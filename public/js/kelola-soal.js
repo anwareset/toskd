@@ -7,9 +7,14 @@ const modalTitle = document.getElementById("modal-title");
 const imgGroup = document.getElementById("image-group");
 const imgInput = document.getElementById("q-image");
 const imgPreview = document.getElementById("image-preview");
+const explanationImgInput = document.getElementById("q-explanation-image");
+const explanationImgPreview = document.getElementById(
+  "explanation-image-preview",
+);
 
 let questions = [];
 let base64Image = null;
+let base64ExplanationImage = null;
 
 function esc(s) {
   const d = document.createElement("div");
@@ -62,6 +67,9 @@ function renderPreview() {
   const explanation = document.getElementById("q-explanation").value;
   const existing_image_url =
     document.getElementById("existing-image-url").value;
+  const existing_explanation_image_url = document.getElementById(
+    "existing-explanation-image-url",
+  ).value;
 
   let imgHtml = "";
   if (question_type === "figural") {
@@ -69,6 +77,13 @@ function renderPreview() {
     if (src) {
       imgHtml = `<div style="margin-top:12px"><img src="${src}" style="max-height:200px;border-radius:8px"></div>`;
     }
+  }
+
+  let explanationImgHtml = "";
+  const explanationSrc =
+    base64ExplanationImage || existing_explanation_image_url;
+  if (explanationSrc) {
+    explanationImgHtml = `<div style="margin-top:12px"><img src="${explanationSrc}" style="max-height:200px;border-radius:8px"></div>`;
   }
 
   const previewArea = document.getElementById("preview-render-area");
@@ -86,6 +101,7 @@ function renderPreview() {
     <hr style="margin:20px 0;border:0;border-top:1px solid #e2e8f0">
     <div style="font-weight:bold;margin-bottom:8px">Pembahasan (Kunci: ${correct}):</div>
     <div>${explanation || "(belum diisi)"}</div>
+    ${explanationImgHtml}
   `;
 
   if (window.MathJax?.typesetPromise) {
@@ -116,8 +132,11 @@ document.getElementById("add-q-btn").onclick = () => {
   form.reset();
   document.getElementById("q-id").value = "";
   document.getElementById("existing-image-url").value = "";
+  document.getElementById("existing-explanation-image-url").value = "";
   base64Image = null;
+  base64ExplanationImage = null;
   imgPreview.style.display = "none";
+  explanationImgPreview.style.display = "none";
   imgGroup.style.display = "none";
   modalTitle.textContent = "Tambah Soal Baru";
   resetTabs();
@@ -147,6 +166,18 @@ imgInput.onchange = () => {
   reader.readAsDataURL(file);
 };
 
+explanationImgInput.onchange = () => {
+  const file = explanationImgInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    base64ExplanationImage = e.target.result;
+    explanationImgPreview.style.display = "block";
+    explanationImgPreview.innerHTML = `<img src="${base64ExplanationImage}" style="max-height:150px;border-radius:4px">`;
+  };
+  reader.readAsDataURL(file);
+};
+
 form.onsubmit = async (e) => {
   e.preventDefault();
   const id = document.getElementById("q-id").value;
@@ -165,6 +196,9 @@ form.onsubmit = async (e) => {
   const explanation = document.getElementById("q-explanation").value.trim();
   const existing_image_url =
     document.getElementById("existing-image-url").value;
+  const existing_explanation_image_url = document.getElementById(
+    "existing-explanation-image-url",
+  ).value;
 
   if (!content) {
     alert("Teks / Pertanyaan wajib diisi!");
@@ -203,6 +237,8 @@ form.onsubmit = async (e) => {
     explanation,
     image: base64Image,
     image_url: existing_image_url,
+    explanation_image: base64ExplanationImage,
+    explanation_image_url: existing_explanation_image_url,
   };
 
   const method = id ? "PUT" : "POST";
@@ -253,7 +289,18 @@ window.editQuestion = (id) => {
   document.getElementById("correct-ans").value = q.correct_answer;
   document.getElementById("q-explanation").value = q.explanation;
 
+  if (q.explanation_image_url) {
+    document.getElementById("existing-explanation-image-url").value =
+      q.explanation_image_url;
+    explanationImgPreview.style.display = "block";
+    explanationImgPreview.innerHTML = `<img src="${q.explanation_image_url}" style="max-height:150px;border-radius:4px">`;
+  } else {
+    document.getElementById("existing-explanation-image-url").value = "";
+    explanationImgPreview.style.display = "none";
+  }
+
   base64Image = null;
+  base64ExplanationImage = null;
   modalTitle.textContent = "Edit Soal";
   resetTabs();
   modal.showModal();

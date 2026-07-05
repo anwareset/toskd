@@ -110,3 +110,8 @@ Akses platform di `http://localhost:3000`.
 
 Untuk membuat seluruh tabel dan relasi yang diperlukan di dashboard Supabase (SQL Editor), jalankan query yang ada di file:
 👉 [`schema.sql`](./schema.sql)
+
+Jika Anda sudah memiliki database yang berjalan dan ingin menambahkan kolom baru untuk gambar pembahasan, jalankan query berikut:
+```sql
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS explanation_image_url TEXT;
+```

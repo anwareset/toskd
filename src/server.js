@@ -37,8 +37,10 @@ app.post("/api/questions", async (req, res) => {
       correct_answer,
       explanation,
       image,
+      explanation_image,
     } = req.body;
     let image_url = null;
+    let explanation_image_url = null;
 
     if (image) {
       const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
@@ -47,6 +49,18 @@ app.post("/api/questions", async (req, res) => {
         access: "public",
       });
       image_url = url;
+    }
+
+    if (explanation_image) {
+      const base64Data = explanation_image.replace(
+        /^data:image\/\w+;base64,/,
+        "",
+      );
+      const buffer = Buffer.from(base64Data, "base64");
+      const { url } = await put(`explanations/${Date.now()}.png`, buffer, {
+        access: "public",
+      });
+      explanation_image_url = url;
     }
 
     const { data, error } = await supabase
@@ -58,6 +72,7 @@ app.post("/api/questions", async (req, res) => {
         correct_answer,
         explanation,
         image_url,
+        explanation_image_url,
       })
       .select();
 
@@ -251,6 +266,8 @@ app.put("/api/questions/:id", async (req, res) => {
       explanation,
       image,
       image_url: existingUrl,
+      explanation_image,
+      explanation_image_url: existingExplanationUrl,
     } = req.body;
     let image_url = existingUrl || null;
     if (image && image.startsWith("data:")) {
@@ -261,6 +278,18 @@ app.put("/api/questions/:id", async (req, res) => {
       });
       image_url = url;
     }
+    let explanation_image_url = existingExplanationUrl || null;
+    if (explanation_image && explanation_image.startsWith("data:")) {
+      const base64Data = explanation_image.replace(
+        /^data:image\/\w+;base64,/,
+        "",
+      );
+      const buffer = Buffer.from(base64Data, "base64");
+      const { url } = await put(`explanations/${Date.now()}.png`, buffer, {
+        access: "public",
+      });
+      explanation_image_url = url;
+    }
     const { data, error } = await supabase
       .from("questions")
       .update({
@@ -270,6 +299,7 @@ app.put("/api/questions/:id", async (req, res) => {
         correct_answer,
         explanation,
         image_url,
+        explanation_image_url,
       })
       .eq("id", req.params.id)
       .select();

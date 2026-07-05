@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS questions (
     correct_answer VARCHAR(1) NOT NULL, -- 'A', 'B', 'C', 'D', 'E'
     explanation TEXT NOT NULL,
     image_url TEXT,
+    explanation_image_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

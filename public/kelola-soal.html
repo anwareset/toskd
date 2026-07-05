@@ -221,6 +221,30 @@
                                     placeholder="Tuliskan langkah penyelesaian..."
                                 ></textarea>
                             </div>
+                            <div class="form-group">
+                                <label for="q-explanation-image"
+                                    >Upload Gambar Pembahasan (Opsional)</label
+                                >
+                                <input
+                                    type="file"
+                                    id="q-explanation-image"
+                                    class="input-field"
+                                    accept="image/*"
+                                />
+                                <div
+                                    id="explanation-image-preview"
+                                    class="preview-box"
+                                    style="
+                                        display: none;
+                                        text-align: center;
+                                        margin-top: 12px;
+                                    "
+                                ></div>
+                                <input
+                                    type="hidden"
+                                    id="existing-explanation-image-url"
+                                />
+                            </div>
                         </div>
 
                         <!-- Tab 4: Preview -->

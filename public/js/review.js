@@ -78,7 +78,11 @@ function renderQuestion(idx) {
     })
     .join("");
   explanationEl.style.display = "block";
-  explanationEl.innerHTML = `<strong>Pembahasan:</strong><br>${q.explanation}`;
+  let expHtml = `<strong>Pembahasan:</strong><br>${q.explanation}`;
+  if (q.explanation_image_url) {
+    expHtml += `<br><img src="${q.explanation_image_url}" style="max-width:100%;margin-top:12px;border-radius:8px">`;
+  }
+  explanationEl.innerHTML = expHtml;
   counterEl.textContent = `${idx + 1} / ${questions.length}`;
   prevBtn.disabled = idx === 0;
   nextBtn.disabled = idx === questions.length - 1;
