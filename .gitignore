@@ -2,6 +2,7 @@
 logs
 *.log
 npm-debug.log*
+pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
@@ -127,6 +128,7 @@ dist
 
 # pnpm
 .pnpm-store
+.pnpm-debug.log*
 
 # yarn v3
 .pnp.*
@@ -141,3 +143,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Vercel
+.vercel/
+
+# OS files
+.DS_Store
+Thumbs.db

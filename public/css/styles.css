@@ -1,0 +1,103 @@
+body {
+  font-family: sans-serif;
+  margin: 20px;
+}
+
+h1 {
+  color: #333;
+}
+
+.buttons {
+  margin-top: 20px;
+}
+
+button {
+  padding: 10px 15px;
+  margin-right: 10px;
+  cursor: pointer;
+}
+
+.exam-container {
+  margin-top: 20px;
+  border: 1px solid #ccc;
+  padding: 20px;
+}
+
+.exam-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.timer {
+  font-weight: bold;
+}
+
+.question-container {
+  margin-bottom: 20px;
+}
+
+.options label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.navigation {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.question-numbers {
+  display: flex;
+  gap: 5px;
+}
+
+.question-number {
+  padding: 5px 10px;
+  border: 1px solid #ccc;
+  cursor: pointer;
+}
+
+.question-number.active, .question-number:hover {
+  background-color: #f0f0f0;
+}
+
+.question-number.correct {
+  background-color: lightgreen;
+}
+
+.question-number.incorrect {
+  background-color: salmon;
+}
+
+.question-number.unanswered {
+  background-color: lightyellow;
+}
+
+.review-container {
+  margin-top: 20px;
+}
+
+.explanation {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #eef;
+  border-left: 3px solid #55f;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 8px;
+  text-align: left;
+}
+
+th {
+  background-color: #f2f2f2;
+}

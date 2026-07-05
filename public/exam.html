@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CAT SKD CPNS - TIU</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <div class="exam-container">
+    <div class="exam-header">
+      <h2 id="pack-name">Paket Soal: ...</h2>
+      <div class="timer">Sisa Waktu: <span id="time-left">--:--</span></div>
+    </div>
+
+    <div class="question-container">
+      <div id="question-content">Memuat soal...</div>
+      <div class="options">
+        <label><input type="radio" name="answer" value="A"> A. <span id="option-A"></span></label>
+        <label><input type="radio" name="answer" value="B"> B. <span id="option-B"></span></label>
+        <label><input type="radio" name="answer" value="C"> C. <span id="option-C"></span></label>
+        <label><input type="radio" name="answer" value="D"> D. <span id="option-D"></span></label>
+        <label><input type="radio" name="answer" value="E"> E. <span id="option-E"></span></label>
+      </div>
+    </div>
+
+    <div class="navigation">
+      <button id="prev-question">Sebelumnya</button>
+      <div class="question-numbers" id="question-numbers"></div>
+      <button id="next-question">Selanjutnya</button>
+    </div>
+
+    <button id="end-exam">Akhiri Ujian</button>
+  </div>
+
+  <script src="/js/exam.js"></script>
+</body>
+</html>
