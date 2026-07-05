@@ -66,16 +66,35 @@ Pastikan sudah terpasang:
 - PNPM / NPM
 - Akun Vercel & Supabase
 
-### 2. Environment Variables (`.env.local`)
-Buat file `.env.local` di root folder project dan isi dengan konfigurasi berikut:
+### 2. Setup Infrastruktur
+
+#### Supabase (Database)
+1. Buat project baru di Supabase Dashboard
+2. Buka **Project Settings → API** untuk mengambil:
+   - **Project URL** untuk `SUPABASE_URL`
+   - **anon public key** untuk `SUPABASE_KEY`
+
+#### Vercel Blob (Storage Image)
+1. Buat **Blob Store** di Vercel Dashboard
+2. Set access mode: **Public**
+3. Cari **Blob Read/Write Token** ambil untuk `BLOB_READ_WRITE_TOKEN`
+
+#### Vercel Deploy
+1. Pastikan **Environment Variables** sudah ada di Vercel Project:
+   - `SUPABASE_URL` = [Supabase URL]
+   - `SUPABASE_KEY` = [Supabase anon key]
+   - `BLOB_READ_WRITE_TOKEN` = [Blob token]
+
+### 3. Environment Variables (`.env`)
+Buat file `.env` di root folder project dan isi:
 ```env
-SUPABASE_URL=https://xxxx.supabase.co
-SUPABASE_KEY=your-supabase-anon-key
-BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxxxx
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxxxxxxxxxxx
 ```
 
-### 3. Jalankan Project
-Jalankan perintah berikut untuk menginstall dependensi dan memulai server lokal:
+### 4. Jalankan Project
+Jalankan perintah berikut untuk menginstall dependency dan run server lokal:
 ```bash
 # Install dependensi
 pnpm install
