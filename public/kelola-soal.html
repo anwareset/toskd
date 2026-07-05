@@ -123,233 +123,243 @@
         </style>
     </head>
     <body>
-        <div class="container" style="max-width: 1300px">
-            <div class="header">
-                <h1 class="app-title">📄 Kelola Bank Soal</h1>
-                <div>
-                    <button class="btn-primary" id="add-q-btn">
-                        ➕ Tambah Soal Baru
-                    </button>
-                    <button
-                        class="btn-secondary"
-                        onclick="location.href = '/bank-soal.html'"
-                    >
-                        Kembali
-                    </button>
-                </div>
-            </div>
-
-            <div id="loading" class="loading-overlay">
-                <div class="spinner"></div>
-            </div>
-
-            <table id="questions-table" style="display: none">
-                <thead>
-                    <tr>
-                        <th>No</th>
-                        <th>Konten Soal (Preview)</th>
-                        <th>Tipe</th>
-                        <th>Gambar</th>
-                        <th>Kunci Jawaban</th>
-                        <th>Aksi</th>
-                    </tr>
-                </thead>
-                <tbody id="questions-body"></tbody>
-            </table>
-
-            <dialog id="q-modal" class="modal" style="max-width: 800px">
-                <div class="modal-content">
-                    <h3 id="modal-title">Tambah Soal</h3>
-
-                    <div class="tab-nav">
-                        <button class="tab-btn active" data-tab="tab-content">
-                            Konten Soal
+        <div class="site-wrapper">
+            <div class="container" style="max-width: 1300px; flex: 1">
+                <div class="header">
+                    <h1 class="app-title">📄 Kelola Bank Soal</h1>
+                    <div>
+                        <button class="btn-primary" id="add-q-btn">
+                            ➕ Tambah Soal Baru
                         </button>
-                        <button class="tab-btn" data-tab="tab-options">
-                            Opsi Jawaban
-                        </button>
-                        <button class="tab-btn" data-tab="tab-explanation">
-                            Pembahasan
-                        </button>
-                        <button class="tab-btn" data-tab="tab-preview">
-                            Preview
+                        <button
+                            class="btn-secondary"
+                            onclick="location.href = '/bank-soal.html'"
+                        >
+                            Kembali
                         </button>
                     </div>
-
-                    <form id="q-form" class="cms-form">
-                        <input type="hidden" id="q-id" />
-
-                        <!-- Tab 1: Konten Soal -->
-                        <div id="tab-content" class="tab-content active">
-                            <div class="form-group">
-                                <label>Teks / Pertanyaan</label>
-                                <div
-                                    id="q-content-editor"
-                                    class="quill-editor"
-                                    data-placeholder="Tuliskan pertanyaan disini... Gunakan toolbar untuk memformat teks dan menyisipkan gambar."
-                                ></div>
-                                <textarea
-                                    id="q-content-text"
-                                    class="input-field"
-                                    name="q-content-text"
-                                    style="display: none"
-                                ></textarea>
-                            </div>
-                        </div>
-
-                        <!-- Tab 2: Opsi Jawaban -->
-                        <div id="tab-options" class="tab-content">
-                            <p
-                                style="
-                                    color: var(--text-muted);
-                                    font-size: 0.85rem;
-                                    margin-bottom: 12px;
-                                "
-                            >
-                                Isi semua opsi dan pilih 1 kunci jawaban benar
-                            </p>
-
-                            <div class="form-group">
-                                <label>Opsi A</label>
-                                <div
-                                    id="opt-a-editor"
-                                    class="quill-editor editor-option"
-                                    data-placeholder="Isi opsi A"
-                                ></div>
-                                <textarea
-                                    id="opt-a"
-                                    class="input-field"
-                                    style="display: none"
-                                ></textarea>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Opsi B</label>
-                                <div
-                                    id="opt-b-editor"
-                                    class="quill-editor editor-option"
-                                    data-placeholder="Isi opsi B"
-                                ></div>
-                                <textarea
-                                    id="opt-b"
-                                    class="input-field"
-                                    style="display: none"
-                                ></textarea>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Opsi C</label>
-                                <div
-                                    id="opt-c-editor"
-                                    class="quill-editor editor-option"
-                                    data-placeholder="Isi opsi C"
-                                ></div>
-                                <textarea
-                                    id="opt-c"
-                                    class="input-field"
-                                    style="display: none"
-                                ></textarea>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Opsi D</label>
-                                <div
-                                    id="opt-d-editor"
-                                    class="quill-editor editor-option"
-                                    data-placeholder="Isi opsi D"
-                                ></div>
-                                <textarea
-                                    id="opt-d"
-                                    class="input-field"
-                                    style="display: none"
-                                ></textarea>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Opsi E</label>
-                                <div
-                                    id="opt-e-editor"
-                                    class="quill-editor editor-option"
-                                    data-placeholder="Isi opsi E"
-                                ></div>
-                                <textarea
-                                    id="opt-e"
-                                    class="input-field"
-                                    style="display: none"
-                                ></textarea>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Kunci Jawaban Benar</label>
-                                <select
-                                    id="correct-ans"
-                                    class="input-field"
-                                    style="margin-top: 6px"
-                                >
-                                    <option value="A">A</option>
-                                    <option value="B">B</option>
-                                    <option value="C">C</option>
-                                    <option value="D">D</option>
-                                    <option value="E">E</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- Tab 3: Pembahasan -->
-                        <div id="tab-explanation" class="tab-content">
-                            <div class="form-group">
-                                <label>Pembahasan Cara Pengerjaan</label>
-                                <div
-                                    id="q-explanation-editor"
-                                    class="quill-editor"
-                                    data-placeholder="Tuliskan langkah penyelesaian..."
-                                ></div>
-                                <textarea
-                                    id="q-explanation"
-                                    class="input-field"
-                                    name="q-explanation"
-                                    style="display: none"
-                                ></textarea>
-                            </div>
-                        </div>
-
-                        <!-- Tab 4: Preview -->
-                        <div id="tab-preview" class="tab-content">
-                            <div class="form-group">
-                                <label>
-                                    Pratinjau Soal (Format MathJax & Gambar)
-                                </label>
-                                <div
-                                    id="preview-render-area"
-                                    style="
-                                        padding: 16px;
-                                        background: var(--surface);
-                                        border: 1px solid var(--border);
-                                        border-radius: 8px;
-                                        min-height: 100px;
-                                        margin-top: 8px;
-                                        overflow-y: auto;
-                                        max-height: 300px;
-                                    "
-                                ></div>
-                            </div>
-                        </div>
-
-                        <div class="modal-buttons">
-                            <button
-                                type="button"
-                                class="btn-secondary"
-                                id="close-modal-btn"
-                            >
-                                Batal
-                            </button>
-                            <button type="submit" class="btn-primary">
-                                Simpan Soal
-                            </button>
-                        </div>
-                    </form>
                 </div>
-            </dialog>
+
+                <div id="loading" class="loading-overlay">
+                    <div class="spinner"></div>
+                </div>
+
+                <table id="questions-table" style="display: none">
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Konten Soal (Preview)</th>
+                            <th>Tipe</th>
+                            <th>Gambar</th>
+                            <th>Kunci Jawaban</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="questions-body"></tbody>
+                </table>
+
+                <dialog id="q-modal" class="modal" style="max-width: 800px">
+                    <div class="modal-content">
+                        <h3 id="modal-title">Tambah Soal</h3>
+
+                        <div class="tab-nav">
+                            <button
+                                class="tab-btn active"
+                                data-tab="tab-content"
+                            >
+                                Konten Soal
+                            </button>
+                            <button class="tab-btn" data-tab="tab-options">
+                                Opsi Jawaban
+                            </button>
+                            <button class="tab-btn" data-tab="tab-explanation">
+                                Pembahasan
+                            </button>
+                            <button class="tab-btn" data-tab="tab-preview">
+                                Preview
+                            </button>
+                        </div>
+
+                        <form id="q-form" class="cms-form">
+                            <input type="hidden" id="q-id" />
+
+                            <!-- Tab 1: Konten Soal -->
+                            <div id="tab-content" class="tab-content active">
+                                <div class="form-group">
+                                    <label>Teks / Pertanyaan</label>
+                                    <div
+                                        id="q-content-editor"
+                                        class="quill-editor"
+                                        data-placeholder="Tuliskan pertanyaan disini... Gunakan toolbar untuk memformat teks dan menyisipkan gambar."
+                                    ></div>
+                                    <textarea
+                                        id="q-content-text"
+                                        class="input-field"
+                                        name="q-content-text"
+                                        style="display: none"
+                                    ></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Tab 2: Opsi Jawaban -->
+                            <div id="tab-options" class="tab-content">
+                                <p
+                                    style="
+                                        color: var(--text-muted);
+                                        font-size: 0.85rem;
+                                        margin-bottom: 12px;
+                                    "
+                                >
+                                    Isi semua opsi dan pilih 1 kunci jawaban
+                                    benar
+                                </p>
+
+                                <div class="form-group">
+                                    <label>Opsi A</label>
+                                    <div
+                                        id="opt-a-editor"
+                                        class="quill-editor editor-option"
+                                        data-placeholder="Isi opsi A"
+                                    ></div>
+                                    <textarea
+                                        id="opt-a"
+                                        class="input-field"
+                                        style="display: none"
+                                    ></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Opsi B</label>
+                                    <div
+                                        id="opt-b-editor"
+                                        class="quill-editor editor-option"
+                                        data-placeholder="Isi opsi B"
+                                    ></div>
+                                    <textarea
+                                        id="opt-b"
+                                        class="input-field"
+                                        style="display: none"
+                                    ></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Opsi C</label>
+                                    <div
+                                        id="opt-c-editor"
+                                        class="quill-editor editor-option"
+                                        data-placeholder="Isi opsi C"
+                                    ></div>
+                                    <textarea
+                                        id="opt-c"
+                                        class="input-field"
+                                        style="display: none"
+                                    ></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Opsi D</label>
+                                    <div
+                                        id="opt-d-editor"
+                                        class="quill-editor editor-option"
+                                        data-placeholder="Isi opsi D"
+                                    ></div>
+                                    <textarea
+                                        id="opt-d"
+                                        class="input-field"
+                                        style="display: none"
+                                    ></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Opsi E</label>
+                                    <div
+                                        id="opt-e-editor"
+                                        class="quill-editor editor-option"
+                                        data-placeholder="Isi opsi E"
+                                    ></div>
+                                    <textarea
+                                        id="opt-e"
+                                        class="input-field"
+                                        style="display: none"
+                                    ></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Kunci Jawaban Benar</label>
+                                    <select
+                                        id="correct-ans"
+                                        class="input-field"
+                                        style="margin-top: 6px"
+                                    >
+                                        <option value="A">A</option>
+                                        <option value="B">B</option>
+                                        <option value="C">C</option>
+                                        <option value="D">D</option>
+                                        <option value="E">E</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Tab 3: Pembahasan -->
+                            <div id="tab-explanation" class="tab-content">
+                                <div class="form-group">
+                                    <label>Pembahasan Cara Pengerjaan</label>
+                                    <div
+                                        id="q-explanation-editor"
+                                        class="quill-editor"
+                                        data-placeholder="Tuliskan langkah penyelesaian..."
+                                    ></div>
+                                    <textarea
+                                        id="q-explanation"
+                                        class="input-field"
+                                        name="q-explanation"
+                                        style="display: none"
+                                    ></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Tab 4: Preview -->
+                            <div id="tab-preview" class="tab-content">
+                                <div class="form-group">
+                                    <label>
+                                        Pratinjau Soal (Format MathJax & Gambar)
+                                    </label>
+                                    <div
+                                        id="preview-render-area"
+                                        style="
+                                            padding: 16px;
+                                            background: var(--surface);
+                                            border: 1px solid var(--border);
+                                            border-radius: 8px;
+                                            min-height: 100px;
+                                            margin-top: 8px;
+                                            overflow-y: auto;
+                                            max-height: 300px;
+                                        "
+                                    ></div>
+                                </div>
+                            </div>
+
+                            <div class="modal-buttons">
+                                <button
+                                    type="button"
+                                    class="btn-secondary"
+                                    id="close-modal-btn"
+                                >
+                                    Batal
+                                </button>
+                                <button type="submit" class="btn-primary">
+                                    Simpan Soal
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </dialog>
+            </div>
+            <footer class="footer">
+                Untuk latihan SKD (Seleksi Kompetensi Dasar) · Made with ♥️ in
+                2026
+            </footer>
         </div>
         <script src="/js/kelola-soal.js"></script>
     </body>

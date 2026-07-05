@@ -8,39 +8,50 @@
         <script src="/js/theme.js"></script>
     </head>
     <body>
-        <div
-            class="container"
-            style="max-width: 700px; margin-top: 60px; text-align: center"
-        >
-            <h1 class="app-title">📚 Bank Soal & Paket Soal</h1>
-            <p style="color: #64748b; margin-bottom: 40px">
-                Kelola soal dan paket soal ujian
-            </p>
-            <div class="card-grid" style="grid-template-columns: 1fr 1fr">
-                <div
-                    class="card"
-                    style="cursor: pointer"
-                    onclick="location.href = '/paket-soal.html'"
-                >
-                    <h3>📦 Kelola Paket Soal</h3>
-                    <p>Buat, edit, dan hapus paket soal ujian</p>
-                </div>
-                <div
-                    class="card"
-                    style="cursor: pointer"
-                    onclick="location.href = '/kelola-soal.html'"
-                >
-                    <h3>📄 Kelola Soal</h3>
-                    <p>Tambah, edit, dan hapus soal dari bank soal</p>
-                </div>
-            </div>
-            <button
-                class="btn-back"
-                style="margin-top: 30px"
-                onclick="location.href = '/'"
+        <div class="site-wrapper">
+            <div
+                class="container"
+                style="
+                    max-width: 700px;
+                    margin-top: 60px;
+                    text-align: center;
+                    flex: 1;
+                "
             >
-                ← Kembali ke Halaman Utama
-            </button>
+                <h1 class="app-title">📚 Bank Soal & Paket Soal</h1>
+                <p style="color: #64748b; margin-bottom: 40px">
+                    Kelola soal dan paket soal ujian
+                </p>
+                <div class="card-grid" style="grid-template-columns: 1fr 1fr">
+                    <div
+                        class="card"
+                        style="cursor: pointer"
+                        onclick="location.href = '/paket-soal.html'"
+                    >
+                        <h3>📦 Kelola Paket Soal</h3>
+                        <p>Buat, edit, dan hapus paket soal ujian</p>
+                    </div>
+                    <div
+                        class="card"
+                        style="cursor: pointer"
+                        onclick="location.href = '/kelola-soal.html'"
+                    >
+                        <h3>📄 Kelola Soal</h3>
+                        <p>Tambah, edit, dan hapus soal dari bank soal</p>
+                    </div>
+                </div>
+                <button
+                    class="btn-back"
+                    style="margin-top: 30px"
+                    onclick="location.href = '/'"
+                >
+                    ← Kembali ke Halaman Utama
+                </button>
+            </div>
+            <footer class="footer">
+                Untuk latihan SKD (Seleksi Kompetensi Dasar) · Made with ♥️ in
+                2026
+            </footer>
         </div>
     </body>
 </html>

@@ -8,39 +8,45 @@
         <script src="/js/theme.js"></script>
     </head>
     <body>
-        <div class="container">
-            <div class="header">
-                <h1 class="app-title">📝 Pilih Paket Soal</h1>
-                <button class="btn-back" onclick="location.href = '/'">
-                    ← Kembali
-                </button>
-            </div>
-            <div id="loading" class="loading-overlay">
-                <div class="spinner"></div>
-            </div>
-            <div id="pack-grid" class="card-grid"></div>
-            <dialog id="name-modal" class="modal">
-                <div class="modal-content">
-                    <h3>Masukkan Nama Peserta</h3>
-                    <p style="color: #64748b; margin-bottom: 12px">
-                        Nama akan dicatat dalam hasil ujian
-                    </p>
-                    <input
-                        type="text"
-                        id="participant-name"
-                        class="input-field"
-                        placeholder="Nama lengkap..."
-                    />
-                    <div class="modal-buttons">
-                        <button class="btn-secondary" id="cancel-btn">
-                            Batal
-                        </button>
-                        <button class="btn-primary" id="start-btn">
-                            Mulai Ujian
-                        </button>
-                    </div>
+        <div class="site-wrapper">
+            <div class="container">
+                <div class="header">
+                    <h1 class="app-title">📝 Pilih Paket Soal</h1>
+                    <button class="btn-back" onclick="location.href = '/'">
+                        ← Kembali
+                    </button>
                 </div>
-            </dialog>
+                <div id="loading" class="loading-overlay">
+                    <div class="spinner"></div>
+                </div>
+                <div id="pack-grid" class="card-grid"></div>
+                <dialog id="name-modal" class="modal">
+                    <div class="modal-content">
+                        <h3>Masukkan Nama Peserta</h3>
+                        <p style="color: #64748b; margin-bottom: 12px">
+                            Nama akan dicatat dalam hasil ujian
+                        </p>
+                        <input
+                            type="text"
+                            id="participant-name"
+                            class="input-field"
+                            placeholder="Nama lengkap..."
+                        />
+                        <div class="modal-buttons">
+                            <button class="btn-secondary" id="cancel-btn">
+                                Batal
+                            </button>
+                            <button class="btn-primary" id="start-btn">
+                                Mulai Ujian
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
+            </div>
+            <footer class="footer">
+                Untuk latihan SKD (Seleksi Kompetensi Dasar) · Made with ♥️ in
+                2026
+            </footer>
         </div>
         <script src="/js/select-pack.js"></script>
     </body>

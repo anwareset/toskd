@@ -8,74 +8,80 @@
         <script src="/js/theme.js"></script>
     </head>
     <body>
-        <div class="container">
-            <div class="header">
-                <h1 class="app-title">🏆 Scoreboard</h1>
-                <button class="btn-back" onclick="location.href = '/'">
-                    ← Kembali
-                </button>
-            </div>
-            <div
-                style="
-                    display: flex;
-                    gap: 16px;
-                    align-items: center;
-                    margin-bottom: 20px;
-                    flex-wrap: wrap;
-                "
-            >
-                <label style="font-weight: 600">Paket Soal:</label>
-                <select
-                    id="pack-filter"
-                    class="input-field"
-                    style="width: auto; margin-top: 0"
-                ></select>
-                <label style="font-weight: 600">Urutkan:</label>
-                <select
-                    id="sort-filter"
-                    class="input-field"
-                    style="width: auto; margin-top: 0"
+        <div class="site-wrapper">
+            <div class="container" style="flex: 1">
+                <div class="header">
+                    <h1 class="app-title">🏆 Scoreboard</h1>
+                    <button class="btn-back" onclick="location.href = '/'">
+                        ← Kembali
+                    </button>
+                </div>
+                <div
+                    style="
+                        display: flex;
+                        gap: 16px;
+                        align-items: center;
+                        margin-bottom: 20px;
+                        flex-wrap: wrap;
+                    "
                 >
-                    <option value="score_desc">Skor (Tertinggi)</option>
-                    <option value="date_desc">Tanggal (Terbaru)</option>
-                </select>
+                    <label style="font-weight: 600">Paket Soal:</label>
+                    <select
+                        id="pack-filter"
+                        class="input-field"
+                        style="width: auto; margin-top: 0"
+                    ></select>
+                    <label style="font-weight: 600">Urutkan:</label>
+                    <select
+                        id="sort-filter"
+                        class="input-field"
+                        style="width: auto; margin-top: 0"
+                    >
+                        <option value="score_desc">Skor (Tertinggi)</option>
+                        <option value="date_desc">Tanggal (Terbaru)</option>
+                    </select>
+                </div>
+                <div id="loading" class="loading-overlay">
+                    <div class="spinner"></div>
+                </div>
+                <table id="score-table" style="display: none">
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Nama Peserta</th>
+                            <th>Paket Soal</th>
+                            <th>Skor</th>
+                            <th>Status</th>
+                            <th>Tanggal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="score-body"></tbody>
+                </table>
+                <p
+                    id="empty-msg"
+                    style="
+                        display: none;
+                        color: #64748b;
+                        text-align: center;
+                        padding: 40px;
+                    "
+                >
+                    Belum ada data hasil ujian.
+                </p>
+                <div
+                    id="pagination"
+                    style="
+                        display: flex;
+                        gap: 8px;
+                        justify-content: center;
+                        margin-top: 20px;
+                    "
+                ></div>
             </div>
-            <div id="loading" class="loading-overlay">
-                <div class="spinner"></div>
-            </div>
-            <table id="score-table" style="display: none">
-                <thead>
-                    <tr>
-                        <th>No</th>
-                        <th>Nama Peserta</th>
-                        <th>Paket Soal</th>
-                        <th>Skor</th>
-                        <th>Status</th>
-                        <th>Tanggal</th>
-                    </tr>
-                </thead>
-                <tbody id="score-body"></tbody>
-            </table>
-            <p
-                id="empty-msg"
-                style="
-                    display: none;
-                    color: #64748b;
-                    text-align: center;
-                    padding: 40px;
-                "
-            >
-                Belum ada data hasil ujian.
-            </p>
-            <div
-                id="pagination"
-                style="
-                    display: flex;
-                    gap: 8px;
-                    justify-content: center;
-                    margin-top: 20px;
-                "
-            ></div>
+            <footer class="footer">
+                Untuk latihan SKD (Seleksi Kompetensi Dasar) · Made with ♥️ in
+                2026
+            </footer>
         </div>
         <script src="/js/scoreboard.js"></script>
     </body>
