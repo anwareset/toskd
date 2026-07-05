@@ -279,12 +279,27 @@ function renderPreview() {
   previewArea.innerHTML = `
     <div style="font-weight:bold;margin-bottom:8px">Pertanyaan:</div>
     <div style="margin-bottom:16px">${content || "(kosong)"}</div>
-    <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
-      <div><span style="font-weight:bold;color:${correct === "A" ? "var(--success)" : "inherit"}">A.</span> ${optA || "(belum diisi)"}</div>
-      <div><span style="font-weight:bold;color:${correct === "B" ? "var(--success)" : "inherit"}">B.</span> ${optB || "(belum diisi)"}</div>
-      <div><span style="font-weight:bold;color:${correct === "C" ? "var(--success)" : "inherit"}">C.</span> ${optC || "(belum diisi)"}</div>
-      <div><span style="font-weight:bold;color:${correct === "D" ? "var(--success)" : "inherit"}">D.</span> ${optD || "(belum diisi)"}</div>
-      <div><span style="font-weight:bold;color:${correct === "E" ? "var(--success)" : "inherit"}">E.</span> ${optE || "(belum diisi)"}</div>
+    <div style="margin-top:16px;line-height:1.8">
+      <div style="display: flex; align-items: center; margin-bottom: 8px;">
+        <span style="font-weight:bold;color:${correct === "A" ? "var(--success)" : "inherit"}; min-width: 24px;">A.</span>
+        <span>${optA || "(belum diisi)"}</span>
+      </div>
+      <div style="display: flex; align-items: center; margin-bottom: 8px;">
+        <span style="font-weight:bold;color:${correct === "B" ? "var(--success)" : "inherit"}; min-width: 24px;">B.</span>
+        <span>${optB || "(belum diisi)"}</span>
+      </div>
+      <div style="display: flex; align-items: center; margin-bottom: 8px;">
+        <span style="font-weight:bold;color:${correct === "C" ? "var(--success)" : "inherit"}; min-width: 24px;">C.</span>
+        <span>${optC || "(belum diisi)"}</span>
+      </div>
+      <div style="display: flex; align-items: center; margin-bottom: 8px;">
+        <span style="font-weight:bold;color:${correct === "D" ? "var(--success)" : "inherit"}; min-width: 24px;">D.</span>
+        <span>${optD || "(belum diisi)"}</span>
+      </div>
+      <div style="display: flex; align-items: center; margin-bottom: 8px;">
+        <span style="font-weight:bold;color:${correct === "E" ? "var(--success)" : "inherit"}; min-width: 24px;">E.</span>
+        <span>${optE || "(belum diisi)"}</span>
+      </div>
     </div>
     <hr style="margin:20px 0;border:0;border-top:1px solid #e2e8f0">
     <div style="font-weight:bold;margin-bottom:8px">Pembahasan (Kunci: ${correct}):</div>
