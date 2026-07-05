@@ -1,30 +1,82 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Scoreboard - CAT SKD CPNS</title>
-  <link rel="stylesheet" href="/css/styles.css">
-</head>
-<body>
-  <h1>Scoreboard</h1>
-
-  <label for="pack-select">Pilih Paket Soal:</label>
-  <select id="pack-select">
-    <!-- Opsi paket soal akan dimuat di sini -->
-  </select>
-
-  <table id="scoreboard-table">
-    <thead>
-      <tr>
-        <th>Nama Peserta</th>
-        <th>Skor</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody id="scoreboard-body">
-      <!-- Data scoreboard akan dimuat di sini -->
-    </tbody>
-  </table>
-
-  <script src="/js/scoreboard.js"></script>
-</body>
+<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+        <title>Scoreboard</title>
+        <link rel="stylesheet" href="/css/styles.css" />
+        <script src="/js/theme.js"></script>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1 class="app-title">🏆 Scoreboard</h1>
+                <button class="btn-back" onclick="location.href = '/'">
+                    ← Kembali
+                </button>
+            </div>
+            <div
+                style="
+                    display: flex;
+                    gap: 16px;
+                    align-items: center;
+                    margin-bottom: 20px;
+                    flex-wrap: wrap;
+                "
+            >
+                <label style="font-weight: 600">Paket Soal:</label>
+                <select
+                    id="pack-filter"
+                    class="input-field"
+                    style="width: auto; margin-top: 0"
+                ></select>
+                <label style="font-weight: 600">Urutkan:</label>
+                <select
+                    id="sort-filter"
+                    class="input-field"
+                    style="width: auto; margin-top: 0"
+                >
+                    <option value="score_desc">Skor (Tertinggi)</option>
+                    <option value="date_desc">Tanggal (Terbaru)</option>
+                </select>
+            </div>
+            <div id="loading" class="loading-overlay">
+                <div class="spinner"></div>
+            </div>
+            <table id="score-table" style="display: none">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Nama Peserta</th>
+                        <th>Paket Soal</th>
+                        <th>Skor</th>
+                        <th>Status</th>
+                        <th>Tanggal</th>
+                    </tr>
+                </thead>
+                <tbody id="score-body"></tbody>
+            </table>
+            <p
+                id="empty-msg"
+                style="
+                    display: none;
+                    color: #64748b;
+                    text-align: center;
+                    padding: 40px;
+                "
+            >
+                Belum ada data hasil ujian.
+            </p>
+            <div
+                id="pagination"
+                style="
+                    display: flex;
+                    gap: 8px;
+                    justify-content: center;
+                    margin-top: 20px;
+                "
+            ></div>
+        </div>
+        <script src="/js/scoreboard.js"></script>
+    </body>
 </html>

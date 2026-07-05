@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+        <title>Detail Paket Soal</title>
+        <link rel="stylesheet" href="/css/styles.css" />
+        <script src="/js/theme.js"></script>
+    </head>
+    <body>
+        <div class="container" style="max-width: 1300px">
+            <div class="header">
+                <div>
+                    <h1 class="app-title" id="pack-title">Detail Paket Soal</h1>
+                    <p id="pack-subtitle" style="color: #64748b"></p>
+                </div>
+                <button
+                    class="btn-secondary"
+                    onclick="location.href = '/paket-soal.html'"
+                >
+                    Kembali
+                </button>
+            </div>
+
+            <div class="pack-detail-layout">
+                <div>
+                    <h3>➕ Tambah Soal dari Bank Soal</h3>
+                    <div id="loading-bank" class="loading-overlay">
+                        <div class="spinner"></div>
+                    </div>
+                    <div
+                        id="bank-questions-list"
+                        style="
+                            max-height: 600px;
+                            overflow-y: auto;
+                            margin-top: 12px;
+                        "
+                    ></div>
+                    <button
+                        class="btn-primary"
+                        id="add-to-pack-btn"
+                        style="margin-top: 16px; width: 100%"
+                    >
+                        Masukkan Soal Terpilih ke Paket
+                    </button>
+                </div>
+
+                <div>
+                    <h3>📋 Soal dalam Paket (Urutan pengerjaan)</h3>
+                    <p
+                        style="
+                            color: #64748b;
+                            font-size: 0.85rem;
+                            margin-bottom: 12px;
+                        "
+                    >
+                        Tarik & lepas (Drag & Drop) item untuk mengatur urutan
+                        soal
+                    </p>
+                    <div id="loading-pack" class="loading-overlay">
+                        <div class="spinner"></div>
+                    </div>
+                    <div
+                        id="pack-questions-list"
+                        style="
+                            min-height: 200px;
+                            background: #f1f5f9;
+                            border-radius: 8px;
+                            padding: 8px;
+                        "
+                    ></div>
+                    <button
+                        class="btn-success"
+                        id="save-order-btn"
+                        style="margin-top: 16px; width: 100%"
+                        disabled
+                    >
+                        Simpan Urutan Soal
+                    </button>
+                </div>
+            </div>
+        </div>
+        <script src="/js/paket-detail.js"></script>
+    </body>
+</html>

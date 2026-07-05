@@ -1,90 +1,97 @@
-// public/js/scoreboard.js
+const filterEl = document.getElementById("pack-filter");
+const sortFilterEl = document.getElementById("sort-filter");
+const loadingEl = document.getElementById("loading");
+const tableEl = document.getElementById("score-table");
+const bodyEl = document.getElementById("score-body");
+const emptyEl = document.getElementById("empty-msg");
+const pagEl = document.getElementById("pagination");
+let allResults = [],
+  currentPage = 1;
+const perPage = 20;
 
-// DOM Elements
-const packSelectEl = document.getElementById('pack-select');
-const scoreboardBodyEl = document.getElementById('scoreboard-body');
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
 
-// State
-let packs = [];
+async function init() {
+  const r = await fetch("/api/packs");
+  const packs = await r.json();
+  filterEl.innerHTML =
+    '<option value="">Semua Paket</option>' +
+    packs
+      .map((p) => `<option value="${p.id}">${esc(p.name)}</option>`)
+      .join("");
+  filterEl.onchange = () => {
+    currentPage = 1;
+    loadData();
+  };
+  sortFilterEl.onchange = () => {
+    currentPage = 1;
+    sortData();
+    renderPage();
+  };
+  loadData();
+}
 
-// Initialize scoreboard
-async function initializeScoreboard() {
-    try {
-        await loadPacks();
-        if (packs.length > 0) {
-            loadScoreboard(packs[0].id); // Load first pack by default
-        }
-    } catch (error) {
-        console.error('Error initializing scoreboard:', error);
-        alert('Gagal memuat scoreboard. Silakan refresh halaman.');
+function sortData() {
+  const sortBy = sortFilterEl.value;
+  if (sortBy === "score_desc") {
+    allResults.sort((a, b) => b.score - a.score);
+  } else if (sortBy === "date_desc") {
+    allResults.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+}
+
+async function loadData() {
+  loadingEl.style.display = "flex";
+  tableEl.style.display = "none";
+  emptyEl.style.display = "none";
+  const pid = filterEl.value;
+  const url = pid
+    ? `/api/scoreboard-all?pack_id=${pid}`
+    : "/api/scoreboard-all";
+  try {
+    const r = await fetch(url);
+    allResults = await r.json();
+    sortData();
+    loadingEl.style.display = "none";
+    if (!allResults.length) {
+      emptyEl.style.display = "block";
+      pagEl.innerHTML = "";
+      return;
     }
+    tableEl.style.display = "table";
+    renderPage();
+  } catch (e) {
+    loadingEl.innerHTML =
+      '<p style="color:var(--danger)">Gagal memuat data.</p>';
+  }
 }
 
-// Load all question packs
-async function loadPacks() {
-    try {
-        const response = await fetch('/api/packs');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        packs = await response.json();
-        renderPackOptions();
-    } catch (error) {
-        console.error('Error loading packs:', error);
-        throw error;
-    }
+function renderPage() {
+  const s = (currentPage - 1) * perPage;
+  const pg = allResults.slice(s, s + perPage);
+  bodyEl.innerHTML = pg
+    .map((r, i) => {
+      const d = new Date(r.created_at).toLocaleDateString("id-ID");
+      const sc = r.status === "Lulus PG" ? "status-pass" : "status-fail";
+      return `<tr><td>${s + i + 1}</td><td>${esc(r.participant_name)}</td><td>${esc(r.question_packs?.name || "-")}</td><td>${r.score}</td><td class="${sc}">${r.status}</td><td>${d}</td></tr>`;
+    })
+    .join("");
+  const tp = Math.ceil(allResults.length / perPage);
+  pagEl.innerHTML =
+    tp <= 1
+      ? ""
+      : Array.from(
+          { length: tp },
+          (_, i) =>
+            `<button class="${i + 1 === currentPage ? "btn-primary" : "btn-secondary"}" onclick="goPage(${i + 1})">${i + 1}</button>`,
+        ).join("");
 }
-
-// Render pack options in select element
-function renderPackOptions() {
-    packSelectEl.innerHTML = '';
-    packs.forEach(pack => {
-        const option = document.createElement('option');
-        option.value = pack.id;
-        option.textContent = pack.name;
-        packSelectEl.appendChild(option);
-    });
-}
-
-// Load scoreboard for a specific pack
-async function loadScoreboard(packId) {
-    try {
-        const response = await fetch(`/api/scoreboard?pack_id=${packId}`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const results = await response.json();
-        renderScoreboard(results);
-    } catch (error) {
-        console.error('Error loading scoreboard:', error);
-        alert('Gagal memuat data scoreboard.');
-    }
-}
-
-// Render scoreboard
-function renderScoreboard(results) {
-    scoreboardBodyEl.innerHTML = '';
-    if (results.length === 0) {
-        scoreboardBodyEl.innerHTML = '<tr><td colspan="3">Belum ada hasil ujian untuk paket ini.</td></tr>';
-        return;
-    }
-
-    results.forEach(result => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${result.participant_name}</td>
-            <td>${result.score}</td>
-            <td>${result.status}</td>
-        `;
-        scoreboardBodyEl.appendChild(row);
-    });
-}
-
-// Event listener for pack selection change
-packSelectEl.addEventListener('change', (event) => {
-    const packId = event.target.value;
-    loadScoreboard(packId);
-});
-
-// Initial load
-window.addEventListener('load', initializeScoreboard);
+window.goPage = (p) => {
+  currentPage = p;
+  renderPage();
+};
+init();

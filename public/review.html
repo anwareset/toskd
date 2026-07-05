@@ -1,23 +1,63 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Pembahasan Soal - CAT SKD CPNS</title>
-  <link rel="stylesheet" href="/css/styles.css">
-</head>
-<body>
-  <div class="review-container">
-    <h2>Pembahasan Hasil Ujian</h2>
-    <p>Nama Peserta: <span id="participant-name"></span></p>
-    <p>Skor: <span id="score"></span></p>
-    <p>Status: <span id="status"></span></p>
-
-    <div id="review-questions">
-      <!-- Soal dan pembahasan akan dimuat di sini -->
-    </div>
-
-    <button onclick="window.location.href = '/index.html'">Kembali ke Beranda</button>
-  </div>
-
-  <script src="/js/review.js"></script>
-</body>
+<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+        <title>Hasil & Pembahasan</title>
+        <link rel="stylesheet" href="/css/styles.css" />
+        <script src="/js/theme.js"></script>
+        <script
+            src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+            async
+        ></script>
+    </head>
+    <body>
+        <div class="container" style="max-width: 1400px">
+            <div class="header">
+                <h1 class="app-title">📊 Hasil & Pembahasan</h1>
+                <button class="btn-back" onclick="location.href = '/'">
+                    ← Halaman Utama
+                </button>
+            </div>
+            <div id="loading" class="loading-overlay">
+                <div class="spinner"></div>
+            </div>
+            <div
+                id="result-info"
+                class="review-header-info"
+                style="display: none"
+            ></div>
+            <div id="review-body" class="review-layout" style="display: none">
+                <section class="review-question-section">
+                    <div class="question-container">
+                        <div class="question-no" id="question-no"></div>
+                        <div
+                            class="question-content"
+                            id="question-content"
+                        ></div>
+                        <div id="options-container"></div>
+                        <div
+                            id="explanation"
+                            class="review-explanation"
+                            style="display: none"
+                        ></div>
+                        <div class="question-nav">
+                            <button class="btn-secondary" id="prev-btn">
+                                ← Sebelumnya
+                            </button>
+                            <span id="q-counter" style="color: #64748b"></span>
+                            <button class="btn-secondary" id="next-btn">
+                                Selanjutnya →
+                            </button>
+                        </div>
+                    </div>
+                </section>
+                <aside class="review-answer-panel answer-panel">
+                    <h3>📋 Hasil Jawaban</h3>
+                    <div class="answer-grid" id="answer-grid"></div>
+                </aside>
+            </div>
+        </div>
+        <script src="/js/review.js"></script>
+    </body>
 </html>

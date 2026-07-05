@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+        <title>Kelola Paket Soal</title>
+        <link rel="stylesheet" href="/css/styles.css" />
+        <script src="/js/theme.js"></script>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1 class="app-title">📦 Kelola Paket Soal</h1>
+                <div>
+                    <button class="btn-primary" id="add-pack-btn">
+                        ➕ Tambah Paket Soal
+                    </button>
+                    <button
+                        class="btn-secondary"
+                        onclick="location.href = '/bank-soal.html'"
+                    >
+                        Kembali
+                    </button>
+                </div>
+            </div>
+
+            <div id="loading" class="loading-overlay">
+                <div class="spinner"></div>
+            </div>
+
+            <table id="pack-table" style="display: none">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Nama Paket</th>
+                        <th>Durasi (Menit)</th>
+                        <th>Passing Grade</th>
+                        <th>Jumlah Soal</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="pack-body"></tbody>
+            </table>
+
+            <dialog id="pack-modal" class="modal">
+                <div class="modal-content">
+                    <h3 id="modal-title">Tambah Paket Soal</h3>
+                    <form id="pack-form" class="cms-form">
+                        <input type="hidden" id="pack-id" />
+                        <div class="form-group">
+                            <label for="pack-name">Nama Paket</label>
+                            <input
+                                type="text"
+                                id="pack-name"
+                                class="input-field"
+                                required
+                                placeholder="Contoh: TIU Simulasi 1"
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="pack-duration">Durasi (Menit)</label>
+                            <input
+                                type="number"
+                                id="pack-duration"
+                                class="input-field"
+                                required
+                                min="1"
+                                placeholder="Contoh: 60"
+                            />
+                        </div>
+                        <div class="form-group">
+                            <label for="pack-passing"
+                                >Passing Grade (Skor)</label
+                            >
+                            <input
+                                type="number"
+                                id="pack-passing"
+                                class="input-field"
+                                required
+                                min="0"
+                                value="85"
+                            />
+                        </div>
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-secondary"
+                                id="close-modal-btn"
+                            >
+                                Batal
+                            </button>
+                            <button type="submit" class="btn-primary">
+                                Simpan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </dialog>
+        </div>
+        <script src="/js/paket-soal.js"></script>
+    </body>
+</html>

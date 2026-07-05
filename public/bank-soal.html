@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+        <title>Bank Soal</title>
+        <link rel="stylesheet" href="/css/styles.css" />
+        <script src="/js/theme.js"></script>
+    </head>
+    <body>
+        <div
+            class="container"
+            style="max-width: 700px; margin-top: 60px; text-align: center"
+        >
+            <h1 class="app-title">📚 Bank Soal & Paket Soal</h1>
+            <p style="color: #64748b; margin-bottom: 40px">
+                Kelola soal dan paket soal ujian
+            </p>
+            <div class="card-grid" style="grid-template-columns: 1fr 1fr">
+                <div
+                    class="card"
+                    style="cursor: pointer"
+                    onclick="location.href = '/paket-soal.html'"
+                >
+                    <h3>📦 Kelola Paket Soal</h3>
+                    <p>Buat, edit, dan hapus paket soal ujian</p>
+                </div>
+                <div
+                    class="card"
+                    style="cursor: pointer"
+                    onclick="location.href = '/kelola-soal.html'"
+                >
+                    <h3>📄 Kelola Soal</h3>
+                    <p>Tambah, edit, dan hapus soal dari bank soal</p>
+                </div>
+            </div>
+            <button
+                class="btn-back"
+                style="margin-top: 30px"
+                onclick="location.href = '/'"
+            >
+                ← Kembali ke Halaman Utama
+            </button>
+        </div>
+    </body>
+</html>

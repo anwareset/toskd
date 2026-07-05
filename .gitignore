@@ -150,3 +150,15 @@ vite.config.ts.timestamp-*
 # OS files
 .DS_Store
 Thumbs.db
+.vercel
+.env*
+
+# Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.local

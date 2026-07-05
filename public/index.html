@@ -1,19 +1,41 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>CAT SKD CPNS - TIU</title>
-  <link rel="stylesheet" href="/css/styles.css">
-</head>
-<body>
-  <h1>CAT SKD CPNS - TIU</h1>
-  <p>Sistem ujian berbasis komputer untuk Tes Intelegensi Umum (TIU).</p>
-
-  <div class="buttons">
-    <button id="start-exam">Mulai Ujian</button>
-    <button id="manage-questions">Kelola Bank Soal</button>
-    <button id="scoreboard">Scoreboard</button>
-  </div>
-
-  <script src="/js/main.js"></script>
-</body>
+<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+        <title>CAT SKD - TIU</title>
+        <link rel="stylesheet" href="/css/styles.css" />
+        <script src="/js/theme.js"></script>
+    </head>
+    <body>
+        <div
+            class="container"
+            style="max-width: 600px; margin-top: 80px; text-align: center"
+        >
+            <h1 class="app-title" style="font-size: 2rem; margin-bottom: 8px">
+                CAT SKD
+            </h1>
+            <p style="color: #64748b; margin-bottom: 40px">
+                Tes Intelegensi Umum (TIU)
+            </p>
+            <button
+                class="btn-main"
+                onclick="location.href = '/select-pack.html'"
+            >
+                📝 Mulai Ujian
+            </button>
+            <button
+                class="btn-main"
+                onclick="location.href = '/bank-soal.html'"
+            >
+                📚 Bank Soal
+            </button>
+            <button
+                class="btn-main"
+                onclick="location.href = '/scoreboard.html'"
+            >
+                🏆 Scoreboard
+            </button>
+        </div>
+    </body>
 </html>
