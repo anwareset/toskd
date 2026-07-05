@@ -6,10 +6,116 @@
         <title>Kelola Bank Soal</title>
         <link rel="stylesheet" href="/css/styles.css" />
         <script src="/js/theme.js"></script>
+        <link
+            rel="stylesheet"
+            href="https://cdn.quilljs.com/1.3.7/quill.snow.css"
+        />
         <script
             src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
             async
         ></script>
+        <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+        <style>
+            /* Quill inside modal fixes */
+            .quill-editor {
+                background: var(--surface);
+                border-radius: 0 0 8px 8px;
+            }
+            .quill-editor .ql-toolbar.ql-snow {
+                border-radius: 8px 8px 0 0;
+                border-color: var(--border);
+                background: var(--surface-header);
+            }
+            .quill-editor .ql-container.ql-snow {
+                border-color: var(--border);
+                border-radius: 0 0 8px 8px;
+                color: var(--text);
+                min-height: 80px;
+            }
+            .quill-editor .ql-editor {
+                min-height: 80px;
+                color: var(--text);
+            }
+            .quill-editor .ql-editor.ql-blank::before {
+                color: var(--text-muted);
+                font-style: normal;
+                content: attr(data-placeholder);
+            }
+            .quill-editor .ql-editor p {
+                margin-bottom: 0.5em;
+            }
+            /* Option editors: compact */
+            .editor-option .quill-editor {
+                min-height: auto;
+            }
+            .editor-option .ql-editor {
+                min-height: 36px;
+                padding: 6px 12px;
+            }
+            /* Dark mode Quill */
+            [data-theme="dark"] .quill-editor .ql-toolbar.ql-snow .ql-stroke {
+                stroke: var(--text-muted);
+            }
+            [data-theme="dark"] .quill-editor .ql-toolbar.ql-snow .ql-fill {
+                fill: var(--text-muted);
+            }
+            [data-theme="dark"] .quill-editor .ql-toolbar.ql-snow .ql-picker {
+                color: var(--text-muted);
+            }
+            [data-theme="dark"]
+                .quill-editor
+                .ql-toolbar.ql-snow
+                .ql-picker-label {
+                color: var(--text-muted);
+            }
+            [data-theme="dark"]
+                .quill-editor
+                .ql-toolbar.ql-snow
+                button:hover
+                .ql-stroke {
+                stroke: var(--primary);
+            }
+            [data-theme="dark"]
+                .quill-editor
+                .ql-toolbar.ql-snow
+                .ql-active
+                .ql-stroke {
+                stroke: var(--primary);
+            }
+            [data-theme="dark"] .quill-editor .ql-toolbar.ql-snow .ql-active {
+                color: var(--primary);
+            }
+            .form-group {
+                margin-bottom: 16px;
+            }
+            .form-group label {
+                display: block;
+                font-weight: 600;
+                margin-bottom: 6px;
+                font-size: 0.9rem;
+            }
+            .input-field {
+                width: 100%;
+                padding: 10px 12px;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                background: var(--surface);
+                color: var(--text);
+                font-size: 0.95rem;
+                box-sizing: border-box;
+            }
+            .input-field:focus {
+                outline: 2px solid var(--primary);
+                border-color: transparent;
+            }
+            .cms-form select.input-field {
+                appearance: auto;
+            }
+            /* Placeholder for Quill editor */
+            .ql-editor[data-placeholder]:empty::before {
+                color: var(--text-muted);
+            }
+        </style>
     </head>
     <body>
         <div class="container" style="max-width: 1300px">
@@ -71,74 +177,18 @@
                         <!-- Tab 1: Konten Soal -->
                         <div id="tab-content" class="tab-content active">
                             <div class="form-group">
-                                <label>Tipe Soal</label>
+                                <label>Teks / Pertanyaan</label>
                                 <div
-                                    style="
-                                        display: flex;
-                                        gap: 16px;
-                                        margin-top: 6px;
-                                    "
-                                >
-                                    <label
-                                        style="font-weight: normal; margin: 0"
-                                        ><input
-                                            type="radio"
-                                            name="q-type"
-                                            value="text"
-                                            checked
-                                        />
-                                        Teks biasa</label
-                                    >
-                                    <label
-                                        style="font-weight: normal; margin: 0"
-                                        ><input
-                                            type="radio"
-                                            name="q-type"
-                                            value="math"
-                                        />
-                                        Matematika (MathJax)</label
-                                    >
-                                    <label
-                                        style="font-weight: normal; margin: 0"
-                                        ><input
-                                            type="radio"
-                                            name="q-type"
-                                            value="figural"
-                                        />
-                                        Bergambar (Figural)</label
-                                    >
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="q-content-text"
-                                    >Teks / Pertanyaan</label
-                                >
+                                    id="q-content-editor"
+                                    class="quill-editor"
+                                    data-placeholder="Tuliskan pertanyaan disini... Gunakan toolbar untuk memformat teks dan menyisipkan gambar."
+                                ></div>
                                 <textarea
                                     id="q-content-text"
                                     class="input-field"
-                                    placeholder="Tuliskan pertanyaan... Matematika: gunakan $$...$$"
+                                    name="q-content-text"
+                                    style="display: none"
                                 ></textarea>
-                            </div>
-                            <div
-                                class="form-group"
-                                id="image-group"
-                                style="display: none"
-                            >
-                                <label for="q-image"
-                                    >Upload Gambar (Untuk Figural)</label
-                                >
-                                <input
-                                    type="file"
-                                    id="q-image"
-                                    class="input-field"
-                                    accept="image/*"
-                                />
-                                <div
-                                    id="image-preview"
-                                    class="preview-box"
-                                    style="display: none; text-align: center"
-                                ></div>
-                                <input type="hidden" id="existing-image-url" />
                             </div>
                         </div>
 
@@ -146,58 +196,84 @@
                         <div id="tab-options" class="tab-content">
                             <p
                                 style="
-                                    color: #64748b;
+                                    color: var(--text-muted);
                                     font-size: 0.85rem;
                                     margin-bottom: 12px;
                                 "
                             >
                                 Isi semua opsi dan pilih 1 kunci jawaban benar
                             </p>
+
                             <div class="form-group">
-                                <label for="opt-a">Opsi A</label>
+                                <label>Opsi A</label>
+                                <div
+                                    id="opt-a-editor"
+                                    class="quill-editor editor-option"
+                                    data-placeholder="Isi opsi A"
+                                ></div>
                                 <textarea
                                     id="opt-a"
                                     class="input-field"
-                                    rows="2"
-                                    placeholder="Isi opsi A... MathJax: $$...$$"
+                                    style="display: none"
                                 ></textarea>
                             </div>
+
                             <div class="form-group">
-                                <label for="opt-b">Opsi B</label>
+                                <label>Opsi B</label>
+                                <div
+                                    id="opt-b-editor"
+                                    class="quill-editor editor-option"
+                                    data-placeholder="Isi opsi B"
+                                ></div>
                                 <textarea
                                     id="opt-b"
                                     class="input-field"
-                                    rows="2"
-                                    placeholder="Isi opsi B... MathJax: $$...$$"
+                                    style="display: none"
                                 ></textarea>
                             </div>
+
                             <div class="form-group">
-                                <label for="opt-c">Opsi C</label>
+                                <label>Opsi C</label>
+                                <div
+                                    id="opt-c-editor"
+                                    class="quill-editor editor-option"
+                                    data-placeholder="Isi opsi C"
+                                ></div>
                                 <textarea
                                     id="opt-c"
                                     class="input-field"
-                                    rows="2"
-                                    placeholder="Isi opsi C... MathJax: $$...$$"
+                                    style="display: none"
                                 ></textarea>
                             </div>
+
                             <div class="form-group">
-                                <label for="opt-d">Opsi D</label>
+                                <label>Opsi D</label>
+                                <div
+                                    id="opt-d-editor"
+                                    class="quill-editor editor-option"
+                                    data-placeholder="Isi opsi D"
+                                ></div>
                                 <textarea
                                     id="opt-d"
                                     class="input-field"
-                                    rows="2"
-                                    placeholder="Isi opsi D... MathJax: $$...$$"
+                                    style="display: none"
                                 ></textarea>
                             </div>
+
                             <div class="form-group">
-                                <label for="opt-e">Opsi E</label>
+                                <label>Opsi E</label>
+                                <div
+                                    id="opt-e-editor"
+                                    class="quill-editor editor-option"
+                                    data-placeholder="Isi opsi E"
+                                ></div>
                                 <textarea
                                     id="opt-e"
                                     class="input-field"
-                                    rows="2"
-                                    placeholder="Isi opsi E... MathJax: $$...$$"
+                                    style="display: none"
                                 ></textarea>
                             </div>
+
                             <div class="form-group">
                                 <label>Kunci Jawaban Benar</label>
                                 <select
@@ -217,48 +293,27 @@
                         <!-- Tab 3: Pembahasan -->
                         <div id="tab-explanation" class="tab-content">
                             <div class="form-group">
-                                <label for="q-explanation"
-                                    >Pembahasan Cara Pengerjaan</label
-                                >
+                                <label>Pembahasan Cara Pengerjaan</label>
+                                <div
+                                    id="q-explanation-editor"
+                                    class="quill-editor"
+                                    data-placeholder="Tuliskan langkah penyelesaian..."
+                                ></div>
                                 <textarea
                                     id="q-explanation"
                                     class="input-field"
-                                    placeholder="Tuliskan langkah penyelesaian..."
+                                    name="q-explanation"
+                                    style="display: none"
                                 ></textarea>
-                            </div>
-                            <div class="form-group">
-                                <label for="q-explanation-image"
-                                    >Upload Gambar Pembahasan (Opsional)</label
-                                >
-                                <input
-                                    type="file"
-                                    id="q-explanation-image"
-                                    class="input-field"
-                                    accept="image/*"
-                                />
-                                <div
-                                    id="explanation-image-preview"
-                                    class="preview-box"
-                                    style="
-                                        display: none;
-                                        text-align: center;
-                                        margin-top: 12px;
-                                    "
-                                ></div>
-                                <input
-                                    type="hidden"
-                                    id="existing-explanation-image-url"
-                                />
                             </div>
                         </div>
 
                         <!-- Tab 4: Preview -->
                         <div id="tab-preview" class="tab-content">
                             <div class="form-group">
-                                <label
-                                    >Pratinjau Soal (Format MathJax &
-                                    Gambar)</label
-                                >
+                                <label>
+                                    Pratinjau Soal (Format MathJax & Gambar)
+                                </label>
                                 <div
                                     id="preview-render-area"
                                     style="

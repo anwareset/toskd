@@ -1,41 +1,249 @@
+// DOM references
 const tableEl = document.getElementById("questions-table");
 const bodyEl = document.getElementById("questions-body");
 const loadingEl = document.getElementById("loading");
 const modal = document.getElementById("q-modal");
 const form = document.getElementById("q-form");
 const modalTitle = document.getElementById("modal-title");
-const imgGroup = document.getElementById("image-group");
-const imgInput = document.getElementById("q-image");
-const imgPreview = document.getElementById("image-preview");
-const explanationImgInput = document.getElementById("q-explanation-image");
-const explanationImgPreview = document.getElementById(
-  "explanation-image-preview",
-);
 
 let questions = [];
-let base64Image = null;
-let base64ExplanationImage = null;
 
+// Quill editor instances
+let contentEditor = null;
+let explanationEditor = null;
+let optionEditors = {};
+let editorsReady = false;
+let quillInitialized = false;
+
+// Custom image handler for Quill
+const imageHandler = async function () {
+  const input = document.createElement("input");
+  input.setAttribute("type", "file");
+  input.setAttribute("accept", "image/*");
+  input.click();
+
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Image = e.target.result;
+
+        // Upload to server
+        const response = await fetch("/api/upload-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: base64Image, folder: "questions" }),
+        });
+
+        if (!response.ok) throw new Error("Upload failed");
+
+        const { url } = await response.json();
+
+        // Insert image into editor
+        const editor = this.quill;
+        const range = editor.getSelection();
+        editor.insertEmbed(range.index, "image", url);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      alert("Gagal mengupload gambar. Coba lagi.");
+    }
+  };
+};
+
+// Toolbar configuration for Quill
+const toolbarOptions = {
+  container: [
+    ["bold", "italic", "underline", "strike"],
+    ["blockquote", "code-block"],
+    [{ list: "ordered" }, { list: "bullet" }],
+    ["link", { image: "upload" }],
+    ["formula"],
+    ["clean"],
+  ],
+  handlers: {
+    image: imageHandler,
+  },
+};
+
+// Initialize Quill editors
+function initQuillEditors() {
+  if (quillInitialized || !window.Quill) return;
+
+  try {
+    // Destroy existing editors if any (cleanup)
+    if (contentEditor) contentEditor = null;
+    if (explanationEditor) explanationEditor = null;
+    optionEditors = {};
+
+    // Content editor
+    contentEditor = new Quill("#q-content-editor", {
+      theme: "snow",
+      modules: {
+        toolbar: toolbarOptions,
+      },
+      placeholder:
+        "Tuliskan pertanyaan disini... Gunakan toolbar untuk memformat teks dan menyisipkan gambar.",
+    });
+
+    // Sync content to hidden textarea on change
+    contentEditor.on("text-change", () => {
+      document.getElementById("q-content-text").value =
+        contentEditor.root.innerHTML;
+    });
+
+    // Explanation editor
+    explanationEditor = new Quill("#q-explanation-editor", {
+      theme: "snow",
+      modules: {
+        toolbar: toolbarOptions,
+      },
+      placeholder: "Tuliskan langkah penyelesaian...",
+    });
+
+    // Sync explanation to hidden textarea on change
+    explanationEditor.on("text-change", () => {
+      document.getElementById("q-explanation").value =
+        explanationEditor.root.innerHTML;
+    });
+
+    // Option editors (A-E)
+    ["A", "B", "C", "D", "E"].forEach((k) => {
+      const editorId = `opt-${k.toLowerCase()}-editor`;
+      const textareaId = `opt-${k.toLowerCase()}`;
+
+      optionEditors[k] = new Quill(`#${editorId}`, {
+        theme: "snow",
+        modules: {
+          toolbar: {
+            container: [
+              ["bold", "italic", "underline"],
+              ["link", { image: "upload" }],
+              ["formula"],
+              ["clean"],
+            ],
+            handlers: {
+              image: imageHandler,
+            },
+          },
+        },
+        placeholder: `Isi opsi ${k}`,
+      });
+
+      // Sync to hidden textarea on change
+      optionEditors[k].on("text-change", () => {
+        document.getElementById(textareaId).value =
+          optionEditors[k].root.innerHTML;
+      });
+    });
+
+    editorsReady = true;
+    quillInitialized = true;
+    console.log("Quill editors initialized successfully");
+  } catch (e) {
+    console.error("Failed to initialize Quill editors:", e);
+    editorsReady = false;
+    quillInitialized = false;
+  }
+}
+
+// Sync all editors to their hidden textareas
+function syncEditorsToTextareas() {
+  if (!editorsReady) return;
+
+  try {
+    if (contentEditor) {
+      document.getElementById("q-content-text").value =
+        contentEditor.root.innerHTML;
+    }
+
+    if (explanationEditor) {
+      document.getElementById("q-explanation").value =
+        explanationEditor.root.innerHTML;
+    }
+
+    ["A", "B", "C", "D", "E"].forEach((k) => {
+      if (optionEditors[k]) {
+        document.getElementById(`opt-${k.toLowerCase()}`).value =
+          optionEditors[k].root.innerHTML;
+      }
+    });
+  } catch (e) {
+    console.warn("Sync editors failed:", e);
+  }
+}
+
+// Set editor values from strings
+function setEditorValues(content, options, explanation) {
+  if (!editorsReady) return;
+
+  try {
+    if (contentEditor && content) {
+      contentEditor.root.innerHTML = content;
+    }
+
+    if (explanationEditor && explanation) {
+      explanationEditor.root.innerHTML = explanation;
+    }
+
+    if (options) {
+      ["A", "B", "C", "D", "E"].forEach((k) => {
+        if (optionEditors[k] && options[k]) {
+          optionEditors[k].root.innerHTML = options[k];
+        }
+      });
+    }
+  } catch (e) {
+    console.warn("Set editor values failed:", e);
+  }
+}
+
+// Clear all editors
+function clearEditors() {
+  if (!editorsReady) return;
+
+  try {
+    if (contentEditor) contentEditor.root.innerHTML = "";
+    if (explanationEditor) explanationEditor.root.innerHTML = "";
+    ["A", "B", "C", "D", "E"].forEach((k) => {
+      if (optionEditors[k]) optionEditors[k].root.innerHTML = "";
+    });
+  } catch (e) {
+    console.warn("Clear editors failed:", e);
+  }
+}
+
+// Escape HTML
 function esc(s) {
   const d = document.createElement("div");
   d.textContent = s;
   return d.innerHTML;
 }
 
+// Initialize/load questions
 async function init() {
   loadingEl.style.display = "flex";
   tableEl.style.display = "none";
+
   try {
     const res = await fetch("/api/questions");
     questions = await res.json();
     loadingEl.style.display = "none";
     tableEl.style.display = "table";
+
     bodyEl.innerHTML = questions
       .map(
         (q, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis">${esc(q.content.replace(/<[^>]*>/g, ""))}</td>
+        <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis">${esc(
+          q.content.replace(/<[^>]*>/g, ""),
+        )}</td>
         <td><strong>${q.question_type.toUpperCase()}</strong></td>
         <td>${q.image_url ? `<img src="${q.image_url}" style="height:40px;border-radius:4px">` : "-"}</td>
         <td><span class="btn-success" style="padding:2px 8px;border-radius:4px;font-size:0.8rem">${q.correct_answer}</span></td>
@@ -50,14 +258,15 @@ async function init() {
   } catch (e) {
     loadingEl.innerHTML =
       '<p style="color:var(--danger)">Gagal memuat bank soal.</p>';
+    console.error("Failed to load questions:", e);
   }
 }
 
+// Render preview
 function renderPreview() {
+  syncEditorsToTextareas();
+
   const content = document.getElementById("q-content-text").value;
-  const question_type = document.querySelector(
-    'input[name="q-type"]:checked',
-  ).value;
   const optA = document.getElementById("opt-a").value;
   const optB = document.getElementById("opt-b").value;
   const optC = document.getElementById("opt-c").value;
@@ -65,32 +274,11 @@ function renderPreview() {
   const optE = document.getElementById("opt-e").value;
   const correct = document.getElementById("correct-ans").value;
   const explanation = document.getElementById("q-explanation").value;
-  const existing_image_url =
-    document.getElementById("existing-image-url").value;
-  const existing_explanation_image_url = document.getElementById(
-    "existing-explanation-image-url",
-  ).value;
-
-  let imgHtml = "";
-  if (question_type === "figural") {
-    const src = base64Image || existing_image_url;
-    if (src) {
-      imgHtml = `<div style="margin-top:12px"><img src="${src}" style="max-height:200px;border-radius:8px"></div>`;
-    }
-  }
-
-  let explanationImgHtml = "";
-  const explanationSrc =
-    base64ExplanationImage || existing_explanation_image_url;
-  if (explanationSrc) {
-    explanationImgHtml = `<div style="margin-top:12px"><img src="${explanationSrc}" style="max-height:200px;border-radius:8px"></div>`;
-  }
 
   const previewArea = document.getElementById("preview-render-area");
   previewArea.innerHTML = `
     <div style="font-weight:bold;margin-bottom:8px">Pertanyaan:</div>
     <div style="margin-bottom:16px">${content || "(kosong)"}</div>
-    ${imgHtml}
     <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px">
       <div><span style="font-weight:bold;color:${correct === "A" ? "var(--success)" : "inherit"}">A.</span> ${optA || "(belum diisi)"}</div>
       <div><span style="font-weight:bold;color:${correct === "B" ? "var(--success)" : "inherit"}">B.</span> ${optB || "(belum diisi)"}</div>
@@ -101,90 +289,73 @@ function renderPreview() {
     <hr style="margin:20px 0;border:0;border-top:1px solid #e2e8f0">
     <div style="font-weight:bold;margin-bottom:8px">Pembahasan (Kunci: ${correct}):</div>
     <div>${explanation || "(belum diisi)"}</div>
-    ${explanationImgHtml}
   `;
 
+  // Typeset with MathJax if available
   if (window.MathJax?.typesetPromise) {
     MathJax.typesetPromise([previewArea]).catch(() => {});
   }
 }
 
-// Dialog tabs
-const tabs = document.querySelectorAll(".tab-btn");
+// Tab switching
 function switchTab(tabId) {
-  tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === tabId));
+  document
+    .querySelectorAll(".tab-btn")
+    .forEach((t) => t.classList.toggle("active", t.dataset.tab === tabId));
   document
     .querySelectorAll(".tab-content")
     .forEach((c) => c.classList.toggle("active", c.id === tabId));
+
   if (tabId === "tab-preview") {
     renderPreview();
   }
 }
-tabs.forEach((tab) => {
-  tab.onclick = () => switchTab(tab.dataset.tab);
-});
 
+// Reset tabs to first tab
 function resetTabs() {
   switchTab("tab-content");
 }
 
+// Attach event listeners to tab buttons
+function initTabNavigation() {
+  document.querySelectorAll(".tab-btn").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      switchTab(tab.dataset.tab);
+    });
+  });
+}
+
+// Add question button handler
 document.getElementById("add-q-btn").onclick = () => {
   form.reset();
   document.getElementById("q-id").value = "";
-  document.getElementById("existing-image-url").value = "";
-  document.getElementById("existing-explanation-image-url").value = "";
-  base64Image = null;
-  base64ExplanationImage = null;
-  imgPreview.style.display = "none";
-  explanationImgPreview.style.display = "none";
-  imgGroup.style.display = "none";
   modalTitle.textContent = "Tambah Soal Baru";
+
+  clearEditors();
   resetTabs();
+
+  // Initialize Quill editors when modal opens
+  // Small timeout to ensure modal is fully rendered
+  setTimeout(() => {
+    if (!quillInitialized) {
+      initQuillEditors();
+    }
+    initTabNavigation(); // Initialize tab navigation after modal opens
+  }, 50);
+
   modal.showModal();
 };
 
+// Close modal
 document.getElementById("close-modal-btn").onclick = () => modal.close();
 
-// Type radio switcher
-document.querySelectorAll('input[name="q-type"]').forEach((r) => {
-  r.onchange = () => {
-    if (r.value === "figural") imgGroup.style.display = "block";
-    else imgGroup.style.display = "none";
-  };
-});
-
-// Base64 file converter
-imgInput.onchange = () => {
-  const file = imgInput.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    base64Image = e.target.result;
-    imgPreview.style.display = "block";
-    imgPreview.innerHTML = `<img src="${base64Image}" style="max-height:150px;border-radius:4px">`;
-  };
-  reader.readAsDataURL(file);
-};
-
-explanationImgInput.onchange = () => {
-  const file = explanationImgInput.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    base64ExplanationImage = e.target.result;
-    explanationImgPreview.style.display = "block";
-    explanationImgPreview.innerHTML = `<img src="${base64ExplanationImage}" style="max-height:150px;border-radius:4px">`;
-  };
-  reader.readAsDataURL(file);
-};
-
+// Form submit
 form.onsubmit = async (e) => {
   e.preventDefault();
+  syncEditorsToTextareas();
+
   const id = document.getElementById("q-id").value;
   const content = document.getElementById("q-content-text").value.trim();
-  const question_type = document.querySelector(
-    'input[name="q-type"]:checked',
-  ).value;
   const options = {
     A: document.getElementById("opt-a").value.trim(),
     B: document.getElementById("opt-b").value.trim(),
@@ -194,40 +365,42 @@ form.onsubmit = async (e) => {
   };
   const correct_answer = document.getElementById("correct-ans").value;
   const explanation = document.getElementById("q-explanation").value.trim();
-  const existing_image_url =
-    document.getElementById("existing-image-url").value;
-  const existing_explanation_image_url = document.getElementById(
-    "existing-explanation-image-url",
-  ).value;
 
-  if (!content) {
+  // Validation
+  if (!content || content === "<p><br></p>") {
     alert("Teks / Pertanyaan wajib diisi!");
     switchTab("tab-content");
-    document.getElementById("q-content-text").focus();
     return;
   }
-  if (!options.A || !options.B || !options.C || !options.D || !options.E) {
+  if (
+    !options.A ||
+    options.A === "<p><br></p>" ||
+    !options.B ||
+    options.B === "<p><br></p>" ||
+    !options.C ||
+    options.C === "<p><br></p>" ||
+    !options.D ||
+    options.D === "<p><br></p>" ||
+    !options.E ||
+    options.E === "<p><br></p>"
+  ) {
     alert("Semua Opsi Jawaban (A-E) wajib diisi!");
     switchTab("tab-options");
-    if (!options.A) document.getElementById("opt-a").focus();
-    else if (!options.B) document.getElementById("opt-b").focus();
-    else if (!options.C) document.getElementById("opt-c").focus();
-    else if (!options.D) document.getElementById("opt-d").focus();
-    else if (!options.E) document.getElementById("opt-e").focus();
     return;
   }
   if (!correct_answer) {
     alert("Kunci Jawaban Benar wajib dipilih!");
     switchTab("tab-options");
-    document.getElementById("correct-ans").focus();
     return;
   }
-  if (!explanation) {
+  if (!explanation || explanation === "<p><br></p>") {
     alert("Pembahasan Cara Pengerjaan wajib diisi!");
     switchTab("tab-explanation");
-    document.getElementById("q-explanation").focus();
     return;
   }
+
+  // Default to 'text' type since images are now inline
+  const question_type = "text";
 
   const payload = {
     content,
@@ -235,10 +408,11 @@ form.onsubmit = async (e) => {
     options,
     correct_answer,
     explanation,
-    image: base64Image,
-    image_url: existing_image_url,
-    explanation_image: base64ExplanationImage,
-    explanation_image_url: existing_explanation_image_url,
+    // No image fields needed - images are inline in content/explanation
+    image: null,
+    image_url: null,
+    explanation_image: null,
+    explanation_image_url: null,
   };
 
   const method = id ? "PUT" : "POST";
@@ -255,72 +429,69 @@ form.onsubmit = async (e) => {
     init();
   } catch (err) {
     alert("Gagal menyimpan soal.");
+    console.error("Save failed:", err);
   }
 };
 
+// Edit question
 window.editQuestion = (id) => {
   const q = questions.find((x) => x.id === id);
   if (!q) return;
+
   document.getElementById("q-id").value = q.id;
-  document.getElementById("q-content-text").value = q.content;
-  document.querySelector(
-    `input[name="q-type"][value="${q.question_type}"]`,
-  ).checked = true;
 
-  if (q.question_type === "figural") {
-    imgGroup.style.display = "block";
-    if (q.image_url) {
-      document.getElementById("existing-image-url").value = q.image_url;
-      imgPreview.style.display = "block";
-      imgPreview.innerHTML = `<img src="${q.image_url}" style="max-height:150px;border-radius:4px">`;
-    } else {
-      imgPreview.style.display = "none";
-    }
-  } else {
-    imgGroup.style.display = "none";
-    imgPreview.style.display = "none";
-  }
-
-  document.getElementById("opt-a").value = q.options.A;
-  document.getElementById("opt-b").value = q.options.B;
-  document.getElementById("opt-c").value = q.options.C;
-  document.getElementById("opt-d").value = q.options.D;
-  document.getElementById("opt-e").value = q.options.E;
+  // Fill hidden textareas directly
+  document.getElementById("q-content-text").value = q.content || "";
+  document.getElementById("q-explanation").value = q.explanation || "";
+  document.getElementById("opt-a").value = q.options.A || "";
+  document.getElementById("opt-b").value = q.options.B || "";
+  document.getElementById("opt-c").value = q.options.C || "";
+  document.getElementById("opt-d").value = q.options.D || "";
+  document.getElementById("opt-e").value = q.options.E || "";
   document.getElementById("correct-ans").value = q.correct_answer;
-  document.getElementById("q-explanation").value = q.explanation;
 
-  if (q.explanation_image_url) {
-    document.getElementById("existing-explanation-image-url").value =
-      q.explanation_image_url;
-    explanationImgPreview.style.display = "block";
-    explanationImgPreview.innerHTML = `<img src="${q.explanation_image_url}" style="max-height:150px;border-radius:4px">`;
-  } else {
-    document.getElementById("existing-explanation-image-url").value = "";
-    explanationImgPreview.style.display = "none";
-  }
+  // Also set Quill editors if available
+  setEditorValues(q.content, q.options, q.explanation);
 
-  base64Image = null;
-  base64ExplanationImage = null;
   modalTitle.textContent = "Edit Soal";
   resetTabs();
+
+  // Initialize Quill editors and tab navigation for edit
+  setTimeout(() => {
+    if (!quillInitialized) {
+      initQuillEditors();
+    } else {
+      // If already initialized, just set values
+      setEditorValues(q.content, q.options, q.explanation);
+    }
+    initTabNavigation(); // Initialize tab navigation after modal opens
+  }, 50);
+
   modal.showModal();
 };
 
+// Delete question
 window.deleteQuestion = async (id) => {
   try {
+    // Check usage first
     const usageRes = await fetch(`/api/questions/${id}/usage`);
     const usage = await usageRes.json();
+
     let msg = "Apakah Anda yakin ingin menghapus soal ini dari Bank Soal?";
     if (usage.used) {
       msg = `Soal ini digunakan di ${usage.packs.join(", ")}. Hapus?`;
     }
+
     if (!confirm(msg)) return;
+
     const res = await fetch(`/api/questions/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error();
     init();
   } catch (err) {
     alert("Gagal menghapus soal.");
+    console.error("Delete failed:", err);
   }
 };
 
+// Initialize on load
 init();

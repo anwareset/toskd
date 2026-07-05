@@ -329,6 +329,24 @@ app.get("/api/questions/:id/usage", async (req, res) => {
   }
 });
 
+// Upload image for rich text editor
+app.post("/api/upload-image", async (req, res) => {
+  try {
+    const { image, folder } = req.body;
+    if (!image) return res.status(400).json({ error: "No image provided" });
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Data, "base64");
+    const dir = folder || "questions";
+    const { url } = await put(`${dir}/${Date.now()}.png`, buffer, {
+      access: "public",
+    });
+    res.json({ url });
+  } catch (error) {
+    console.error("Error uploading image:", error);
+    res.status(500).json({ error: "Failed to upload image" });
+  }
+});
+
 // Delete a question
 app.delete("/api/questions/:id", async (req, res) => {
   try {
