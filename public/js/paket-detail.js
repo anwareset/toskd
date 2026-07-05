@@ -43,6 +43,24 @@ async function init() {
   }
 }
 
+function createQuestionPreview(content) {
+  // Create a cleaner preview: remove HTML tags, collapse whitespace, limit length
+  if (!content) return "(soal kosong)";
+
+  // Strip HTML tags
+  let text = content.replace(/<[^>]*>/g, "");
+
+  // Replace multiple spaces/tabs/newlines with single space
+  text = text.replace(/\s+/g, " ").trim();
+
+  // Limit to ~120 characters for preview
+  if (text.length > 120) {
+    text = text.substring(0, 120) + "...";
+  }
+
+  return text || "(soal tidak memiliki konten teks)";
+}
+
 function renderLists() {
   const packIds = new Set(packQuestions.map((q) => q.id));
   const available = allQuestions.filter((q) => !packIds.has(q.id));
@@ -55,10 +73,10 @@ function renderLists() {
     bankList.innerHTML = available
       .map(
         (q) => `
-      <label class="option-item" style="cursor:pointer;background:#fff;margin-bottom:8px">
+      <label class="option-item" style="cursor:pointer;background:var(--surface);margin-bottom:8px">
         <input type="checkbox" name="add-q" value="${q.id}">
         <span class="option-label">
-          <strong>[${q.question_type.toUpperCase()}]</strong> ${esc(q.content.substring(0, 100))}...
+          <strong>[${q.question_type.toUpperCase()}]</strong> ${createQuestionPreview(q.content)}
         </span>
       </label>
     `,
@@ -77,7 +95,7 @@ function renderLists() {
         (q, i) => `
       <div class="pack-question-item" draggable="true" data-id="${q.id}" data-index="${i}">
         <span class="q-num">Soal ${i + 1}</span>
-        <span class="q-preview">${esc(q.content.replace(/<[^>]*>/g, ""))}</span>
+        <span class="q-preview">${createQuestionPreview(q.content)}</span>
         <button class="btn-danger" style="padding:4px 8px;font-size:0.8rem" onclick="removeQuestion(${q.id})">Hapus</button>
       </div>
     `,

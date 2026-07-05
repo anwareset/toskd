@@ -13,7 +13,7 @@
 
     const title = document.createElement("a");
     title.className = `global-header-title${isExam ? " no-link" : ""}`;
-    title.textContent = "🚀 CAT SKD - TIU";
+    title.textContent = "TOSKD CAT";
     if (!isExam) {
       title.href = "/";
     }
