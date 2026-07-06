@@ -95,6 +95,12 @@ body {
     background: var(--bg);
     color: var(--text);
     line-height: 1.6;
+    /* Safety net: prevent horizontal page scroll on pages that have
+       flex/grid columns with long unbreakable content (Math, URLs, etc.).
+       `clip` is used (not `hidden`) so the body remains a non-scrolling
+       container, keeping `position: sticky` working on other pages
+       (e.g. .exam-header, .answer-panel). */
+    overflow-x: clip;
 }
 .container {
     max-width: 1200px;
@@ -557,6 +563,32 @@ tbody tr:hover {
 }
 .pack-detail-layout > div {
     flex: 1;
+    /* ROOT FIX: flex items default to min-width: auto which is their
+       min-content size. Long content (MathJax, URLs, preview text) in
+       bank-questions-list can otherwise force this column wider than
+       its allotment, pushing the pack-question-item column offscreen
+       and producing a horizontal page scrollbar.
+       `min-width: 0` allows the column to shrink; `overflow-wrap: anywhere`
+       breaks unbreakable strings as a last resort. */
+    min-width: 0;
+    min-height: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+@media (min-width: 1201px) {
+    /* On wide viewports, bound each column for readability and prevent
+       one column from monopolizing width when its content is short. */
+    .pack-detail-layout > div {
+        min-width: 360px;
+        max-width: 720px;
+    }
+}
+@media (max-width: 1200px) {
+    /* Stack earlier than the default 1023px breakpoint used by exam/review,
+       so 2-column mode only appears on truly spacious screens. */
+    .pack-detail-layout {
+        flex-direction: column;
+    }
 }
 .pack-question-item {
     display: flex;
@@ -585,6 +617,22 @@ tbody tr:hover {
     text-overflow: ellipsis;
     font-size: 0.85rem;
     color: var(--text-muted);
+}
+/* Drag handle affordance (visual only). The whole .pack-question-item
+   remains draggable; the ::before just signals to the user where to
+   grab. Pure-CSS so we don't have to touch paket-detail.js markup. */
+.pack-question-item::before {
+    content: "\22EE\22EE";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    color: var(--text-muted);
+    font-weight: 700;
+    line-height: 1;
+    user-select: none;
+    cursor: grab;
+    flex-shrink: 0;
 }
 
 /* Preview box */
@@ -646,6 +694,7 @@ tbody tr:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
     margin: 16px 0;
     gap: 12px;
 }

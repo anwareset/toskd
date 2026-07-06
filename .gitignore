@@ -162,3 +162,6 @@ Thumbs.db
 *.sln
 *.swp
 *.local
+
+# Freebuff
+paket-detail-overflow-spec.md
