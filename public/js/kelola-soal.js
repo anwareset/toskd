@@ -244,8 +244,7 @@ async function init() {
         <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis">${esc(
           q.content.replace(/<[^>]*>/g, ""),
         )}</td>
-        <td><strong>${q.question_type.toUpperCase()}</strong></td>
-        <td>${q.image_url ? `<img src="${q.image_url}" style="height:40px;border-radius:4px">` : "-"}</td>
+        <td><strong>${esc(q.question_type || "text")}</strong></td>
         <td><span class="btn-success" style="padding:2px 8px;border-radius:4px;font-size:0.8rem">${q.correct_answer}</span></td>
         <td>
           <button class="btn-secondary" onclick="editQuestion(${q.id})">Edit</button>
@@ -380,6 +379,7 @@ form.onsubmit = async (e) => {
   };
   const correct_answer = document.getElementById("correct-ans").value;
   const explanation = document.getElementById("q-explanation").value.trim();
+  const question_type = document.getElementById("q-question-type").value;
 
   // Validation
   if (!content || content === "<p><br></p>") {
@@ -413,9 +413,11 @@ form.onsubmit = async (e) => {
     switchTab("tab-explanation");
     return;
   }
-
-  // Default to 'text' type since images are now inline
-  const question_type = "text";
+  if (!question_type) {
+    alert("Tipe Soal wajib dipilih!");
+    switchTab("tab-content");
+    return;
+  }
 
   const payload = {
     content,
@@ -464,6 +466,8 @@ window.editQuestion = (id) => {
   document.getElementById("opt-d").value = q.options.D || "";
   document.getElementById("opt-e").value = q.options.E || "";
   document.getElementById("correct-ans").value = q.correct_answer;
+  document.getElementById("q-question-type").value =
+    q.question_type || "TWK Pilar Negara";
 
   // Also set Quill editors if available
   setEditorValues(q.content, q.options, q.explanation);

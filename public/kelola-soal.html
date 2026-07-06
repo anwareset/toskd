@@ -149,8 +149,7 @@
                         <tr>
                             <th>No</th>
                             <th>Konten Soal (Preview)</th>
-                            <th>Tipe</th>
-                            <th>Gambar</th>
+                            <th>Tipe Soal</th>
                             <th>Kunci Jawaban</th>
                             <th>Aksi</th>
                         </tr>
@@ -185,6 +184,73 @@
 
                             <!-- Tab 1: Konten Soal -->
                             <div id="tab-content" class="tab-content active">
+                                <div class="form-group">
+                                    <label for="q-question-type"
+                                        >Tipe Soal</label
+                                    >
+                                    <select
+                                        id="q-question-type"
+                                        class="input-field"
+                                    >
+                                        <optgroup label="TWK - Dasar Negara">
+                                            <option value="TWK Pilar Negara">
+                                                TWK Pilar Negara (Pancasila,
+                                                UUD45, Bhinneka Tunggal Ika)
+                                            </option>
+                                            <option
+                                                value="TWK Nilai Kebangsaan"
+                                            >
+                                                TWK Nilai Kebangsaan
+                                                (Nasionalisme, Integritas, Bela
+                                                Negara)
+                                            </option>
+                                            <option
+                                                value="TWK Bahasa Indonesia"
+                                            >
+                                                TWK Bahasa Indonesia
+                                            </option>
+                                        </optgroup>
+                                        <optgroup
+                                            label="TIU - Inteligensia Umum"
+                                        >
+                                            <option value="TIU Verbal">
+                                                TIU Verbal
+                                            </option>
+                                            <option value="TIU Numerik">
+                                                TIU Numerik
+                                            </option>
+                                            <option value="TIU Figural">
+                                                TIU Figural
+                                            </option>
+                                        </optgroup>
+                                        <optgroup
+                                            label="TKP - Karakteristik Pribadi"
+                                        >
+                                            <option
+                                                value="TKP Pelayanan Publik"
+                                            >
+                                                TKP Pelayanan Publik
+                                            </option>
+                                            <option value="TKP Jejaring Kerja">
+                                                TKP Jejaring Kerja
+                                            </option>
+                                            <option value="TKP Sosial Budaya">
+                                                TKP Sosial Budaya
+                                            </option>
+                                            <option
+                                                value="TKP Anti Radikalisme"
+                                            >
+                                                TKP Anti Radikalisme
+                                            </option>
+                                            <option value="TKP Profesionalisme">
+                                                TKP Profesionalisme
+                                            </option>
+                                            <option value="TKP TIK">
+                                                TKP TIK
+                                            </option>
+                                        </optgroup>
+                                    </select>
+                                </div>
                                 <div class="form-group">
                                     <label>Teks / Pertanyaan</label>
                                     <div
