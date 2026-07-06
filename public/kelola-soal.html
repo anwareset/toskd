@@ -124,7 +124,7 @@
     </head>
     <body>
         <div class="site-wrapper">
-            <div class="container" style="max-width: 1300px; flex: 1">
+            <div class="container" style="flex: 1">
                 <div class="header">
                     <h1 class="app-title">📄 Kelola Bank Soal</h1>
                     <div>
@@ -144,109 +144,56 @@
                     <div class="spinner"></div>
                 </div>
 
-                <!-- Top Pagination & Search Controls -->
+                <!-- Top Pagination & Search Controls (refactored) -->
                 <div
-                    class="table-controls"
+                    class="pagination-bar pagination-bar--precise"
                     id="controls-top"
-                    style="
-                        display: none;
-                        justify-content: space-between;
-                        align-items: center;
-                        margin: 16px 0;
-                        flex-wrap: wrap;
-                        gap: 12px;
-                    "
+                    style="display: none;"
                 >
-                    <div style="display: flex; align-items: center; gap: 8px">
-                        <label
-                            for="rows-per-page-top"
-                            style="
-                                font-size: 0.85rem;
-                                color: var(--text-muted);
-                                white-space: nowrap;
-                            "
+                    <div class="pagination-bar-left">
+                        <label for="rows-per-page-top" class="pagination-label"
                             >Tampilkan:</label
                         >
-                        <select
-                            id="rows-per-page-top"
-                            style="
-                                padding: 6px 12px;
-                                border: 1px solid var(--border);
-                                border-radius: 6px;
-                                background: var(--surface);
-                                color: var(--text);
-                                font-size: 0.85rem;
-                                height: 36px;
-                            "
-                        >
+                        <select id="rows-per-page-top" class="pagination-select">
                             <option value="10">10</option>
                             <option value="25">25</option>
                             <option value="50">50</option>
                             <option value="100">100</option>
                         </select>
-                        <span
-                            style="font-size: 0.85rem; color: var(--text-muted)"
-                            >baris</span
-                        >
+                        <span class="pagination-text">baris</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 12px">
+                    <div class="pagination-bar-center">
                         <input
                             type="text"
                             id="search-input"
+                            class="pagination-search"
                             placeholder="Cari soal..."
-                            style="
-                                padding: 6px 12px;
-                                border: 1px solid var(--border);
-                                border-radius: 6px;
-                                background: var(--surface);
-                                color: var(--text);
-                                font-size: 0.85rem;
-                                width: 280px;
-                                height: 36px;
-                            "
                         />
+                    </div>
+                    <div class="pagination-bar-right">
                         <button
-                            class="btn-secondary"
+                            class="btn-secondary pagination-btn"
                             id="prev-page-btn-top"
-                            style="
-                                padding: 6px 12px;
-                                border-radius: 6px;
-                                height: 36px;
-                                line-height: 1;
-                                display: inline-flex;
-                                align-items: center;
-                            "
                         >
                             Sebelumnya
                         </button>
-                        <span
-                            id="page-info-top"
-                            style="
-                                font-size: 0.85rem;
-                                color: var(--text-muted);
-                                white-space: nowrap;
-                                padding: 0 4px;
-                            "
+                        <span id="page-info-top" class="pagination-info"
                             >Halaman 1 dari 1</span
                         >
                         <button
-                            class="btn-secondary"
+                            class="btn-secondary pagination-btn"
                             id="next-page-btn-top"
-                            style="
-                                padding: 6px 12px;
-                                border-radius: 6px;
-                                height: 36px;
-                                line-height: 1;
-                                display: inline-flex;
-                                align-items: center;
-                            "
                         >
                             Selanjutnya
                         </button>
                     </div>
                 </div>
 
-                <table id="questions-table" style="display: none">
+                <table
+                    id="questions-table"
+                    class="table-condensed"
+                    style="display: none"
+                >
                     <thead>
                         <tr>
                             <th>No</th>
@@ -259,40 +206,21 @@
                     <tbody id="questions-body"></tbody>
                 </table>
 
-                <!-- Bottom Pagination Controls -->
+                <!-- Bottom Pagination Controls (refactored) -->
                 <div
-                    class="table-controls"
+                    class="pagination-bar pagination-bar--bottom pagination-bar--precise"
                     id="controls-bottom"
-                    style="
-                        display: flex;
-                        justify-content: flex-end;
-                        align-items: center;
-                        margin-top: 16px;
-                        flex-wrap: wrap;
-                        gap: 12px;
-                    "
+                    style="display: flex;"
                 >
-                    <div style="display: flex; align-items: center; gap: 8px">
+                    <div class="pagination-bar-left">
                         <label
                             for="rows-per-page-bottom"
-                            style="
-                                font-size: 0.85rem;
-                                color: var(--text-muted);
-                                white-space: nowrap;
-                            "
+                            class="pagination-label"
                             >Tampilkan:</label
                         >
                         <select
                             id="rows-per-page-bottom"
-                            style="
-                                padding: 6px 12px;
-                                border: 1px solid var(--border);
-                                border-radius: 6px;
-                                background: var(--surface);
-                                color: var(--text);
-                                font-size: 0.85rem;
-                                height: 36px;
-                            "
+                            class="pagination-select"
                         >
                             <option value="10">10</option>
                             <option value="25">25</option>
@@ -300,42 +228,21 @@
                             <option value="100">100</option>
                         </select>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 8px">
+                    <div class="pagination-bar-right">
                         <button
-                            class="btn-secondary"
+                            class="btn-secondary pagination-btn"
                             id="prev-page-btn-bottom"
-                            style="
-                                padding: 6px 12px;
-                                border-radius: 6px;
-                                height: 36px;
-                                line-height: 1;
-                                display: inline-flex;
-                                align-items: center;
-                            "
                         >
                             Sebelumnya
                         </button>
                         <span
                             id="page-info-bottom"
-                            style="
-                                font-size: 0.85rem;
-                                color: var(--text-muted);
-                                white-space: nowrap;
-                                padding: 0 4px;
-                            "
+                            class="pagination-info"
                             >Halaman 1 dari 1</span
                         >
                         <button
-                            class="btn-secondary"
+                            class="btn-secondary pagination-btn"
                             id="next-page-btn-bottom"
-                            style="
-                                padding: 6px 12px;
-                                border-radius: 6px;
-                                height: 36px;
-                                line-height: 1;
-                                display: inline-flex;
-                                align-items: center;
-                            "
                         >
                             Selanjutnya
                         </button>

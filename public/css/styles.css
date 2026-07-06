@@ -887,3 +887,27 @@ tbody tr:hover {
         max-width: 320px;
     }
 }
+
+/* ==== kelola-soal.html: table condensed for 1200px container ==== */
+/* Utility class untuk tabel yang perlu tampil compact di container
+   lebih sempit (mis. max-width: 1200px setelah standarisasi container).
+   Berlaku untuk kelola-soal.html dan halaman lain yang pakai tabel
+   dengan kolom lebar (seperti Konten Soal Preview).
+   Lihat kelola-soal-toolbar-spec.md untuk rationale. */
+
+.table-condensed th,
+.table-condensed td {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}
+.table-condensed th:nth-child(2),
+.table-condensed td:nth-child(2) {
+    max-width: 320px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.table-condensed td button {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+}
