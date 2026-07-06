@@ -163,7 +163,6 @@ Thumbs.db
 *.swp
 *.local
 
-# Freebuff
-paket-detail-*.md
-paket-detail-overflow-spec.md
-kelola-soal-toolbar-spec.md
+# Specs
+specs/**
+*-spec.md
