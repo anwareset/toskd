@@ -700,7 +700,7 @@ tbody tr:hover {
 }
 
 .pagination-bar--bottom {
-    justify-content: flex-end;
+    justify-content: space-between;
     margin-top: 16px;
     margin-bottom: 0;
 }
@@ -834,5 +834,56 @@ tbody tr:hover {
     }
     .card-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+/* ==== paket-detail.html toolbar utilities (rev. 3) ==== */
+/* Util class untuk pagination bar dengan layout presisi:
+   - Left group (Tampilkan) di ujung kiri via parent's space-between.
+   - Right group (Sebelumnya | Halaman X dari Y | Selanjutnya) di
+     ujung kanan dengan info center presisi via CSS Grid 1fr/auto/1fr.
+   - Jika ada .pagination-bar-center, ia naik ke baris 1 dengan order:-1
+     dan lebar penuh (full-width).
+
+   Reusable untuk halaman lain yang butuh pola pagination presisi.
+   Lihat paket-detail-toolbar-spec.md rev. 3 untuk rationale. */
+
+.pagination-bar--precise .pagination-bar-right {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    column-gap: 8px;
+}
+.pagination-bar--precise .pagination-bar-right > :first-child {
+    justify-self: start;
+}
+.pagination-bar--precise .pagination-bar-right > :nth-child(2) {
+    justify-self: center;
+}
+.pagination-bar--precise .pagination-bar-right > :last-child {
+    justify-self: end;
+}
+
+/* Center naik ke baris sendiri dengan lebar penuh.
+   Efektif hanya jika parent memiliki .pagination-bar-center
+   (saat ini hanya #bank-controls-top yang punya search).
+   Untuk bottom bar tanpa center, rule ini otomatis no-op — aman. */
+.pagination-bar--precise .pagination-bar-center {
+    order: -1;
+    flex-basis: 100%;
+    max-width: none;
+}
+
+/* Mobile (≤767 px): reset center behavior untuk top bar saja
+   (ID-scoped karena center spesifik top bar). Rule .pagination-bar
+   parent (flex-direction:column, align-items:stretch) tetap berlaku
+   untuk stack vertikal native. Tidak menambah exemption mobile untuk
+   right-cluster karena keputusan interview Ronde 2: "pertahankan rule
+   existing" — konsekuensi grid 1fr/auto/1fr di mobile sengaja diterima. */
+@media (max-width: 767px) {
+    #bank-controls-top .pagination-bar-center {
+        order: initial;
+        flex-basis: auto;
+        max-width: 320px;
     }
 }
