@@ -31,18 +31,111 @@
                         <div id="loading-bank" class="loading-overlay">
                             <div class="spinner"></div>
                         </div>
+
+                        <!-- Top Controls -->
+                        <div
+                            id="bank-controls-top"
+                            class="pagination-bar"
+                            style="display: none"
+                        >
+                            <div class="pagination-bar-left">
+                                <label
+                                    for="bank-rows-per-page-top"
+                                    class="pagination-label"
+                                >
+                                    Tampilkan:
+                                </label>
+                                <select
+                                    id="bank-rows-per-page-top"
+                                    class="pagination-select"
+                                >
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span class="pagination-text">baris</span>
+                            </div>
+                            <div class="pagination-bar-center">
+                                <input
+                                    type="text"
+                                    id="bank-search-input"
+                                    class="pagination-search"
+                                    placeholder="Cari soal..."
+                                />
+                            </div>
+                            <div class="pagination-bar-right">
+                                <button
+                                    class="btn-secondary pagination-btn"
+                                    id="bank-prev-btn-top"
+                                >
+                                    Sebelumnya
+                                </button>
+                                <span
+                                    id="bank-page-info-top"
+                                    class="pagination-info"
+                                >
+                                    Halaman 1 dari 1
+                                </span>
+                                <button
+                                    class="btn-secondary pagination-btn"
+                                    id="bank-next-btn-top"
+                                >
+                                    Selanjutnya
+                                </button>
+                            </div>
+                        </div>
+
                         <div
                             id="bank-questions-list"
-                            style="
-                                max-height: 600px;
-                                overflow-y: auto;
-                                margin-top: 12px;
-                                background: var(--bg);
-                                border: 1px solid var(--border);
-                                border-radius: 8px;
-                                padding: 8px;
-                            "
+                            class="bank-list-container"
                         ></div>
+
+                        <!-- Bottom Controls -->
+                        <div
+                            id="bank-controls-bottom"
+                            class="pagination-bar pagination-bar--bottom"
+                            style="display: none"
+                        >
+                            <div class="pagination-bar-left">
+                                <label
+                                    for="bank-rows-per-page-bottom"
+                                    class="pagination-label"
+                                >
+                                    Tampilkan:
+                                </label>
+                                <select
+                                    id="bank-rows-per-page-bottom"
+                                    class="pagination-select"
+                                >
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                            <div class="pagination-bar-right">
+                                <button
+                                    class="btn-secondary pagination-btn"
+                                    id="bank-prev-btn-bottom"
+                                >
+                                    Sebelumnya
+                                </button>
+                                <span
+                                    id="bank-page-info-bottom"
+                                    class="pagination-info"
+                                >
+                                    Halaman 1 dari 1
+                                </span>
+                                <button
+                                    class="btn-secondary pagination-btn"
+                                    id="bank-next-btn-bottom"
+                                >
+                                    Selanjutnya
+                                </button>
+                            </div>
+                        </div>
+
                         <button
                             class="btn-primary"
                             id="add-to-pack-btn"
