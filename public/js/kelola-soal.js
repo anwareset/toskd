@@ -225,10 +225,153 @@ function esc(s) {
   return d.innerHTML;
 }
 
+// Pagination & Search State
+let rowsPerPage = 10;
+let currentPage = 0;
+let searchTerm = "";
+
+function renderTable() {
+  const filtered = questions.filter((q) => {
+    const contentText = (q.content || "").replace(/<[^>]*>/g, "").toLowerCase();
+    const typeText = (q.question_type || "").toLowerCase();
+    const term = searchTerm.toLowerCase();
+    return contentText.includes(term) || typeText.includes(term);
+  });
+
+  const totalPages = Math.ceil(filtered.length / rowsPerPage) || 1;
+  if (currentPage >= totalPages) {
+    currentPage = totalPages - 1;
+  }
+  if (currentPage < 0) {
+    currentPage = 0;
+  }
+
+  // Update page info displays
+  const pageInfoText = `Halaman ${currentPage + 1} dari ${totalPages}`;
+  document.getElementById("page-info-top").textContent = pageInfoText;
+  document.getElementById("page-info-bottom").textContent = pageInfoText;
+
+  // Enable/disable buttons
+  const isFirst = currentPage === 0;
+  const isLast = currentPage >= totalPages - 1;
+  document.getElementById("prev-page-btn-top").disabled = isFirst;
+  document.getElementById("prev-page-btn-bottom").disabled = isFirst;
+  document.getElementById("next-page-btn-top").disabled = isLast;
+  document.getElementById("next-page-btn-bottom").disabled = isLast;
+
+  // Slice questions for current page
+  const start = currentPage * rowsPerPage;
+  const pageData = filtered.slice(start, start + rowsPerPage);
+
+  bodyEl.innerHTML = pageData
+    .map((q, idx) => {
+      const globalIdx = start + idx + 1;
+      return `
+        <tr>
+          <td>${globalIdx}</td>
+          <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis">${esc(
+            q.content.replace(/<[^>]*>/g, ""),
+          )}</td>
+          <td><strong>${esc(q.question_type || "text")}</strong></td>
+          <td><span class="btn-success" style="padding:2px 8px;border-radius:4px;font-size:0.8rem">${q.correct_answer}</span></td>
+          <td>
+            <button class="btn-secondary" onclick="editQuestion(${q.id})">Edit</button>
+            <button class="btn-danger" onclick="deleteQuestion(${q.id})">Hapus</button>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  // Show/hide controls containers
+  const controlsTop = document.getElementById("controls-top");
+  const controlsBottom = document.getElementById("controls-bottom");
+  if (questions.length > 0) {
+    controlsTop.style.display = "flex";
+    controlsBottom.style.display = "flex";
+  } else {
+    controlsTop.style.display = "none";
+    controlsBottom.style.display = "none";
+  }
+}
+
+// Event Listeners for Pagination & Search
+document.getElementById("rows-per-page-top").addEventListener("change", (e) => {
+  rowsPerPage = parseInt(e.target.value);
+  document.getElementById("rows-per-page-bottom").value = e.target.value;
+  currentPage = 0;
+  renderTable();
+});
+
+document
+  .getElementById("rows-per-page-bottom")
+  .addEventListener("change", (e) => {
+    rowsPerPage = parseInt(e.target.value);
+    document.getElementById("rows-per-page-top").value = e.target.value;
+    currentPage = 0;
+    renderTable();
+  });
+
+document.getElementById("prev-page-btn-top").addEventListener("click", () => {
+  if (currentPage > 0) {
+    currentPage--;
+    renderTable();
+  }
+});
+
+document
+  .getElementById("prev-page-btn-bottom")
+  .addEventListener("click", () => {
+    if (currentPage > 0) {
+      currentPage--;
+      renderTable();
+    }
+  });
+
+document.getElementById("next-page-btn-top").addEventListener("click", () => {
+  const filteredCount = questions.filter((q) => {
+    const contentText = (q.content || "").replace(/<[^>]*>/g, "").toLowerCase();
+    const typeText = (q.question_type || "").toLowerCase();
+    const term = searchTerm.toLowerCase();
+    return contentText.includes(term) || typeText.includes(term);
+  }).length;
+  const totalPages = Math.ceil(filteredCount / rowsPerPage) || 1;
+  if (currentPage < totalPages - 1) {
+    currentPage++;
+    renderTable();
+  }
+});
+
+document
+  .getElementById("next-page-btn-bottom")
+  .addEventListener("click", () => {
+    const filteredCount = questions.filter((q) => {
+      const contentText = (q.content || "")
+        .replace(/<[^>]*>/g, "")
+        .toLowerCase();
+      const typeText = (q.question_type || "").toLowerCase();
+      const term = searchTerm.toLowerCase();
+      return contentText.includes(term) || typeText.includes(term);
+    }).length;
+    const totalPages = Math.ceil(filteredCount / rowsPerPage) || 1;
+    if (currentPage < totalPages - 1) {
+      currentPage++;
+      renderTable();
+    }
+  });
+
+document.getElementById("search-input").addEventListener("input", (e) => {
+  searchTerm = e.target.value;
+  currentPage = 0;
+  renderTable();
+});
+
 // Initialize/load questions
 async function init() {
   loadingEl.style.display = "flex";
   tableEl.style.display = "none";
+  document.getElementById("controls-top").style.display = "none";
+  document.getElementById("controls-bottom").style.display = "none";
 
   try {
     const res = await fetch("/api/questions");
@@ -236,24 +379,7 @@ async function init() {
     loadingEl.style.display = "none";
     tableEl.style.display = "table";
 
-    bodyEl.innerHTML = questions
-      .map(
-        (q, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis">${esc(
-          q.content.replace(/<[^>]*>/g, ""),
-        )}</td>
-        <td><strong>${esc(q.question_type || "text")}</strong></td>
-        <td><span class="btn-success" style="padding:2px 8px;border-radius:4px;font-size:0.8rem">${q.correct_answer}</span></td>
-        <td>
-          <button class="btn-secondary" onclick="editQuestion(${q.id})">Edit</button>
-          <button class="btn-danger" onclick="deleteQuestion(${q.id})">Hapus</button>
-        </td>
-      </tr>
-    `,
-      )
-      .join("");
+    renderTable();
   } catch (e) {
     loadingEl.innerHTML =
       '<p style="color:var(--danger)">Gagal memuat bank soal.</p>';

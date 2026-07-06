@@ -144,6 +144,76 @@
                     <div class="spinner"></div>
                 </div>
 
+                <!-- Top Pagination & Search Controls -->
+                <div
+                    class="table-controls"
+                    id="controls-top"
+                    style="
+                        display: none;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin: 16px 0;
+                        flex-wrap: wrap;
+                        gap: 12px;
+                    "
+                >
+                    <div style="display: flex; align-items: center; gap: 8px">
+                        <label for="rows-per-page-top">Tampilkan:</label>
+                        <select
+                            id="rows-per-page-top"
+                            style="
+                                padding: 6px 12px;
+                                border: 1px solid var(--border);
+                                border-radius: 6px;
+                                background: var(--surface);
+                                color: var(--text);
+                                font-size: 0.9rem;
+                            "
+                        >
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                        <span>baris</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px">
+                        <input
+                            type="text"
+                            id="search-input"
+                            placeholder="Cari soal..."
+                            style="
+                                padding: 6px 12px;
+                                border: 1px solid var(--border);
+                                border-radius: 6px;
+                                background: var(--surface);
+                                color: var(--text);
+                                font-size: 0.9rem;
+                                width: 280px;
+                            "
+                        />
+                        <button
+                            class="btn-secondary"
+                            id="prev-page-btn-top"
+                            style="padding: 6px 12px; border-radius: 6px"
+                        >
+                            Sebelumnya
+                        </button>
+                        <span
+                            id="page-info-top"
+                            style="font-size: 0.9rem; color: var(--text-muted)"
+                            >Halaman 1 dari 1</span
+                        >
+                        <button
+                            class="btn-secondary"
+                            id="next-page-btn-top"
+                            style="padding: 6px 12px; border-radius: 6px"
+                        >
+                            Selanjutnya
+                        </button>
+                    </div>
+                </div>
+
                 <table id="questions-table" style="display: none">
                     <thead>
                         <tr>
@@ -156,6 +226,61 @@
                     </thead>
                     <tbody id="questions-body"></tbody>
                 </table>
+
+                <!-- Bottom Pagination Controls -->
+                <div
+                    class="table-controls"
+                    id="controls-bottom"
+                    style="
+                        display: flex;
+                        justify-content: flex-end;
+                        align-items: center;
+                        margin-top: 16px;
+                        flex-wrap: wrap;
+                        gap: 12px;
+                    "
+                >
+                    <div style="display: flex; align-items: center; gap: 8px">
+                        <label for="rows-per-page-bottom">Tampilkan:</label>
+                        <select
+                            id="rows-per-page-bottom"
+                            style="
+                                padding: 6px 12px;
+                                border: 1px solid var(--border);
+                                border-radius: 6px;
+                                background: var(--surface);
+                                color: var(--text);
+                                font-size: 0.9rem;
+                            "
+                        >
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px">
+                        <button
+                            class="btn-secondary"
+                            id="prev-page-btn-bottom"
+                            style="padding: 6px 12px; border-radius: 6px"
+                        >
+                            Sebelumnya
+                        </button>
+                        <span
+                            id="page-info-bottom"
+                            style="font-size: 0.9rem; color: var(--text-muted)"
+                            >Halaman 1 dari 1</span
+                        >
+                        <button
+                            class="btn-secondary"
+                            id="next-page-btn-bottom"
+                            style="padding: 6px 12px; border-radius: 6px"
+                        >
+                            Selanjutnya
+                        </button>
+                    </div>
+                </div>
 
                 <dialog id="q-modal" class="modal" style="max-width: 800px">
                     <div class="modal-content">
