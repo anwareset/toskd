@@ -1,19 +1,10 @@
-:root {
-    --primary: #2563eb;
-    --primary-light: #eff6ff;
-    --success: #10b981;
-    --success-light: #ecfdf5;
-    --danger: #ef4444;
-    --danger-light: #fef2f2;
-    --warning: #f59e0b;
-    --bg: #f8fafc;
-    --text: #1e293b;
-    --text-muted: #64748b;
-    --border: #e2e8f0;
-    --radius: 10px;
-    --surface: #ffffff;
-    --surface-header: #f1f5f9;
-}
+/* TOSKD CAT — component styles
+ * ==========================================================
+ * Color tokens live in /css/tokens.css (loaded first by every
+ * HTML page). This file uses var(--…) only — no inline hex
+ * outside rgba shadows/backdrop overlays (those are theme-
+ * neutral by design).
+ */
 
 /* Footer */
 .footer {
@@ -30,22 +21,6 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-}
-
-[data-theme="dark"] {
-    --primary: #3b82f6;
-    --primary-light: #1e293b;
-    --success: #10b981;
-    --success-light: #064e3b;
-    --danger: #ef4444;
-    --danger-light: #7f1d1d;
-    --warning: #f59e0b;
-    --bg: #0f172a;
-    --text: #f1f5f9;
-    --text-muted: #94a3b8;
-    --border: #334155;
-    --surface: #1e293b;
-    --surface-header: #334155;
 }
 
 /* Global Navigation Header */
@@ -219,10 +194,10 @@ body {
 }
 .btn-primary {
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
 }
 .btn-primary:hover {
-    background: #1d4ed8;
+    background: var(--primary-hover);
 }
 .btn-secondary {
     background: var(--surface-header);
@@ -230,21 +205,21 @@ body {
     border: 1px solid var(--border);
 }
 .btn-secondary:hover {
-    background: #e2e8f0;
+    background: var(--border);
 }
 .btn-danger {
     background: var(--danger);
-    color: #fff;
+    color: var(--on-primary);
 }
 .btn-danger:hover {
-    background: #dc2626;
+    background: var(--danger-hover);
 }
 .btn-success {
     background: var(--success);
-    color: #fff;
+    color: var(--on-primary);
 }
 .btn-success:hover {
-    background: #059669;
+    background: var(--success-hover);
 }
 .btn-back {
     background: none;
@@ -270,7 +245,7 @@ body {
 }
 .btn-main:hover {
     background: var(--primary);
-    color: #fff;
+    color: var(--on-primary);
 }
 button:disabled {
     opacity: 0.5;
@@ -342,7 +317,9 @@ select.input-field {
 .input-field:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    /* Soft halo in --primary's hue; uses the new --primary #3e63dd
+       (62,99,221) at 10% alpha so it follows the palette. */
+    box-shadow: 0 0 0 3px rgba(62, 99, 221, 0.1);
 }
 textarea.input-field {
     min-height: 100px;
@@ -487,26 +464,26 @@ tbody tr:hover {
 }
 .answer-grid button.answered {
     background: var(--success);
-    color: #fff;
+    color: var(--on-primary);
     border-color: var(--success);
 }
 .answer-grid button.unanswered {
     background: var(--danger);
-    color: #fff;
+    color: var(--on-primary);
     border-color: var(--danger);
 }
 .answer-grid button.active {
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4);
+    box-shadow: 0 0 0 3px rgba(62, 99, 221, 0.4);
     transform: scale(1.1);
 }
 .answer-grid button.correct {
     background: var(--success);
-    color: #fff;
+    color: var(--on-primary);
     border-color: var(--success);
 }
 .answer-grid button.incorrect {
     background: var(--danger);
-    color: #fff;
+    color: var(--on-primary);
     border-color: var(--danger);
 }
 .answer-grid button.not-answered {
@@ -691,6 +668,16 @@ tbody tr:hover {
         max-width: 720px;
     }
 }
+
+/* Inside the .container--wide variant (used by paket-detail.html,
+   kelola-soal.html, paket-soal.html), drop the 720px-per-column cap so
+   pack-detail-layout columns extend to the same x-coordinates as the
+   global-header-title (left) and theme-toggle-btn (right) above. The
+   `min-width: 360px` from the media query above still keeps each column
+   readable when the screen becomes very narrow on a wide container. */
+.container--wide > .pack-detail-layout > div {
+    max-width: none;
+}
 @media (max-width: 1200px) {
     /* Stack earlier than the default 1023px breakpoint used by exam/review,
        so 2-column mode only appears on truly spacious screens. */
@@ -746,7 +733,7 @@ tbody tr:hover {
 /* Preview box */
 .preview-box {
     background: var(--bg);
-    border: 1px dashed #d1d5db;
+    border: 1px dashed var(--border);
     border-radius: 8px;
     padding: 16px;
     margin-top: 12px;
@@ -774,12 +761,14 @@ tbody tr:hover {
     align-items: center;
     padding: 60px;
 }
+/* Toast uses fixed-tone tokens so the notification card stays
+   readable as a "system" element regardless of the user's theme. */
 .toast {
     position: fixed;
     bottom: 24px;
     right: 24px;
-    background: #1e293b;
-    color: #fff;
+    background: var(--toast-bg);
+    color: var(--toast-text);
     padding: 12px 24px;
     border-radius: 8px;
     z-index: 1000;

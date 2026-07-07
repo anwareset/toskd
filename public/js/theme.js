@@ -1,17 +1,28 @@
 (function () {
-  // Load Theme
-  const savedTheme = localStorage.getItem("theme") || "light";
-  document.documentElement.setAttribute("data-theme", savedTheme);
+  // Threshold to decide whether the user has expressed an explicit
+  // preference via the toggle. Once set, OS-level changes are ignored.
+  function applyInitialTheme() {
+    const saved = localStorage.getItem("theme");
+    const osDark =
+      window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const initial = saved || (osDark ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", initial);
+    return saved;
+  }
+
+  // Apply synchronously before the body parses so first paint already
+  // shows the right palette — avoids flash of wrong-theme content.
+  const hadExplicitChoice = applyInitialTheme();
 
   document.addEventListener("DOMContentLoaded", () => {
     const path = window.location.pathname;
-    // Skip global header on sensitive pages
-    // (exam: locked timer bar; review: post-exam results view).
-    const skipHeader =
-      path.endsWith("exam.html") || path.endsWith("review.html");
-    if (skipHeader) return;
+    // Brand title + theme toggle now render on every page, including
+    // exam.html (so the user can switch during a timed session) and
+    // review.html (so pembahasan dapat dibaca di mode gelap).
 
-    // Create Global Header
+    const isHome = path === "/" || path.endsWith("/index.html");
+
     const header = document.createElement("header");
     header.className = "global-header";
 
@@ -20,17 +31,12 @@
     title.textContent = "TOSKD CAT";
     title.href = "/";
 
-    // Hide the nav menu items on the homepage landing — that page
-    // already surfaces the same destinations as large .btn-main cards.
-    // Brand title and theme toggle are still rendered above them.
-    const isHome = path === "/" || path.endsWith("/index.html");
-
     let nav = null;
     if (!isHome) {
       nav = document.createElement("nav");
       nav.className = "global-header-nav";
       const navLinks = [
-        { href: "/select-pack.html", label: "Pilih Paket" },
+        { href: "/select-pack.html", label: "Ujian" },
         { href: "/bank-soal.html", label: "Bank Soal" },
         { href: "/scoreboard.html", label: "Scoreboard" },
       ];
@@ -46,21 +52,51 @@
     const toggle = document.createElement("button");
     toggle.className = "theme-toggle-btn";
     toggle.setAttribute("aria-label", "Toggle dark/light theme");
-    toggle.innerHTML = savedTheme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+
+    function updateToggleLabel() {
+      const current =
+        document.documentElement.getAttribute("data-theme") || "light";
+      toggle.innerHTML =
+        current === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+    }
+    updateToggleLabel();
 
     toggle.onclick = () => {
-      const currentTheme = document.documentElement.getAttribute("data-theme");
-      const newTheme = currentTheme === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", newTheme);
-      localStorage.setItem("theme", newTheme);
-      toggle.innerHTML = newTheme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+      const current =
+        document.documentElement.getAttribute("data-theme") || "light";
+      const next = current === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      // Mark the choice explicitly so future OS-preference changes
+      // stop overriding.
+      localStorage.setItem("theme", next);
+      updateToggleLabel();
     };
 
     header.appendChild(title);
     if (nav) header.appendChild(nav);
     header.appendChild(toggle);
 
-    // Insert Header at the top of the body
     document.body.insertBefore(header, document.body.firstChild);
+
+    // Live OS-preference tracking. We only honor it while the user has
+    // never clicked the toggle; once they make an explicit choice via
+    // UI, their decision wins over the OS signal.
+    if (!hadExplicitChoice && window.matchMedia) {
+      const mql = window.matchMedia("(prefers-color-scheme: dark)");
+      const onChange = (e) => {
+        if (localStorage.getItem("theme")) return; // user override
+        document.documentElement.setAttribute(
+          "data-theme",
+          e.matches ? "dark" : "light",
+        );
+        updateToggleLabel();
+      };
+      if (mql.addEventListener) {
+        mql.addEventListener("change", onChange);
+      } else if (mql.addListener) {
+        // Safari < 14 fallback.
+        mql.addListener(onChange);
+      }
+    }
   });
 })();

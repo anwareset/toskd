@@ -426,7 +426,7 @@ function renderPreview() {
         <span>${optE || "(belum diisi)"}</span>
       </div>
     </div>
-    <hr style="margin:20px 0;border:0;border-top:1px solid #e2e8f0">
+    <hr style="margin:20px 0;border:0;border-top:1px solid var(--border)">
     <div style="font-weight:bold;margin-bottom:8px">Pembahasan (Kunci: ${correct}):</div>
     <div>${explanation || "(belum diisi)"}</div>
   `;

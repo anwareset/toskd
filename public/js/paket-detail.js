@@ -105,10 +105,10 @@ function renderBankList() {
 
   if (!available.length) {
     bankList.innerHTML =
-      '<p style="color:#64748b;padding:12px">Semua soal sudah dimasukkan ke paket ini.</p>';
+      '<p style="color:var(--text-muted);padding:12px">Semua soal sudah dimasukkan ke paket ini.</p>';
   } else if (!pageData.length) {
     bankList.innerHTML =
-      '<p style="color:#64748b;padding:12px">Tidak ada soal yang cocok.</p>';
+      '<p style="color:var(--text-muted);padding:12px">Tidak ada soal yang cocok.</p>';
   } else {
     bankList.innerHTML = pageData
       .map(
@@ -142,7 +142,7 @@ function renderLists() {
   // Render Pack questions
   if (!packQuestions.length) {
     packList.innerHTML =
-      '<p style="color:#64748b;padding:24px;text-align:center">Belum ada soal dalam paket ini.</p>';
+      '<p style="color:var(--text-muted);padding:24px;text-align:center">Belum ada soal dalam paket ini.</p>';
     saveBtn.disabled = true;
   } else {
     packList.innerHTML = packQuestions

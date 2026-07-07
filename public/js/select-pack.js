@@ -18,7 +18,7 @@ async function loadPacks() {
     loading.style.display = "none";
     if (!packs.length) {
       grid.innerHTML =
-        '<p style="color:#64748b">Belum ada paket soal tersedia.</p>';
+        '<p style="color:var(--text-muted)">Belum ada paket soal tersedia.</p>';
       return;
     }
     const packsWithCounts = await Promise.all(
@@ -71,6 +71,6 @@ document.getElementById("start-btn").onclick = () => {
 };
 nameInput.addEventListener(
   "input",
-  () => (nameInput.style.borderColor = "#d1d5db"),
+  () => (nameInput.style.borderColor = ""),
 );
 loadPacks();
