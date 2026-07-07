@@ -625,6 +625,16 @@ tbody tr:hover {
     border-radius: 0 8px 8px 0;
     line-height: 1.7;
 }
+/* Image inside the explanation block: render as block-level with the
+   standard `max-width:100%;height:auto` cap so it can never overflow
+   the colored box, even when the intrinsic source image is very wide.
+   Complements the inline style set by review.js (which already sets
+   max-width:100%) by adding `display:block` and `height:auto`. */
+.review-explanation img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
 
 /* Tabs */
 .tab-nav {
