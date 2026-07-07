@@ -154,6 +154,36 @@ body {
     margin: 0 auto;
     padding: 20px;
 }
+/* Wide container variant — used by pages whose content should extend
+   to match the global header inner edges (24px from viewport edges).
+   Removes the default 1200px max-width cap and sets the same horizontal
+   padding as `.global-header`, so the page's content area aligns with
+   the brand title (left) and theme toggle button (right) above it.
+   Scoped via opt-in class so other pages remain at 1200px max-width. */
+.container--wide {
+    max-width: none;
+    padding-inline: 24px;
+}
+
+/* Per user request: align the listed elements horizontally with the
+   edges of `global-header-title` (left) and `theme-toggle-btn` (right)
+   inside a wide container on kelola-soal.html.
+
+   Selector `.pagination-bar.pagination-bar--precise` matches BOTH the
+   top bar (`#controls-top`) AND the bottom bar (`#controls-bottom`),
+   since both share the `pagination-bar--precise` modifier. The table
+   is matched by its unique id `questions-table`. The page header is
+   matched by its single class `header`.
+
+   `!important` is used to guarantee override against any inherited or
+   future-added max-width / width cap, so the elements visibly extend to
+   the same x-coordinates as the global header content above. */
+.container--wide > .header,
+.container--wide > .pagination-bar.pagination-bar--precise,
+.container--wide > #questions-table {
+    width: 100% !important;
+    max-width: none !important;
+}
 .header {
     display: flex;
     justify-content: space-between;
@@ -249,8 +279,28 @@ button:disabled {
 /* Cards */
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    /* `auto-fit` (not `auto-fill`) collapses empty tracks so the last
+       row's cards stretch to fill the available width — no trailing
+       gap. Affects select-pack.html; bank-soal.html overrides inline
+       with `1fr 1fr`. */
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 20px;
+}
+
+/* select-pack.html: cards in `#pack-grid` are arranged side-by-side
+   in horizontal rows that fill the container width before wrapping
+   to a new row. Uses flexbox with `flex: 1 1 280px` so each card
+   grows to fill its row evenly, ensuring no trailing gap. Scoped to
+   `#pack-grid` so other `.card-grid` users (bank-soal.html) are
+   unaffected. */
+#pack-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+#pack-grid > .card {
+    flex: 1 1 280px;
+    min-width: 280px;
 }
 .card {
     border-radius: 12px;
@@ -953,6 +1003,14 @@ tbody tr:hover {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Inside a wide container (.container--wide — used by kelola-soal.html,
+   paket-soal.html, paket-detail.html), allow the second column more
+   horizontal room so 'Konten Soal (Preview)' truncates less aggressively. */
+.container--wide .table-condensed th:nth-child(2),
+.container--wide .table-condensed td:nth-child(2) {
+    max-width: 480px;
 }
 .table-condensed td button {
     padding: 4px 10px;

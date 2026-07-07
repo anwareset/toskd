@@ -269,7 +269,7 @@ function renderTable() {
       return `
         <tr>
           <td>${globalIdx}</td>
-          <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis">${esc(
+          <td>${esc(
             q.content.replace(/<[^>]*>/g, ""),
           )}</td>
           <td><strong>${esc(q.question_type || "text")}</strong></td>
