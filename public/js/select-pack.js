@@ -67,7 +67,13 @@ document.getElementById("start-btn").onclick = () => {
     nameInput.focus();
     return;
   }
-  location.href = `/exam.html?packId=${selectedPackId}&name=${encodeURIComponent(name)}`;
+  // Exam Timer Persistence (spec: specs/exam-timer-persistence-spec.md, AC1):
+  // generate SID sekali per "Mulai" click — jadi exam.html bisa pakai wall-clock
+  // untuk resume timer walaupun user me-refresh.
+  const sid =
+    globalThis.crypto?.randomUUID?.() ??
+    (Date.now().toString(36) + Math.random().toString(36).slice(2)).slice(0, 32);
+  location.href = `/exam.html?packId=${selectedPackId}&name=${encodeURIComponent(name)}&sid=${sid}`;
 };
 nameInput.addEventListener(
   "input",

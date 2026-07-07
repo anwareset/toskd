@@ -1,7 +1,48 @@
+/* Exam Timer Persistence — see specs/exam-timer-persistence-spec.md
+   AC1: started_at ditulis sekali di init() saat TIMER_KEY belum ada
+   AC2: silent auto-resume (tanpa konfirmasi dialog)
+   AC3: auto-submit pada init() jika timeLeft <= 0 (laptop sleep semalam)
+   AC4: TIMER_KEY + ANSWERS_KEY di-remove saat submitExam() berhasil
+   AC5: storage event listener untuk multi-tab sync
+   AC6: wall-clock (timeLeft = duration − elapsed), bukan tick-count
+   AC7/AC8: tidak ada perubahan server; tanpa sid di URL tetap tidak crash
+*/
 const params = new URLSearchParams(location.search);
 const packId = params.get("packId");
 const participantName = decodeURIComponent(params.get("name") || "");
+const sid = params.get("sid") || generateSid();
+
 if (!packId || !participantName) location.href = "/select-pack.html";
+
+function generateSid() {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    (Date.now().toString(36) + Math.random().toString(36).slice(2)).slice(0, 32)
+  );
+}
+
+// Try/catch wrapper around localStorage untuk graceful fallback kalau browser
+// dalam mode private (Safari) atau storage di-disable (R7)
+const safeStorage = (() => {
+  try {
+    const probe = "__exam_probe_" + Date.now().toString(36);
+    localStorage.setItem(probe, "1");
+    localStorage.removeItem(probe);
+    return {
+      getItem: (k) => localStorage.getItem(k),
+      setItem: (k, v) => localStorage.setItem(k, v),
+      removeItem: (k) => localStorage.removeItem(k),
+    };
+  } catch {
+    return { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+  }
+})();
+
+const TIMER_KEY = `exam_${sid}_startedAt`;
+const ANSWERS_KEY = `exam_${sid}_answers`;
+// Legacy key dari versi sebelum spec ini (exam_<packId>_answers). Tetap di-baca
+// supaya peserta dengan sesi lama tidak kehilangan jawaban yang sudah diisi.
+const LEGACY_ANSWERS_KEY = `exam_${packId}_answers`;
 
 let questions = [],
   currentIndex = 0,
@@ -21,29 +62,72 @@ const nextBtn = document.getElementById("next-btn");
 const endBtn = document.getElementById("end-exam-btn");
 
 async function init() {
+  let pack;
   try {
     const [packRes, qRes] = await Promise.all([
       fetch(`/api/packs/${packId}`),
       fetch(`/api/packs/${packId}/questions`),
     ]);
-    const pack = await packRes.json();
+    pack = await packRes.json();
     questions = await qRes.json();
-    if (!questions.length) {
-      qContentEl.textContent = "Paket ini belum memiliki soal.";
-      return;
-    }
-    packNameEl.textContent = pack.name;
-    timeLeft = pack.duration_minutes * 60;
-    const saved = localStorage.getItem(`exam_${packId}_answers`);
-    if (saved)
-      try {
-        answers = JSON.parse(saved);
-      } catch (e) {}
-    buildGrid();
-    renderQuestion(0);
-    startTimer();
-  } catch (e) {
+  } catch {
     packNameEl.textContent = "Gagal memuat ujian";
+    return;
+  }
+  if (!questions.length) {
+    qContentEl.textContent = "Paket ini belum memiliki soal.";
+    return;
+  }
+  packNameEl.textContent = pack.name;
+
+  const duration = pack.duration_minutes * 60;
+  const savedStartedAt = safeStorage.getItem(TIMER_KEY);
+  if (savedStartedAt) {
+    // AC6 wall-clock: timeLeft = duration − (Date.now() − startedAt)/1000
+    const elapsed = Math.floor((Date.now() - +savedStartedAt) / 1000);
+    timeLeft = Math.max(0, duration - elapsed);
+  } else {
+    timeLeft = duration;
+    // AC1: tulis sekali di init() saat key belum ada (idempotent)
+    safeStorage.setItem(TIMER_KEY, Date.now().toString());
+  }
+
+  loadAnswers();
+
+  // AC3: auto-submit kalau timer sudah habis saat halaman dimuat (mis. laptop tidur)
+  if (timeLeft <= 0) {
+    await submitExam();
+    return;
+  }
+
+  buildGrid();
+  renderQuestion(0);
+  startTimer();
+
+  // AC5: multi-tab sync via storage event
+  window.addEventListener("storage", (e) => {
+    if (e.key === TIMER_KEY && e.newValue) {
+      const elapsed = Math.floor((Date.now() - +e.newValue) / 1000);
+      timeLeft = Math.max(0, duration - elapsed);
+      updateTimerDisplay();
+    }
+  });
+}
+
+function loadAnswers() {
+  // Try new key first (per-sid), fallback ke legacy per-pack kalau ada
+  const saved =
+    safeStorage.getItem(ANSWERS_KEY) ??
+    safeStorage.getItem(LEGACY_ANSWERS_KEY);
+  if (saved) {
+    try {
+      answers = JSON.parse(saved);
+      // Migrasi satu arah: tulis ke key baru supaya submit berikutnya hanya
+      // menghapus key baru + legacy idempotent di clear.
+      if (!safeStorage.getItem(ANSWERS_KEY)) {
+        safeStorage.setItem(ANSWERS_KEY, saved);
+      }
+    } catch {}
   }
 }
 
@@ -88,7 +172,7 @@ function renderQuestion(idx) {
     (r) =>
       (r.onchange = () => {
         answers[q.id] = r.value;
-        localStorage.setItem(`exam_${packId}_answers`, JSON.stringify(answers));
+        safeStorage.setItem(ANSWERS_KEY, JSON.stringify(answers));
         optionsEl
           .querySelectorAll(".option-item")
           .forEach((el) => el.classList.remove("selected"));
@@ -135,9 +219,12 @@ async function submitExam() {
       }),
     });
     const result = await res.json();
-    localStorage.removeItem(`exam_${packId}_answers`);
+    // AC4: bersihkan semua key yang terkait sesi ini
+    safeStorage.removeItem(TIMER_KEY);
+    safeStorage.removeItem(ANSWERS_KEY);
+    safeStorage.removeItem(LEGACY_ANSWERS_KEY);
     location.href = `/review.html?id=${result.id}`;
-  } catch (e) {
+  } catch {
     alert("Gagal mengirim jawaban. Coba lagi.");
     endBtn.disabled = false;
   }
