@@ -453,7 +453,27 @@ function switchTab(tabId) {
 
 // Reset tabs to first tab
 function resetTabs() {
-  switchTab("tab-content");
+  switchTab("tab-data");
+}
+
+// scrollToError utility: smooth-scroll to an Element (or selector) and trigger
+// 'field-validation-error' border-pulse for 1.5s. Used in form.onsubmit validation
+// since modal is now a single editable tab (no auto tab-switch fallback).
+// Auto-opens parent <details> if collapsed so the field is visible.
+function scrollToError(target) {
+  const el =
+    typeof target === "string"
+      ? document.querySelector(target)
+      : target;
+  if (!el) return;
+  // If target is inside a collapsed <details>, open it first so user can see the error.
+  const parentDetails = el.closest("details");
+  if (parentDetails && !parentDetails.open) {
+    parentDetails.open = true;
+  }
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("field-validation-error");
+  setTimeout(() => el.classList.remove("field-validation-error"), 1500);
 }
 
 // Attach event listeners to tab buttons
@@ -507,10 +527,13 @@ form.onsubmit = async (e) => {
   const explanation = document.getElementById("q-explanation").value.trim();
   const question_type = document.getElementById("q-question-type").value;
 
-  // Validation
+  // Validation: scrollToError (with red border pulse) replaces old switchTab() calls
+  // since modal is now a single editable tab — no need to switch.
   if (!content || content === "<p><br></p>") {
     alert("Teks / Pertanyaan wajib diisi!");
-    switchTab("tab-content");
+    scrollToError(
+      document.querySelector("#q-content-editor")?.closest(".data-section-body"),
+    );
     return;
   }
   if (
@@ -526,22 +549,28 @@ form.onsubmit = async (e) => {
     options.E === "<p><br></p>"
   ) {
     alert("Semua Opsi Jawaban (A-E) wajib diisi!");
-    switchTab("tab-options");
+    scrollToError(
+      document.querySelector("#opt-a-editor")?.closest(".data-section-body"),
+    );
     return;
   }
   if (!correct_answer) {
     alert("Kunci Jawaban Benar wajib dipilih!");
-    switchTab("tab-options");
+    scrollToError("#correct-ans");
     return;
   }
   if (!explanation || explanation === "<p><br></p>") {
     alert("Pembahasan Cara Pengerjaan wajib diisi!");
-    switchTab("tab-explanation");
+    scrollToError(
+      document
+        .querySelector("#q-explanation-editor")
+        ?.closest(".data-section-body"),
+    );
     return;
   }
   if (!question_type) {
     alert("Tipe Soal wajib dipilih!");
-    switchTab("tab-content");
+    scrollToError("#q-question-type");
     return;
   }
 
