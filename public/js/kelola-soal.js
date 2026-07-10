@@ -649,20 +649,25 @@ window.editQuestion = (id) => {
   document.getElementById("q-question-type").value =
     q.question_type || "TWK Pilar Negara";
 
-  // Also set Quill editors if available
-  setEditorValues(q.content, q.options, q.explanation);
-
   modalTitle.textContent = "Edit Soal";
   resetTabs();
 
-  // Initialize Quill editors and tab navigation for edit
+  // Initialize Quill editors (if not yet mounted), then unconditionally
+  // set their values. `new Quill(...)` is synchronous, so by the time
+  // `setEditorValues` runs inside this setTimeout, `editorsReady` is
+  // guaranteed to be true (or stays false if `window.Quill` failed to
+  // load — in which case `setEditorValues` safely no-ops and the
+  // hidden textareas above remain the source of truth on form submit).
+  //
+  // This fixes the first-Edit prefill bug: previously the immediate
+  // `setEditorValues(...)` call ran before Quill mounted on the very
+  // first click, so `editorsReady` was still false and the call was a
+  // no-op; the data was only shown starting from the 2nd click.
   setTimeout(() => {
     if (!quillInitialized) {
       initQuillEditors();
-    } else {
-      // If already initialized, just set values
-      setEditorValues(q.content, q.options, q.explanation);
     }
+    setEditorValues(q.content, q.options, q.explanation);
     initTabNavigation(); // Initialize tab navigation after modal opens
   }, 50);
 
