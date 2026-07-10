@@ -1023,6 +1023,105 @@ tbody tr:hover {
 .container--wide #pack-table td:nth-child(2) {
     width: 480px;
 }
+/* ==== Question content cells: 1-line compact preview ====
+   Truncate each question preview cell to a SINGLE line via
+   text-overflow: ellipsis, leveraging the existing 1-line setup
+   already present in:
+     - `.table-condensed td:nth-child(2)` (kelola-soal table):
+       max-width:480px (in wide container), white-space:nowrap,
+       overflow:hidden, text-overflow:ellipsis.
+     - `.pack-question-item .q-preview` (paket-detail right list):
+       flex:1, white-space:nowrap, overflow:hidden, text-overflow:ellipsis.
+
+   The previous `-webkit-line-clamp: 3` override forced each direct
+   child (img-chip + each `<p>`) onto its own flex row, making rows
+   3 lines tall and visibly worse for formula/image-heavy questions.
+   Removing the override restores 1-line truncation; the existing
+   base rules do the heavy lifting.
+
+   For .q-preview the parent `.pack-question-item` has `display:
+   flex` which "blockifies" the inline `<span>` child per CSS Flexbox
+   spec — it becomes a block-level flex item with a proper block
+   formatting context, so `text-overflow: ellipsis` works against it.
+
+   We additionally force `<p>`s inside these cells to `display: inline`
+   so multi-paragraph Quill content collapses to a continuous inline
+   string that the cell truncates with ellipsis. Without this each
+   `<p>` would still be a block and stack vertically inside the
+   `<td>` / .q-preview. `.option-item .option-label` (bank list) is
+   intentionally NOT scoped here — the bank list scrolls vertically
+   and paragraph breaks there are useful (we still strip the default
+   `<p>` margin below).
+
+   The chip and MathJax overrides below work unchanged in this
+   1-line context: the chip `<span>` and `<mjx-container>` (forced
+   `display: inline-block`) flow inline alongside the actual text
+   and the cell clips them with ellipsis at the right edge. */
+#questions-table td:nth-child(2) p,
+.pack-question-item .q-preview p {
+    display: inline;
+    margin: 0;
+    padding: 0;
+}
+/* Separator space between consecutive <p>s so adjacent paragraphs
+   aren't visually concatenated when truncated. */
+#questions-table td:nth-child(2) p + p::before,
+.pack-question-item .q-preview p + p::before {
+    content: " ";
+}
+/* Bank list keeps block `<p>`s (intentional — bank list scrolls
+   vertically, paragraph breaks are useful) but strips the default
+   `<p>` margin so paragraphs sit tightly stacked. */
+.option-item .option-label p {
+    margin: 0;
+}
+
+/* ==== Question content cells: image marker ====
+   Inline images in question content are stripped at render time by
+   `imgToMarker()` in kelola-soal.js / paket-detail.js, which removes
+   every `<img>` and prepends a single `<span class="img-marker">📷
+   Ada Gambar</span>` chip to the rendered HTML. Prepending (rather
+   than in-place replacement) keeps the chip visible regardless of
+   where the original image sat, since the cell's text-overflow
+   ellipsis truncates the END of the inline string while leaving the
+   chip at the START intact.
+   Style the chip so it visually says "there's an image here" without
+   rendering the image itself. */
+.img-marker {
+    display: inline-block;
+    background: var(--surface-header);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+/* ==== Question content cells: tighten MathJax output ====
+   MathJax CommonHTML (`tex-mml-chtml.js`) renders formulas sized via
+   the root `<mjx-container>`'s font-size. By default block math
+   (`\[...\]` / `display: true`) uses `display: block` + `margin: 1em 0`
+   and a larger line-height, which makes typeset formulas look noticeably
+   larger than surrounding plain text inside these 1-line preview
+   cells. Force inline-block + matched font-size + zero vertical margin
+   + tight line-height so formulas sit visually flush with the prose.
+   `vertical-align: middle` is meaningful inside `<p>` flows (parent
+   `.option-item .option-label` keeps block `<p>`s; the table/q-preview
+   `<p>`s are forced `display: inline` but still host inline math).
+   Scoped to the same three preview surfaces used elsewhere in this
+   ruleset. */
+.pack-question-item .q-preview mjx-container,
+#questions-table td:nth-child(2) mjx-container,
+.option-item .option-label mjx-container {
+    display: inline-block !important;
+    margin: 0 !important;
+    font-size: 1em !important;
+    vertical-align: middle !important;
+    line-height: 1 !important;
+}
 .table-condensed td button {
     padding: 4px 10px;
     font-size: 0.8rem;

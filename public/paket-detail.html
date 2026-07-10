@@ -7,6 +7,15 @@
         <link rel="stylesheet" href="/css/tokens.css" />
         <link rel="stylesheet" href="/css/styles.css" />
         <script src="/js/theme.js"></script>
+        <!-- MathJax for rendering LaTeX math formulas in question content
+             previews. Async so it doesn't block initial render; typeset
+             calls in paket-detail.js queue work via MathJax.typesetPromise
+             which resolves once MathJax finishes loading. Mirrors the
+             pattern in kelola-soal.html. -->
+        <script
+            src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+            async
+        ></script>
     </head>
     <body>
         <div class="site-wrapper">

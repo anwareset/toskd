@@ -225,6 +225,25 @@ function esc(s) {
   return d.innerHTML;
 }
 
+// Strip every <img> in a Quill-rendered HTML string and prepend a
+// single "📷 Ada Gambar" chip so the table preview cell stays compact
+// — rendering full images inside table rows blows out row heights and
+// adds nothing useful to a quick-glance preview.
+//
+// Done in JS rather than CSS because the parent uses `-webkit-line-
+// clamp: 3`, which would clip any CSS-`::after`-based chip past line 3.
+// Prepending the chip to the rendered HTML parks it on line 1, well
+// inside the 3-line budget regardless of where the original image sat
+// in the source. Marker styling lives in `styles.css` under `.img-marker`.
+function imgToMarker(html) {
+  if (!html) return "";
+  if (!/<img\b/i.test(html)) return html;
+  return (
+    '<span class="img-marker">📷 Ada Gambar</span> ' +
+    html.replace(/<img\b[^>]*>/gi, "")
+  );
+}
+
 // Pagination & Search State
 let rowsPerPage = 10;
 let currentPage = 0;
@@ -269,21 +288,27 @@ function renderTable() {
       return `
         <tr>
           <td>${globalIdx}</td>
-          <td>${esc(
-            q.content.replace(/<[^>]*>/g, ""),
-          )}</td>
+          <td>${imgToMarker(q.content)}</td>
           <td><strong>${esc(q.question_type || "text")}</strong></td>
           <td><span class="btn-success" style="padding:2px 8px;border-radius:4px;font-size:0.8rem">${q.correct_answer}</span></td>
           <td>
             <button class="btn-secondary" onclick="editQuestion(${q.id})">Edit</button>
             <button class="btn-danger" onclick="deleteQuestion(${q.id})">Hapus</button>
-          </td>
-        </tr>
+          </td>        </tr>
       `;
-    })
-    .join("");
+      })
+      .join("");
 
-  // Show/hide controls containers
+    // Render \( ... \) LaTeX delimiters in question content cells, so
+    // injected math formulas become visible in the table preview. Quill
+    // formula <span>s already render via their stored KaTeX HTML — no
+    // extra KaTeX render call needed. Safe no-op if MathJax isn't loaded
+    // yet; the promise swallows any single-typeset error.
+    if (window.MathJax?.typesetPromise) {
+      MathJax.typesetPromise([bodyEl]).catch(() => {});
+    }
+
+    // Show/hide controls containers
   const controlsTop = document.getElementById("controls-top");
   const controlsBottom = document.getElementById("controls-bottom");
   if (questions.length > 0) {

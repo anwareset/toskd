@@ -23,6 +23,37 @@ function esc(s) {
   return d.innerHTML;
 }
 
+// Render any \( ... \) or \[ ... \] LaTeX delimiters inside the given
+// element. Safe to call when MathJax is not yet loaded — guarded by the
+// optional chain. `.catch(() => {})` ensures a single failed typeset
+// (e.g. transient error) doesn't break the rest of the page render.
+// Quill formula <span>s already render via their stored KaTeX HTML and
+// do not require an explicit re-typeset call.
+function typesetMath(rootEl) {
+  if (window.MathJax?.typesetPromise) {
+    MathJax.typesetPromise([rootEl]).catch(() => {});
+  }
+}
+
+// Strip every <img> in a Quill-rendered HTML string and prepend a
+// single "📷 Ada Gambar" chip so the cell preview stays compact —
+// rendering full images inside table rows blows out row heights and
+// adds nothing useful to a quick-glance preview.
+//
+// Done in JS rather than CSS because the parent uses `-webkit-line-
+// clamp: 3`, which would clip any CSS-`::after`-based chip past line 3.
+// Prepending the chip to the rendered HTML parks it on line 1, well
+// inside the 3-line budget regardless of where the original image sat
+// in the source. Marker styling lives in `styles.css` under `.img-marker`.
+function imgToMarker(html) {
+  if (!html) return "";
+  if (!/<img\b/i.test(html)) return html;
+  return (
+    '<span class="img-marker">📷 Ada Gambar</span> ' +
+    html.replace(/<img\b[^>]*>/gi, "")
+  );
+}
+
 async function init() {
   document.getElementById("loading-bank").style.display = "flex";
   document.getElementById("loading-pack").style.display = "flex";
@@ -46,24 +77,6 @@ async function init() {
   } catch (e) {
     alert("Gagal memuat detail paket.");
   }
-}
-
-function createQuestionPreview(content) {
-  // Create a cleaner preview: remove HTML tags, collapse whitespace, limit length
-  if (!content) return "(soal kosong)";
-
-  // Strip HTML tags
-  let text = content.replace(/<[^>]*>/g, "");
-
-  // Replace multiple spaces/tabs/newlines with single space
-  text = text.replace(/\s+/g, " ").trim();
-
-  // Limit to ~120 characters for preview
-  if (text.length > 120) {
-    text = text.substring(0, 120) + "...";
-  }
-
-  return text || "(soal tidak memiliki konten teks)";
 }
 
 function renderBankList() {
@@ -116,12 +129,13 @@ function renderBankList() {
       <label class="option-item" style="cursor:pointer;background:var(--surface);margin-bottom:8px">
         <input type="checkbox" name="add-q" value="${q.id}">
         <span class="option-label">
-          <strong>[${esc(q.question_type.toUpperCase())}]</strong> ${esc(createQuestionPreview(q.content))}
+          <strong>[${esc(q.question_type.toUpperCase())}]</strong> ${imgToMarker(q.content)}
         </span>
       </label>
     `,
       )
       .join("");
+    typesetMath(bankList);
   }
 
   // Show/hide controls
@@ -150,12 +164,12 @@ function renderLists() {
         (q, i) => `
       <div class="pack-question-item" draggable="true" data-id="${q.id}" data-index="${i}">
         <span class="q-num">Soal ${i + 1}</span>
-        <span class="q-preview">${createQuestionPreview(q.content)}</span>
-        <button class="btn-danger" style="padding:4px 8px;font-size:0.8rem" onclick="removeQuestion(${q.id})">Hapus</button>
-      </div>
+        <span class="q-preview">${imgToMarker(q.content)}</span>
+        <button class="btn-danger" style="padding:4px 8px;font-size:0.8rem" onclick="removeQuestion(${q.id})">Hapus</button>        </div>
     `,
       )
       .join("");
+    typesetMath(packList);
     setupDragAndDrop();
   }
 }
