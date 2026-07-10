@@ -1012,6 +1012,17 @@ tbody tr:hover {
 .container--wide .table-condensed td:nth-child(2) {
     max-width: 480px;
 }
+/* paket-soal.html: Nama Paket column fixed at 480px (width, not max-width)
+   so column renders wider than Aksi column regardless of content length.
+   ID-scoped to #pack-table so it does NOT override other tables (e.g.
+   bank-soal.html uses its own max-width:480px on nth-child(2)).
+   Existing nowrap + overflow:hidden + text-overflow:ellipsis from the
+   .table-condensed base rules still applies, so long names are ellipsis-
+   truncated rather than overflowing the 480px allocation. */
+.container--wide #pack-table th:nth-child(2),
+.container--wide #pack-table td:nth-child(2) {
+    width: 480px;
+}
 .table-condensed td button {
     padding: 4px 10px;
     font-size: 0.8rem;

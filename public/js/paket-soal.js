@@ -36,7 +36,7 @@ async function init() {
         (p, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td>${esc(p.name)}</td>
+        <td title="${esc(p.name)}">${esc(p.name)}</td>
         <td>${p.duration_minutes} Menit</td>
         <td>${p.passing_grade}</td>
         <td>${counts[i]} Soal</td>
