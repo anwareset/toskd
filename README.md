@@ -163,6 +163,7 @@ Untuk membuat seluruh tabel dan relasi, jalankan query yang ada di file:
 |--------|----------|-----------|
 | GET | `/api/questions` | Daftar semua soal |
 | POST | `/api/questions` | Tambah soal baru |
+| POST | `/api/questions/bulk` | Bulk tambah banyak soal (max 500 per request, atomic via PostgREST) |
 | PUT | `/api/questions/:id` | Update soal |
 | DELETE | `/api/questions/:id` | Hapus soal |
 | GET | `/api/packs` | Daftar paket soal |
