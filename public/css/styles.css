@@ -1127,6 +1127,76 @@ tbody tr:hover {
     font-size: 0.8rem;
 }
 
+/* ==== kelola-soal.html: Bulk Add modal preview rows ====
+   Spec: specs/bulk-add-questions-spec.md
+   - .bulk-preview-row wraps each parsed question in Preview tab
+   - .bulk-status-badge + .bulk-badge-success / .bulk-badge-danger show validation status
+   - .bulk-error-list renders inline error messages for invalid blocks
+*/
+.bulk-preview-row {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.bulk-preview-row.invalid {
+    border-color: var(--danger);
+    background: var(--danger-light);
+}
+.bulk-preview-row.valid {
+    border-color: var(--success);
+}
+.bulk-preview-num {
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 32px;
+    flex-shrink: 0;
+}
+.bulk-preview-body {
+    flex: 1;
+    min-width: 0;
+}
+.bulk-status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.bulk-badge-success {
+    background: var(--success);
+    color: var(--on-primary);
+}
+.bulk-badge-danger {
+    background: var(--danger);
+    color: var(--on-primary);
+}
+.bulk-error-list {
+    color: var(--danger);
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+    line-height: 1.4;
+    font-weight: 600;
+}
+.bulk-preview-fields {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--text);
+    word-break: break-word;
+}
+.bulk-q-line {
+    padding: 1px 0;
+}
+.bulk-preview-fields em {
+    color: var(--text-muted);
+}
+
 /* ==== kelola-soal.html: tab-data fieldset/accordion + validation pulse ====
    Spec: specs/kelola-soal-merge-tabs-spec.md
    - .data-section wraps each <details> in tab-data (modal form, single editable tab)

@@ -130,7 +130,10 @@
                     <h1 class="app-title">📄 Kelola Bank Soal</h1>
                     <div>
                         <button class="btn-primary" id="add-q-btn">
-                            ➕ Tambah Soal Baru
+                            ✏️ Tambah Soal Baru
+                        </button>
+                        <button class="btn-secondary" id="bulk-add-btn">
+                            📋 Bulk Add
                         </button>
                         <button
                             class="btn-secondary"
@@ -510,6 +513,163 @@
                                 </button>
                                 <button type="submit" class="btn-primary">
                                     Simpan Soal
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </dialog>
+
+                <!-- ==================== BULK ADD MODAL ====================
+                     Spec: specs/bulk-add-questions-spec.md
+                     Sibling dialog to q-modal. Tabs: Data Soal (paste area)
+                     + Preview (readonly list). Plain-text Quill editor.
+                -->
+                <dialog id="q-bulk-modal" class="modal" style="max-width: 900px">
+                    <div class="modal-content">
+                        <h3>📋 Bulk Add Soal</h3>
+
+                        <div class="tab-nav">
+                            <button
+                                class="bulk-tab-btn active"
+                                data-tab="bulk-tab-data"
+                            >
+                                📝 Data Soal
+                            </button>
+                            <button class="bulk-tab-btn" data-tab="bulk-tab-preview">
+                                👁 Preview
+                            </button>
+                        </div>
+
+                        <form id="q-bulk-form" class="cms-form">
+                            <!-- Tab 1: Data Soal -->
+                            <div id="bulk-tab-data" class="tab-content active">
+                                <details class="data-section" open>
+                                    <summary>📋 Tipe Soal</summary>
+                                    <div class="data-section-body">
+                                        <div class="form-group">
+                                            <label for="bulk-q-question-type"
+                                                >Tipe Soal (berlaku untuk semua soal di paste ini)</label
+                                            >
+                                            <select
+                                                id="bulk-q-question-type"
+                                                class="input-field"
+                                            >
+                                                <optgroup label="TWK - Dasar Negara">
+                                                    <option value="TWK Pilar Negara" selected>
+                                                        TWK Pilar Negara (Pancasila, UUD45, Bhinneka Tunggal Ika)
+                                                    </option>
+                                                    <option value="TWK Nilai Kebangsaan">
+                                                        TWK Nilai Kebangsaan (Nasionalisme, Integritas, Bela Negara)
+                                                    </option>
+                                                    <option value="TWK Bahasa Indonesia">
+                                                        TWK Bahasa Indonesia
+                                                    </option>
+                                                </optgroup>
+                                                <optgroup label="TIU - Inteligensia Umum">
+                                                    <option value="TIU Verbal">TIU Verbal</option>
+                                                    <option value="TIU Numerik">TIU Numerik</option>
+                                                    <option value="TIU Figural">TIU Figural</option>
+                                                </optgroup>
+                                                <optgroup label="TKP - Karakteristik Pribadi">
+                                                    <option value="TKP Pelayanan Publik">TKP Pelayanan Publik</option>
+                                                    <option value="TKP Jejaring Kerja">TKP Jejaring Kerja</option>
+                                                    <option value="TKP Sosial Budaya">TKP Sosial Budaya</option>
+                                                    <option value="TKP Anti Radikalisme">TKP Anti Radikalisme</option>
+                                                    <option value="TKP Profesionalisme">TKP Profesionalisme</option>
+                                                    <option value="TKP TIK">TKP TIK</option>
+                                                </optgroup>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </details>
+
+                                <details class="data-section" open>
+                                    <summary>📝 Paste Soal (8 baris per blok + pemisah '---')</summary>
+                                    <div class="data-section-body">
+                                        <p
+                                            style="
+                                                color: var(--text-muted);
+                                                font-size: 0.85rem;
+                                                margin-bottom: 12px;
+                                                line-height: 1.6;
+                                            "
+                                        >
+                                            Format (plain text, satu blok per soal):<br />
+                                            <strong>Line 1</strong> = pertanyaan
+                                            <strong>· Line 2–6</strong> = opsi A, B, C, D, E
+                                            <strong>· Line 7</strong> = kunci (A–E)
+                                            <strong>· Line 8+</strong> = pembahasan
+                                            <strong>· ---</strong> = pemisah antar soal
+                                        </p>
+
+                                        <div class="form-group">
+                                        <div
+                                            id="bulk-q-paste-editor"
+                                            class="quill-editor"
+                                            data-placeholder="Paste banyak soal di sini (plain text). Setiap soal 8 baris (pertanyaan, 5 opsi, kunci, pembahasan). Pisahkan dengan baris '---'."
+                                        ></div>
+                                        </div>
+
+                                        <div
+                                            style="
+                                                margin-top: 8px;
+                                                color: var(--text-muted);
+                                                font-size: 0.85rem;
+                                            "
+                                        >
+                                            <span id="bulk-preview-summary"
+                                                >Belum ada soal terdeteksi</span
+                                            >
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+
+                            <!-- Tab 2: Preview (readonly) -->
+                            <div id="bulk-tab-preview" class="tab-content">
+                                <div class="form-group">
+                                    <label>Hasil Parse (read-only)</label>
+                                    <div
+                                        id="bulk-preview-render-area"
+                                        style="
+                                            padding: 16px;
+                                            background: var(--bg);
+                                            border: 1px solid var(--border);
+                                            border-radius: 8px;
+                                            min-height: 100px;
+                                            margin-top: 8px;
+                                            overflow-y: auto;
+                                            max-height: 500px;
+                                        "
+                                    >
+                                        <p
+                                            style="
+                                                color: var(--text-muted);
+                                                text-align: center;
+                                                padding: 32px;
+                                            "
+                                        >
+                                            Belum ada soal. Paste soal di tab Data Soal.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="modal-buttons">
+                                <button
+                                    type="button"
+                                    class="btn-secondary"
+                                    id="bulk-close-modal-btn"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    type="submit"
+                                    class="btn-primary"
+                                    id="bulk-save-btn"
+                                    disabled
+                                >
+                                    Simpan Semua
                                 </button>
                             </div>
                         </form>

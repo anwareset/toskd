@@ -27,6 +27,75 @@ app.get("/api/questions", async (req, res) => {
   }
 });
 
+// Bulk insert questions (atomic single transaction via PostgREST).
+// Spec: specs/bulk-add-questions-spec.md, Section 4.6.
+// Accepts `{ questions: [{...}, {...}] }` and creates all rows in one
+// round-trip. Returns `{ inserted: N, ids: [...] }` on success.
+app.post("/api/questions/bulk", async (req, res) => {
+  try {
+    const { questions } = req.body;
+    if (!Array.isArray(questions)) {
+      return res.status(400).json({ error: "questions must be an array" });
+    }
+    if (questions.length === 0) {
+      return res.status(400).json({ error: "questions array is empty" });
+    }
+    if (questions.length > 500) {
+      return res
+        .status(400)
+        .json({ error: "max 500 questions per bulk request" });
+    }
+
+    // Defensive shape validation. Frontend already validates via parser,
+    // but server-side guard prevents malformed payloads if someone calls
+    // the endpoint directly.
+    for (const q of questions) {
+      if (
+        !q ||
+        !q.content ||
+        !q.question_type ||
+        !q.options ||
+        !q.correct_answer ||
+        !q.explanation
+      ) {
+        return res.status(400).json({ error: "invalid question shape" });
+      }
+    }
+
+    const rows = questions.map(
+      ({ content, question_type, options, correct_answer, explanation }) => ({
+        content,
+        question_type,
+        options,
+        correct_answer,
+        explanation,
+        image_url: null,
+        explanation_image_url: null,
+      })
+    );
+
+    // Supabase's `.insert(rows).select()` sends a single PostgREST
+    // request; PostgREST wraps the rows in one Postgres transaction so
+    // any single insert failure rolls back the entire batch.
+    const { data, error } = await supabase
+      .from("questions")
+      .insert(rows)
+      .select();
+
+    if (error) throw error;
+
+    res
+      .status(201)
+      .json({
+        inserted: data.length,
+        ids: data.map((d) => d.id),
+      });
+  } catch (error) {
+    console.error("Error bulk adding questions:", error);
+    res.status(500).json({ error: "Failed to bulk add questions" });
+  }
+});
+
 // Add a new question
 app.post("/api/questions", async (req, res) => {
   try {
