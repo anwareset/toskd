@@ -137,6 +137,30 @@
                         </button>
                         <button
                             class="btn-secondary"
+                            id="bulk-delete-btn"
+                            disabled
+                            title="Pilih minimal 1 soal untuk mengaktifkan"
+                        >
+                            🗑 Hapus Terpilih
+                        </button>
+                        <!-- Selection pill — visible only when selectedIds.size > 0 -->
+                        <span
+                            id="selection-pill"
+                            class="selection-pill"
+                            style="display: none;"
+                            aria-live="polite"
+                        >
+                            <span id="selection-pill-text">0 dipilih</span>
+                            <button
+                                id="clear-selection-btn"
+                                type="button"
+                                aria-label="Batalkan semua pilihan"
+                            >
+                                ✕
+                            </button>
+                        </span>
+                        <button
+                            class="btn-secondary"
                             onclick="location.href = '/bank-soal.html'"
                         >
                             Kembali
@@ -200,6 +224,13 @@
                 >
                     <thead>
                         <tr>
+                            <th class="col-checkbox">
+                                <input
+                                    type="checkbox"
+                                    id="select-all-checkbox"
+                                    aria-label="Pilih semua soal di halaman ini"
+                                >
+                            </th>
                             <th>No</th>
                             <th>Konten Soal (Preview)</th>
                             <th>Tipe Soal</th>
@@ -673,6 +704,71 @@
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </dialog>
+
+                <!-- ==================== BULK DELETE CONFIRM MODAL ====================
+                     Spec: specs/bulk-delete-questions-spec.md
+                     Sibling dialog to q-modal / q-bulk-modal. Read-only info
+                     panel populated by showBulkDeleteConfirmModal(). Phase 2
+                     hooks the confirm button to POST /api/questions/bulk-delete;
+                     Phase 1 wiring only opens + cancels. MARKUP ONLY — JS in
+                     public/js/kelola-soal.js. -->
+                <dialog
+                    id="bulk-delete-confirm-modal"
+                    class="modal"
+                    style="max-width: 600px"
+                >
+                    <div class="modal-content">
+                        <h3>🗑 Konfirmasi Hapus Massal</h3>
+
+                        <div class="bulk-delete-summary">
+                            <p style="font-weight: 600; margin-bottom: 8px">
+                                Anda akan menghapus
+                                <span id="confirm-total-count">0</span>
+                                soal dari Bank Soal.
+                            </p>
+                            <div
+                                id="confirm-pack-impact"
+                                class="bulk-delete-pack-list"
+                                style="display: none;"
+                            >
+                                <strong>⚠️ Soal-soal ini digunakan di paket:</strong>
+                                <ul id="confirm-pack-list"></ul>
+                            </div>
+                            <p style="color: var(--text-muted); font-size: 0.9rem">
+                                Tindakan ini menghapus soal secara permanen dan
+                                melepas dari semua paket (cascade). Tidak dapat
+                                dibatalkan.
+                            </p>
+                        </div>
+
+                        <details class="bulk-delete-id-list">
+                            <summary>Lihat daftar ID soal yang akan dihapus</summary>
+                            <div
+                                id="confirm-id-list"
+                                style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted); padding: 8px;"
+                            ></div>
+                        </details>
+
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-secondary"
+                                id="bulk-delete-cancel-btn"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                class="btn-danger"
+                                id="bulk-delete-confirm-btn"
+                            >
+                                Ya, Hapus
+                                <span id="modal-confirm-count">0</span>
+                                Soal
+                            </button>
+                        </div>
                     </div>
                 </dialog>
             </div>

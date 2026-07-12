@@ -1007,10 +1007,32 @@ tbody tr:hover {
 
 /* Inside a wide container (.container--wide — used by kelola-soal.html,
    paket-soal.html, paket-detail.html), allow the second column more
-   horizontal room so 'Konten Soal (Preview)' truncates less aggressively. */
+   horizontal room so 'Konten Soal (Preview)' truncates less aggressively.
+   NOTE: as of CP1, kelola-soal.html's table has 6 columns (checkbox
+   added as nth-child(1)), so 'Konten Soal (Preview)' is now nth-child(3).
+   The 1-line truncation for THAT column lives in the ID-scoped
+   `#questions-table th:nth-child(3)` / `td:nth-child(3)` rules below.
+   This generic .table-condensed:nth-child(2) rule still applies to
+   bank-soal.html (which doesn't have the checkbox column) and to
+   the 'No' column in kelola-soal (no-op since row numbers are short). */
 .container--wide .table-condensed th:nth-child(2),
 .container--wide .table-condensed td:nth-child(2) {
     max-width: 480px;
+}
+/* CP1 fix: kelola-soal.html table gained a checkbox column (nth-child(1))
+   which shifted 'Konten Soal (Preview)' from nth-child(2) to nth-child(3).
+   Apply 1-line truncation rules to nth-child(3) here, ID-scoped to
+   #questions-table so bank-soal.html (which uses .table-condensed
+   without a checkbox column) keeps its existing nth-child(2) targeting
+   intact. The original nth-child(2) rules above now apply to the 'No'
+   column in kelola-soal — harmless because row numbers are short and
+   never exceed 320px anyway. */
+#questions-table th:nth-child(3),
+#questions-table td:nth-child(3) {
+    max-width: 480px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 /* paket-soal.html: Nama Paket column fixed at 480px (width, not max-width)
    so column renders wider than Aksi column regardless of content length.
@@ -1057,7 +1079,7 @@ tbody tr:hover {
    1-line context: the chip `<span>` and `<mjx-container>` (forced
    `display: inline-block`) flow inline alongside the actual text
    and the cell clips them with ellipsis at the right edge. */
-#questions-table td:nth-child(2) p,
+#questions-table td:nth-child(3) p,
 .pack-question-item .q-preview p {
     display: inline;
     margin: 0;
@@ -1065,7 +1087,7 @@ tbody tr:hover {
 }
 /* Separator space between consecutive <p>s so adjacent paragraphs
    aren't visually concatenated when truncated. */
-#questions-table td:nth-child(2) p + p::before,
+#questions-table td:nth-child(3) p + p::before,
 .pack-question-item .q-preview p + p::before {
     content: " ";
 }
@@ -1114,7 +1136,7 @@ tbody tr:hover {
    Scoped to the same three preview surfaces used elsewhere in this
    ruleset. */
 .pack-question-item .q-preview mjx-container,
-#questions-table td:nth-child(2) mjx-container,
+#questions-table td:nth-child(3) mjx-container,
 .option-item .option-label mjx-container {
     display: inline-block !important;
     margin: 0 !important;
@@ -1254,4 +1276,68 @@ tbody tr:hover {
     to {
         box-shadow: 0 0 0 8px rgba(182, 34, 38, 0);
     }
+}
+
+/* ==== Bulk Delete selection (per specs/bulk-delete-questions-spec.md
+   Section 3.8 / Section 4) ==== */
+.col-checkbox {
+    width: 40px;
+    padding: 4px 8px;
+    text-align: center;
+}
+.col-checkbox input[type="checkbox"] {
+    cursor: pointer;
+}
+.selection-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--primary-light);
+    color: var(--on-primary);
+    border-radius: 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.selection-pill button {
+    background: none;
+    border: none;
+    color: var(--on-primary);
+    cursor: pointer;
+    font-weight: 700;
+    padding: 0 4px;
+    text-decoration: underline;
+}
+
+/* ==== Bulk Delete confirmation modal (per spec Section 4.8 / Section 3.8) ==== */
+.bulk-delete-summary {
+    margin-bottom: 16px;
+    line-height: 1.6;
+}
+.bulk-delete-pack-list {
+    background: var(--danger-light);
+    border-left: 4px solid var(--danger);
+    border-radius: 4px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+}
+.bulk-delete-pack-list ul {
+    margin: 4px 0;
+    padding-left: 20px;
+}
+details.bulk-delete-id-list summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+details.bulk-delete-id-list {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-radius: 6px;
+}
+details.bulk-delete-id-list[open] summary {
+    color: var(--text);
+    font-weight: 600;
 }

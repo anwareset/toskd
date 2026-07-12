@@ -6,6 +6,23 @@ const modal = document.getElementById("q-modal");
 const form = document.getElementById("q-form");
 const modalTitle = document.getElementById("modal-title");
 
+// ==== Bulk Delete selection (per specs/bulk-delete-questions-spec.md
+//      Section 4.3 / 4.4 — see Phase 1 implementation) ====
+const selectedIds = new Set();
+const selectAllCheckbox = document.getElementById("select-all-checkbox");
+const bulkDeleteBtn = document.getElementById("bulk-delete-btn");
+const selectionPill = document.getElementById("selection-pill");
+const selectionPillText = document.getElementById("selection-pill-text");
+const clearSelectionBtn = document.getElementById("clear-selection-btn");
+const bulkDeleteConfirmModal = document.getElementById("bulk-delete-confirm-modal");
+const bulkDeleteConfirmBtn = document.getElementById("bulk-delete-confirm-btn");
+const bulkDeleteCancelBtn = document.getElementById("bulk-delete-cancel-btn");
+const confirmTotalCountEl = document.getElementById("confirm-total-count");
+const modalConfirmCountEl = document.getElementById("modal-confirm-count");
+const confirmPackImpactEl = document.getElementById("confirm-pack-impact");
+const confirmPackListEl = document.getElementById("confirm-pack-list");
+const confirmIdListEl = document.getElementById("confirm-id-list");
+
 let questions = [];
 
 // Quill editor instances
@@ -280,13 +297,19 @@ function renderTable() {
 
   // Slice questions for current page
   const start = currentPage * rowsPerPage;
-  const pageData = filtered.slice(start, start + rowsPerPage);
-
-  bodyEl.innerHTML = pageData
+  const pageData = filtered.slice(start, start + rowsPerPage);  bodyEl.innerHTML = pageData
     .map((q, idx) => {
       const globalIdx = start + idx + 1;
+      const isSelected = selectedIds.has(q.id);
       return `
         <tr>
+          <td class="col-checkbox">
+            <input type="checkbox"
+                   class="row-checkbox"
+                   data-id="${q.id}"
+                   ${isSelected ? 'checked' : ''}
+                   aria-label="Pilih soal #${globalIdx}">
+          </td>
           <td>${globalIdx}</td>
           <td>${imgToMarker(q.content)}</td>
           <td><strong>${esc(q.question_type || "text")}</strong></td>
@@ -295,9 +318,9 @@ function renderTable() {
             <button class="btn-secondary" onclick="editQuestion(${q.id})">Edit</button>
             <button class="btn-danger" onclick="deleteQuestion(${q.id})">Hapus</button>
           </td>        </tr>
-      `;
-      })
-      .join("");
+    `;
+    })
+    .join("");
 
     // Render \( ... \) LaTeX delimiters in question content cells, so
     // injected math formulas become visible in the table preview. Quill
@@ -317,7 +340,137 @@ function renderTable() {
   } else {
     controlsTop.style.display = "none";
     controlsBottom.style.display = "none";
+    // Spec Section 4.12: empty-state row when zero questions
+    bodyEl.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 32px; color: var(--text-muted)">
+      Tidak ada soal di Bank Soal. Tambah soal baru via tombol di atas.
+    </td></tr>`;
   }
+
+  // Spec Section 4.3 / Section 12: sync pill + bulk-delete button + header
+  // checkbox 3-state after every render. Reads selectedIds (state, not DOM)
+  // and current filtered pageData (view) — detached from DOM checkbox state
+  // to avoid render-then-update loops.
+  updateSelectionUI();
+}
+
+// ==== Bulk Delete: state machine + body checkbox delegation ====
+// Spec: specs/bulk-delete-questions-spec.md Section 4.3 / 4.4 / 4.5 / 4.6
+
+// updateSelectionUI() — synchronises pill, bulk-delete button, and header
+// checkbox 3-state from the in-memory `selectedIds` set + current filtered
+// pageData. Strict-scope: header checkbox reflects current page rows ONLY
+// (cross-page selection tracked via counter pill text per Section 3.1).
+function updateSelectionUI() {
+  const total = selectedIds.size;
+  // Compute "on this page" subset using same filter logic as renderTable
+  // (duplicated here intentionally — extracting a shared helper felt like
+  // premature abstraction for a 5-line filter that may evolve independently
+  // per design notes in spec Section 7 R5).
+  const filtered = questions.filter((q) => {
+    const contentText = (q.content || "").replace(/<[^>]*>/g, "").toLowerCase();
+    const typeText = (q.question_type || "").toLowerCase();
+    const term = searchTerm.toLowerCase();
+    return contentText.includes(term) || typeText.includes(term);
+  });
+  const start = currentPage * rowsPerPage;
+  const pageData = filtered.slice(start, start + rowsPerPage);
+  const onThisPage = pageData.filter((q) => selectedIds.has(q.id)).length;
+  const totalOnPage = pageData.length;
+
+  // Pill + button visibility
+  if (total === 0) {
+    selectionPill.style.display = "none";
+    bulkDeleteBtn.disabled = true;
+  } else {
+    selectionPill.style.display = "inline-flex";
+    // Simplify to "X dipilih di halaman ini" ONLY when there are zero
+    // selections on other pages (total selections == this page's row
+    // count). Otherwise always show "X total · Y di halaman ini" so
+    // cross-page selections stay visible (T5/T27). Fix from CP2 review.
+    if (total === totalOnPage && total > 0) {
+      selectionPillText.textContent = `${total} dipilih di halaman ini`;
+    } else {
+      selectionPillText.textContent = `${total} dipilih total · ${onThisPage} di halaman ini`;
+    }
+    bulkDeleteBtn.disabled = false;
+  }
+
+  // Header checkbox 3-state (Section 12 Appendix A state machine)
+  if (totalOnPage === 0 || onThisPage === 0) {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = false;
+  } else if (onThisPage === totalOnPage) {
+    selectAllCheckbox.checked = true;
+    selectAllCheckbox.indeterminate = false;
+  } else {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = true;
+  }
+}
+
+// setupCheckboxDelegation() — attach delegated `change` handler on bodyEl
+// ONCE at file-init (Section 4.4a). The handler converts row-checkbox
+// toggles into `selectedIds` Set mutations. Guard prevents re-attach on
+// hot-reload / multiple init calls. Defensive null-check on bodyEl for
+// load-time race resilience (spec minor polish item from R0.1 review).
+let checkboxDelegationInstalled = false;
+function setupCheckboxDelegation() {
+  if (checkboxDelegationInstalled) return;
+  if (!bodyEl) return;
+  checkboxDelegationInstalled = true;
+  bodyEl.addEventListener("change", (e) => {
+    const cb = e.target.closest(".row-checkbox");
+    if (!cb) return;
+    const id = parseInt(cb.dataset.id, 10);
+    if (Number.isNaN(id)) return;
+    if (cb.checked) selectedIds.add(id);
+    else selectedIds.delete(id);
+    updateSelectionUI();
+  });
+}
+
+// ==== Bulk Delete: confirmation modal (per spec Section 4.8) ====
+// Phase 2 (CP3 stub) — opens the dialog with current selectedIds count +
+// (Phase 2) pack impact list. POST /api/questions/bulk-usage pre-fetch
+// is NOT wired here (Phase 2 Step 8 / 10). For now we pass an empty
+// usageMap {} and the modal shows "no pack impact" placeholder. Real
+// Phase 2 will swap this for a fetch + showBulkDeleteConfirmModal call.
+function showBulkDeleteConfirmModal(ids, usageMap) {
+  const totalIds = ids.length;
+  confirmTotalCountEl.textContent = totalIds;
+  modalConfirmCountEl.textContent = totalIds;
+
+  // Aggregate pack impact across all selected ids (dedupe sets).
+  const allImpactedPacks = new Set();
+  for (const id of ids) {
+    const usage = usageMap[id];
+    if (usage?.used && Array.isArray(usage.packs)) {
+      for (const packName of usage.packs) allImpactedPacks.add(packName);
+    }
+  }
+
+  confirmPackListEl.innerHTML = "";
+  if (allImpactedPacks.size > 0) {
+    confirmPackImpactEl.style.display = "block";
+    for (const packName of allImpactedPacks) {
+      const li = document.createElement("li");
+      li.textContent = packName;
+      confirmPackListEl.appendChild(li);
+    }
+  } else {
+    confirmPackImpactEl.style.display = "none";
+  }
+
+  // Collapsible id list — keep modest cap to avoid huge DOM (cap 1000 map).
+  // Phase 2 may want pagination within <details>; for v1 we slice.
+  const MAX_IDS_SHOWN = 1000;
+  const shown = ids.slice(0, MAX_IDS_SHOWN);
+  const suffix = ids.length > MAX_IDS_SHOWN
+    ? ` … (${ids.length - MAX_IDS_SHOWN} more)`
+    : "";
+  confirmIdListEl.textContent = shown.join(", ") + suffix;
+
+  bulkDeleteConfirmModal.showModal();
 }
 
 // Event Listeners for Pagination & Search
@@ -699,6 +852,177 @@ window.deleteQuestion = async (id) => {
 
 // Initialize on load
 init();
+
+// ==================== BULK DELETE WIRING (Phase 1) ====================
+// Spec: specs/bulk-delete-questions-spec.md Sections 4.4a + 4.5 + 4.6
+// Phase 1 installs the state-machine + selection-state plumbing. The
+// picker modal markup, <dialog id="bulk-delete-confirm-modal">, and the
+// pre-fetch / submit handlers are Phase 2 (spec Steps 6-11) — not in
+// this commit. bulk-delete-btn stays structurally disabled until then.
+
+// Attach body-checkbox delegated listener ONCE (re-entry guard via flag).
+setupCheckboxDelegation();
+
+// Header checkbox: select/deselect all rows on current page only. Other
+// pages retain their selection (counter pill text reflects total + per-page).
+selectAllCheckbox.addEventListener("change", (e) => {
+  const filtered = questions.filter((q) => {
+    const contentText = (q.content || "").replace(/<[^>]*>/g, "").toLowerCase();
+    const typeText = (q.question_type || "").toLowerCase();
+    const term = searchTerm.toLowerCase();
+    return contentText.includes(term) || typeText.includes(term);
+  });
+  const start = currentPage * rowsPerPage;
+  const pageData = filtered.slice(start, start + rowsPerPage);
+  if (e.target.checked) {
+    pageData.forEach((q) => selectedIds.add(q.id));
+  } else {
+    pageData.forEach((q) => selectedIds.delete(q.id));
+  }
+  updateSelectionUI();
+});
+
+// Pill × button: clear all selections.
+clearSelectionBtn.addEventListener("click", () => {
+  selectedIds.clear();
+  updateSelectionUI();
+  renderTable();
+});
+
+// Esc shortcut: clear selection when no modal open. Guard against
+// <dialog> native close via Esc — we don't want to also wipe selection.
+// Fall-through to ring-of-fire: if a delete-confirm modal IS open, the
+// Esc press closes the modal first (browser default); selection stays
+// intact so the user can retry.
+document.addEventListener("keydown", (e) => {
+  if (
+    e.key === "Escape" &&
+    selectedIds.size > 0 &&
+    !document.querySelector("dialog[open]")
+  ) {
+    selectedIds.clear();
+    updateSelectionUI();
+    renderTable();
+  }
+});
+
+// ==== Bulk Delete: pre-fetch usage + open confirmation modal (Phase 2 Step 10) ====
+// Per spec Section 4.7: pre-fetch is single round-trip to
+// /api/questions/bulk-usage. If it fails user gets an alert and the
+// button state restores (no modal opens). On success the populated
+// usageMap is passed to showBulkDeleteConfirmModal which then renders
+// the pack-impact list inside the modal markup.
+bulkDeleteBtn.onclick = async () => {
+  if (selectedIds.size === 0) return; // defensive
+
+  bulkDeleteBtn.disabled = true;
+  const originalLabel = bulkDeleteBtn.textContent;
+  bulkDeleteBtn.textContent = "Memeriksa...";
+
+  try {
+    const ids = Array.from(selectedIds);
+    const res = await fetch("/api/questions/bulk-usage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const usageMap = await res.json();
+    showBulkDeleteConfirmModal(ids, usageMap);
+  } catch (err) {
+    console.error("Bulk usage pre-fetch failed:", err);
+    alert("Gagal memeriksa soal. Coba lagi.");
+  } finally {
+    bulkDeleteBtn.textContent = originalLabel;
+    // Re-enable iff selection is non-empty (user may have cleared it during pre-fetch
+    // via Esc; updateSelectionUI handles the canonical case).
+    updateSelectionUI();
+  }
+};
+
+// ==== Bulk Delete: confirmation modal cancel button ====
+bulkDeleteCancelBtn.addEventListener("click", () => {
+  bulkDeleteConfirmModal.close();
+});
+
+// ==== Bulk Delete: confirmation modal submit button (Phase 2 Step 11) ====
+// POST /api/questions/bulk-delete with Promise.allSettled best-effort on
+// the server side. Client handles the {deleted, failed} response:
+// - `deleted` ids pruned from selectedIds (gone from DB)
+// - `failed` ids retained in selectedIds so user can retry without re-selecting
+// - modal closes, alert shows summary (with first-failed reason if any)
+// - init() refetches table to reflect new state. updateSelectionUI runs at
+//   end of renderTable() inside init() so pill reflects remaining failed ids.
+bulkDeleteConfirmBtn.addEventListener("click", async () => {
+  const ids = Array.from(selectedIds);
+  if (ids.length === 0) {
+    bulkDeleteConfirmModal.close();
+    return;
+  }
+
+  bulkDeleteConfirmBtn.disabled = true;
+  bulkDeleteCancelBtn.disabled = true;
+  const originalConfirmLabel = bulkDeleteConfirmBtn.textContent;
+  bulkDeleteConfirmBtn.textContent = "Menghapus...";
+
+  // Activate global loading overlay (existing #loading element). Inject
+  // progress text into the overlay without replacing the spinner.
+  const loadingOverlay = document.getElementById("loading");
+  loadingOverlay.style.display = "flex";
+  let overlayMsg = loadingOverlay.querySelector("p.bulk-delete-progress");
+  if (!overlayMsg) {
+    overlayMsg = document.createElement("p");
+    overlayMsg.className = "bulk-delete-progress";
+    overlayMsg.style.cssText = "color: var(--text); margin-top: 16px;";
+    loadingOverlay.appendChild(overlayMsg);
+  }
+  overlayMsg.textContent = `Menghapus ${ids.length} soal...`;
+
+  try {
+    const res = await fetch("/api/questions/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json(); // {deleted: [...], failed: [{id, reason}]}
+    handleBulkDeleteResponse(data, ids);
+  } catch (err) {
+    console.error("Bulk delete submit failed:", err);
+    alert("Gagal menghapus soal. Coba lagi.");
+  } finally {
+    bulkDeleteConfirmBtn.disabled = false;
+    bulkDeleteCancelBtn.disabled = false;
+    bulkDeleteConfirmBtn.textContent = originalConfirmLabel;
+    if (overlayMsg) overlayMsg.textContent = "";
+    loadingOverlay.style.display = "none";
+  }
+});
+
+// handleBulkDeleteResponse — prune deleted ids, close modal, alert summary,
+// trigger table refresh. Per spec Section 4.9 + Appendix A: selectedIds
+// retained for failed ids (enables user retry without re-selecting).
+function handleBulkDeleteResponse(data, submittedIds) {
+  const deleted = data.deleted || [];
+  const failed = data.failed || [];
+
+  // Prune successfully-deleted; failed stays (already in selectedIds).
+  for (const id of deleted) selectedIds.delete(id);
+
+  bulkDeleteConfirmModal.close();
+
+  let alertMsg = `${deleted.length} soal berhasil dihapus`;
+  if (failed.length > 0) {
+    const firstReason = failed[0]?.reason || "unknown error";
+    alertMsg = `${deleted.length} berhasil, ${failed.length} gagal — contoh #${failed[0].id}: ${firstReason}`;
+  }
+  alert(alertMsg);
+
+  // Refresh table — init() refetches questions, calls renderTable() which
+  // ends with updateSelectionUI(). After refresh, remaining selectedIds
+  // (failed-only) reflect in the pill counter (T17 / T18 happy path).
+  init();
+}
 
 // ==================== BULK ADD FUNCTIONS ====================
 // Spec: specs/bulk-add-questions-spec.md

@@ -144,36 +144,54 @@ Akses platform di [`http://localhost:3000`](http://localhost:3000).
 
 ---
 
-## 🗃️ Skema Database Supabase
-
-Untuk membuat seluruh tabel dan relasi, jalankan query yang ada di file:
- [`schema.sql`](./schema.sql)
-
-**Tabel utama**:
-- `questions` - Bank soal (konten HTML dengan gambar inline)
-- `question_packs` - Paket soal
-- `pack_questions` - Relasi soal dalam paket
-- `exam_results` - Hasil ujian peserta
-
----
-
 ## 📚 API Endpoints
+
+Semua endpoint didefinisikan di `src/server.js` (Express.js, di-deploy sebagai Vercel Serverless Function). Backend menggunakan Supabase untuk database dan Vercel Blob untuk upload gambar. Total: **23 endpoint**, dikelompokkan berdasarkan resource.
+
+### 📝 Questions (8 endpoint)
 
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
 | GET | `/api/questions` | Daftar semua soal |
-| POST | `/api/questions` | Tambah soal baru |
-| POST | `/api/questions/bulk` | Bulk tambah banyak soal (max 500 per request, atomic via PostgREST) |
-| PUT | `/api/questions/:id` | Update soal |
-| DELETE | `/api/questions/:id` | Hapus soal |
-| GET | `/api/packs` | Daftar paket soal |
+| POST | `/api/questions` | Tambah soal baru (dengan optional upload gambar inline ke Vercel Blob) |
+| POST | `/api/questions/bulk` | Bulk tambah banyak soal (max 500 per request, atomic via PostgREST single transaction) |
+| POST | `/api/questions/bulk-usage` | Pre-check pack usage untuk banyak soal sekaligus. **Body:** `{ ids: [1..1000] }`. **Returns:** `Record<idStr, { used, packs }>`. Single round-trip via PostgREST `IN` query — bukan loop per-id. |
+| POST | `/api/questions/bulk-delete` | Bulk delete dengan **best-effort per-id semantics** (bukan atomic). **Body:** `{ ids: [1..1000] }`. **Returns:** `{ deleted: [ids], failed: [{ id, reason }] }` untuk partial-failure reporting. |
+| PUT | `/api/questions/:id` | Update soal (dengan optional image upload) |
+| DELETE | `/api/questions/:id` | Hapus soal (auto-unlink dari `pack_questions` via FK CASCADE) |
+| GET | `/api/questions/:id/usage` | Single-question usage check. **Returns:** `{ used, packs: [name] }` |
+
+### 📦 Packs (9 endpoint)
+
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| GET | `/api/packs` | Daftar semua paket soal |
 | GET | `/api/packs/:id` | Detail paket soal |
-| POST | `/api/packs` | Buat paket soal |
-| PUT | `/api/packs/:id` | Update paket soal |
-| DELETE | `/api/packs/:id` | Hapus paket soal |
-| POST | `/api/packs/:id/questions` | Tambah soal ke paket |
-| POST | `/api/exam/start` | Mulai ujian |
-| POST | `/api/exam/submit` | Kirim jawaban |
-| GET | `/api/exam/:id/results` | Hasil ujian |
-| GET | `/api/scoreboard-all` | Daftar peringkat |
-| POST | `/api/upload-image` | Upload gambar ke Vercel Blob |
+| POST | `/api/packs` | Buat paket soal baru |
+| PUT | `/api/packs/:id` | Update nama / durasi / passing grade |
+| DELETE | `/api/packs/:id` | Hapus paket (cascade ke `exam_results` + `pack_questions`) |
+| POST | `/api/packs/:id/questions` | Tambah 1 soal ke paket (assign `question_number`) |
+| GET | `/api/packs/:id/questions` | Daftar soal dalam paket, diurutkan berdasarkan `question_number` |
+| PUT | `/api/packs/:id/questions` | Bulk reorder soal dalam paket (delete-all-then-insert). **Body:** `{ questions: [{ question_id, question_number }] }` |
+| DELETE | `/api/packs/:packId/questions/:questionId` | Hapus 1 soal dari 1 paket (tanpa menghapus soal itu sendiri) |
+
+### 🎯 Exam (3 endpoint)
+
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| POST | `/api/exam/start` | Mulai ujian (create row `exam_results` dengan status `"In Progress"`) |
+| POST | `/api/exam/submit` | Kirim jawaban, hitung skor otomatis (5 poin per benar, 0 untuk salah/tidak dijawab), set status `"Lulus PG"` / `"Tidak Lulus PG"` berdasarkan passing grade |
+| GET | `/api/exam/:id/results` | Hasil ujian berdasarkan `exam_id` (include embedded `question_packs` data) |
+
+### 🏆 Scoreboard (2 endpoint)
+
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| GET | `/api/scoreboard?pack_id=X` | Scoreboard per-paket. **`pack_id` query param WAJIB.** **Returns:** `[{ participant_name, score, status }]` ordered by score DESC. |
+| GET | `/api/scoreboard-all?pack_id=X` | Scoreboard global, dengan optional `pack_id` filter. **Returns:** `[{ participant_name, score, status, created_at, pack_id, question_packs(name) }]` ordered by score DESC. |
+
+### 🖼️ Upload (1 endpoint)
+
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| POST | `/api/upload-image` | Upload gambar (base64) ke Vercel Blob. **Body:** `{ image, folder? }` (default folder: `questions`). **Returns:** `{ url }`. |

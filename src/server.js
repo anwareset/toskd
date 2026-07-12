@@ -96,6 +96,126 @@ app.post("/api/questions/bulk", async (req, res) => {
   }
 });
 
+// Bulk usage pre-check (per specs/bulk-delete-questions-spec.md Section 4.7 / 8).
+// Accepts `{ ids: [1..1000] }` and returns Record<idStr, { used, packs }>
+// in a SINGLE round-trip via PostgREST aggregate `IN` query — never loop
+// per-id (would otherwise hang the UI for hundreds of soal). 400 for bad
+// payload, 500 for unexpected DB error.
+app.post("/api/questions/bulk-usage", async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids must be a non-empty array" });
+    }
+    if (ids.length > 1000) {
+      return res
+        .status(400)
+        .json({ error: "max 1000 ids per request" });
+    }
+
+    // Single PostgREST query: WHERE question_id IN (...) JOIN question_packs.
+    // Each row carries the embedded pack name. Aggregate per-id below.
+    const { data, error } = await supabase
+      .from("pack_questions")
+      .select("question_id, question_packs(name)")
+      .in("question_id", ids);
+    if (error) throw error;
+
+    // Initialize every requested id with default empty usage; then fill from
+    // returned rows. String-keyed map for JSON safety with BigInt ids.
+    const usageMap = {};
+    for (const id of ids) {
+      usageMap[String(id)] = { used: false, packs: [] };
+    }
+    for (const row of data) {
+      const key = String(row.question_id);
+      if (!usageMap[key]) continue; // defensive: id in result but not requested
+      usageMap[key].used = true;
+      const packName = row.question_packs?.name;
+      if (packName && !usageMap[key].packs.includes(packName)) {
+        usageMap[key].packs.push(packName);
+      }
+    }
+
+    res.json(usageMap);
+  } catch (error) {
+    console.error("Error in bulk usage check:", error);
+    res.status(500).json({ error: "Failed to check usage" });
+  }
+});
+
+// Bulk delete questions (per specs/bulk-delete-questions-spec.md Section 4.10).
+// Best-effort per-id semantics via Promise.allSettled — NOT single transaction
+// (partial-failure reporting is explicit feature). Each iteration defensively
+// pre-unlinks pack_questions then deletes the question row (FK ON DELETE
+// CASCADE on pack_questions.question_id handles unlinking too — pre-unlink
+// is belt-and-suspenders for schema-evolution safety). Returns
+// `{ deleted: [ids], failed: [{id, reason}] }`.
+app.post("/api/questions/bulk-delete", async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids must be a non-empty array" });
+    }
+    if (ids.length > 1000) {
+      return res
+        .status(400)
+        .json({ error: "max 1000 ids per request" });
+    }
+
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        // Defensive pre-unlink pack_questions (FK cascade also handles this,
+        // but explicit is safer if schema later removes the CASCADE clause).
+        const { error: relError } = await supabase
+          .from("pack_questions")
+          .delete()
+          .eq("question_id", id);
+        if (relError) {
+          throw new Error(`pack_questions unlink failed: ${relError.message}`);
+        }
+
+        const { error: qError } = await supabase
+          .from("questions")
+          .delete()
+          .eq("id", id);
+        if (qError) {
+          throw new Error(`questions delete failed: ${qError.message}`);
+        }
+        return id;
+      })
+    );
+
+    const deleted = [];
+    const failed = [];
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      const id = ids[i];
+      if (r.status === "fulfilled") {
+        deleted.push(id);
+      } else {
+        failed.push({
+          id,
+          reason: r.reason?.message || "unknown error",
+        });
+      }
+    }
+
+    // Spec Section 7 R13: aggregate server-side summary log to avoid
+    // per-id error spam when 1000 IDs fail at once.
+    console.error("Bulk delete summary:", {
+      total: ids.length,
+      deleted: deleted.length,
+      failed: failed.length,
+    });
+
+    res.json({ deleted, failed });
+  } catch (error) {
+    console.error("Bulk delete error:", error);
+    res.status(500).json({ error: "Failed to bulk delete questions" });
+  }
+});
+
 // Add a new question
 app.post("/api/questions", async (req, res) => {
   try {
