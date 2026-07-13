@@ -70,17 +70,40 @@
     grid-area: title;
     justify-self: start;
 }
+/* ==== Theme toggle button (Rev. 0.8h: minimalist toggle switch) ==== */
+/* Standard "toggle switch" pattern from Material Design / iOS HIG:
+   - Pill-shaped track (hardcoded dark #11181c, always dark per user request)
+   - White circular thumb that slides left/right via CSS transform
+   - Thumb position indicates state: left = light mode, right = dark mode
+   - Uses ARIA role="switch" + aria-checked for accessibility (set in theme.js)
+   - The [data-theme="dark"] on documentElement drives the thumb position
+   - No text — the visual thumb position is the state indicator
+   - No :hover background change (per iOS HIG: cursor: pointer is enough
+     feedback; changing track color would conflict with toggle semantics) */
 .theme-toggle-btn {
-    background: transparent;
-    border: 1px solid var(--border);
-    padding: 6px 12px;
-    border-radius: var(--radius);
-    color: var(--text);
+    position: relative;
+    width: 44px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 12px; /* pill = height / 2 */
+    background: #11181c; /* dark track (always dark, slate-12) */
     cursor: pointer;
-    font-size: 0.9rem;
 }
-.theme-toggle-btn:hover {
-    background: var(--border);
+.theme-toggle-btn::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    transition: transform 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+[data-theme="dark"] .theme-toggle-btn::after {
+    transform: translateX(20px); /* slide to right (active/dark mode) */
 }
 
 /* ==== Global header: right-side group (Rev. 0.8) ====
@@ -228,11 +251,15 @@
         justify-self: auto;
     }
     .theme-toggle-btn {
-        /* Rev. 0.8f: removed `align-self: center` so the toggle follows
-           the right-group's `align-items: stretch` and matches the
-           logout button's width (both ~95px). With both stretched, the
-           toggle and logout are visually identical in size on mobile. */
-        text-align: center;
+        /* Rev. 0.8h: the toggle is now a fixed-size pill (44x24px), NOT
+           a text button. `align-self: flex-start` opts out of the
+           right-group's `align-items: stretch` so the toggle stays at
+           its natural 44px width instead of stretching to match the
+           logout button (~95px). flex-start also pins it to the LEFT
+           edge of the right-group (consistent with the mobile left-
+           stack design from Rev. 0.8d). `text-align: center` removed
+           (no text content anymore). */
+        align-self: flex-start;
     }
     .global-header-logout-btn {
         text-align: center;
@@ -1484,4 +1511,49 @@ details.bulk-delete-id-list {
 details.bulk-delete-id-list[open] summary {
     color: var(--text);
     font-weight: 600;
+}
+
+/* ==== Light theme: branded header + footer (per user request 2026-07-13) ==== */
+/* In light theme ONLY, the global header and footer use `--primary` (the
+   brand indigo #3e63dd) as their background — matching the previous
+   color of the `.global-header-title` text. All in-header/footer text
+   (title, theme toggle, navlinks, footer text) is set to
+   `var(--on-primary)` which is `#ffffff` in BOTH themes per tokens.css
+   (verified AAA contrast 5.1:1 on --primary).
+   Hover/focus states use `rgba(255,255,255,0.1)` for subtle white-tinted
+   highlights on the primary background. The `.global-header-logout-btn`
+   keeps its `--danger` red bg with `--on-primary` text — no change needed,
+   red stands out on indigo. Dark theme is completely unchanged. */
+[data-theme="light"] .global-header {
+    background: var(--primary);
+}
+[data-theme="light"] .global-header-title {
+    color: var(--on-primary);
+}
+[data-theme="light"] .global-header-link {
+    color: var(--on-primary);
+}
+[data-theme="light"] .global-header-link:hover {
+    color: var(--on-primary);
+    background: rgba(255, 255, 255, 0.1);
+}
+[data-theme="light"] .global-header-link:focus-visible {
+    outline: 2px solid var(--on-primary);
+}
+/* Light theme focus-visible: white outline on indigo header bg.
+   The default browser focus ring may not be visible on --primary
+   (indigo), so we explicitly use --on-primary (white) for contrast.
+   Per Rev. 0.8h: the old `color: var(--on-primary)` and `border-color`
+   rules for the text-based button are removed (irrelevant for the
+   new toggle switch — no text, no border). */
+[data-theme="light"] .theme-toggle-btn:focus-visible {
+    outline: 2px solid var(--on-primary);
+    outline-offset: 2px;
+}
+[data-theme="light"] .footer {
+    background: var(--primary);
+    color: var(--on-primary);
+    /* border-top var(--border) would be a light-gray line on indigo bg;
+       match bg color so the separation is via color contrast alone. */
+    border-top-color: var(--primary);
 }

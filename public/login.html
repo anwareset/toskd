@@ -17,7 +17,9 @@
         border: 1px solid var(--border);
         border-radius: 12px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-        flex: 1;
+        /* No `flex: 1` — card sizes to its content height. Footer is
+           pinned to bottom of the .site-wrapper via `.footer`'s
+           `margin-top: auto` in styles.css. */
       }
       .login-form-group {
         margin-bottom: 16px;
@@ -64,7 +66,7 @@
   <body>
     <div class="site-wrapper">
       <div class="login-container">
-        <h1 class="app-title" style="font-size: 1.5rem; margin-bottom: 8px">
+        <h1 class="app-title" style="font-size: 1.5rem; margin-bottom: 8px; text-align: center;">
           🔐 Login Admin
         </h1>
         <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px">
@@ -104,7 +106,7 @@
         </p>
       </div>
       <footer class="footer">
-        Untuk latihan SKD (Seleksi Kompetensi Dasar) · Made with ♥️ in 2026
+        Untuk latihan SKD · Made with ♥️ in 2026
       </footer>
     </div>
     <script src="/js/login.js"></script>

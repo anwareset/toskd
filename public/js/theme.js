@@ -68,14 +68,29 @@
     }
 
     const toggle = document.createElement("button");
+    toggle.type = "button";
     toggle.className = "theme-toggle-btn";
+    // ARIA: role="switch" + aria-checked is the standard accessible
+    // pattern for a toggle switch (Material Design / iOS HIG). The
+    // visual thumb position (driven by [data-theme] on documentElement)
+    // is the state indicator; ARIA attributes communicate the state
+    // to assistive tech. Rev. 0.8h: replaced text content with pure
+    // visual switch design.
+    toggle.setAttribute("role", "switch");
     toggle.setAttribute("aria-label", "Toggle dark/light theme");
 
     function updateToggleLabel() {
       const current =
         document.documentElement.getAttribute("data-theme") || "light";
-      toggle.innerHTML =
-        current === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+      const isDark = current === "dark";
+      // No text content — the thumb position is the visual state indicator.
+      toggle.setAttribute("aria-checked", isDark ? "true" : "false");
+      toggle.setAttribute(
+        "aria-label",
+        isDark
+          ? "Switch to light theme (currently dark)"
+          : "Switch to dark theme (currently light)",
+      );
     }
     updateToggleLabel();
 
