@@ -25,9 +25,34 @@
 
 /* Global Navigation Header */
 .global-header {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
+    /* Rev. 0.8 grid layout: title (1fr | start) | nav (auto | center) |
+       right-group (1fr | end). The two `minmax(0, 1fr)` columns are
+       always equal width, so the auto column sits at the container's
+       true geometric center regardless of title or right-group width.
+       `minmax(0, 1fr)` (vs plain `1fr`) forces the 1fr tracks to stay
+       equal even when content would otherwise push them apart —
+       without this, a wide right-group on a narrow viewport could
+       shift the nav off-center (caught by `code-reviewer-minimax-m3` +
+       `thinker-with-files-gemini` post-Rev. 0.8 review). The internal
+       `flex-wrap: wrap` on .global-header-right lets the toggle/logout
+       button wrap within the column instead of overflowing.
+
+       Rev. 0.8e (user feedback 2026-07-13): Added `grid-template-areas`
+       + `grid-area` on the 3 children. The previous 3-column grid
+       relied on auto-placement, which assumed exactly 3 children in
+       source order. On pages WITHOUT the nav (home / exam / review
+       per `!isHome && !isExam && !isReview` in theme.js), the right
+       group became the 2nd grid item and was placed in the MIDDLE
+       `auto` column (not the right 1fr column) — putting the toggle
+       + auth at the geometric center instead of the right edge. The
+       areas fix this: each child is explicitly placed by name
+       (`grid-area: title/nav/right`), so a missing nav element still
+       leaves the `nav` area as an empty track in the middle, keeping
+       the right group pinned to the rightmost 1fr column. Caught by
+       user on the home page. */
+    display: grid;
+    grid-template-areas: "title nav right";
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     gap: 12px;
     padding: 16px 24px;
@@ -41,6 +66,9 @@
     color: var(--primary);
     cursor: pointer;
     text-decoration: none;
+    /* Rev. 0.8 grid: pin to start of left 1fr column. */
+    grid-area: title;
+    justify-self: start;
 }
 .theme-toggle-btn {
     background: transparent;
@@ -55,14 +83,71 @@
     background: var(--border);
 }
 
-/* Global header navigation (added alongside brand + theme toggle).
-   Auto-injected by /js/theme.js into pages that are NOT
-   exam.html / review.html. */
+/* ==== Global header: right-side group (Rev. 0.8) ====
+   Wraps the theme toggle and the (optional) auth/logout button in a
+   single flex child of .global-header so the parent space-between
+   treats the right side as ONE slot. This keeps the nav consistently
+   positioned in the center regardless of whether the logout button is
+   showing. The internal `gap: 18px` matches .global-header-nav's
+   navlink gap so the auth cluster sits flush with the toggle and the
+   spacing reads as proportional to the navlink cluster on the left. */
+.global-header-right {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    /* Rev. 0.8 grid: pin to end of right 1fr column. `min-width: 0`
+       defensive: on viewports just above 767px where 1fr is narrow,
+       the right group's intrinsic min-content (~178px) could push
+       the column beyond 1fr. Without min-width: 0, the grid would
+       overflow horizontally. Belt-and-suspenders per
+       `code-reviewer-minimax-m3` post-Rev. 0.8 review. */
+    grid-area: right;
+    justify-self: end;
+    min-width: 0;
+}
+
+/* ==== Global header: logout button (Rev. 0.8) ====
+   Mirrors .theme-toggle-btn's dimensions (padding, radius, font-size,
+   border thickness) so the two buttons in the right group feel like
+   siblings. Color uses --danger so the logout action is visually
+   distinct from the neutral theme toggle. No emoji in the label —
+   "Logout" text only. */
+.global-header-logout-btn {
+    background: var(--danger);
+    border: 1px solid var(--danger);
+    padding: 6px 12px;
+    border-radius: var(--radius);
+    color: var(--on-primary);
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.global-header-logout-btn:hover {
+    background: var(--danger-hover);
+    border-color: var(--danger-hover);
+}
+.global-header-logout-btn:focus-visible {
+    outline: 2px solid var(--danger);
+    outline-offset: 2px;
+}
+
+/* Global header navigation (added alongside brand + theme toggle).    Auto-injected by /js/theme.js into pages that are NOT
+    index.html / exam.html / review.html (home page is a landing
+    page with 3 big buttons in main content — nav would be redundant). */
 .global-header-nav {
     display: flex;
     align-items: center;
     gap: 18px;
     flex-wrap: wrap;
+    /* Rev. 0.8 grid: `justify-self: center` pins the navlinks to the
+       center of the auto column, which is at the container's true
+       geometric center (the two 1fr columns on either side are
+       always equal width). `min-width: 0` allows the nav to shrink
+       if the title + nav + right-group can't fit in the viewport
+       (otherwise navlinks would overflow horizontally). */
+    grid-area: nav;
+    justify-self: center;
+    min-width: 0;
 }
 .global-header-link {
     text-decoration: none;
@@ -83,23 +168,82 @@
 }
 
 /* Mobile: stack global header vertically (matches .pagination-bar
-   stacking pattern already used elsewhere in this stylesheet). */
+   stacking pattern already used elsewhere in this stylesheet).
+   Rev. 0.8: revert from grid back to flex column for the single-row
+   vertical stack. Reset `justify-self` to `auto` (it's grid-only).
+   Add `align-self: center` on the title so the brand text centers
+   within the stretched row (otherwise it sticks to the left edge
+   of a full-width row). */
 @media (max-width: 767px) {
     .global-header {
+        display: flex;
         flex-direction: column;
         align-items: stretch;
     }
+    .global-header-title {
+        justify-self: auto;
+        /* Rev. 0.8 consistency: keep title at LEFT edge on mobile too
+           (was `align-self: center` which broke the "title at edge,
+           right group at opposite edge" symmetry established on
+           desktop). User feedback: toggle + logout must be consistently
+           at the right edge on ALL viewports, like the title is at the
+           left edge. */
+        align-self: flex-start;
+    }
     .global-header-nav {
+        display: flex;
         flex-direction: column;
         align-items: stretch;
         gap: 6px;
+        justify-self: auto;
     }
     .global-header-link {
         text-align: center;
+    }    .global-header-right {
+        display: flex;
+        flex-direction: column;
+        /* Rev. 0.8d (user feedback 2026-07-13): Both elements on the
+           left edge of mobile — title at top-left, toggle + logout at
+           bottom-left. Previously the right group was at the right edge
+           (mirror of title) but user wants both stacked on the left side
+           instead. `align-self: flex-start` shrinks the right-group's
+           box to its natural content width and pins it to the LEFT edge.
+           Result: title (top-left) → nav (middle, full-width) → toggle +
+           logout (bottom-left).
+
+           Rev. 0.8f (user feedback 2026-07-13, same day): the toggle
+           button ("🌙 Dark Mode", ~95px) and the logout button ("Logout",
+           ~55px) had different widths because each sized to its own
+           content. User wanted both buttons to be the SAME SIZE on
+           mobile. Fix: `align-items: stretch` (the default for flex
+           containers, so we now set it explicitly) makes both children
+           fill the right-group's cross-axis width. The right-group
+           itself is `align-self: flex-start` so it shrink-wraps to its
+           WIDEST child's intrinsic width (~95px, the toggle). Both
+           children then stretch to that width, giving them a uniform
+           ~95px width — same size, same look, balanced vertical stack. */
+        align-self: flex-start;
+        align-items: stretch;
+        gap: 8px;
+        justify-self: auto;
     }
     .theme-toggle-btn {
+        /* Rev. 0.8f: removed `align-self: center` so the toggle follows
+           the right-group's `align-items: stretch` and matches the
+           logout button's width (both ~95px). With both stretched, the
+           toggle and logout are visually identical in size on mobile. */
         text-align: center;
-        align-self: center;
+    }
+    .global-header-logout-btn {
+        text-align: center;
+        /* Rev. 0.8g: `width: 100%` removed — no longer needed because
+           `theme.js` now appends the logout button DIRECTLY to
+           `.global-header-right` (the dead `authSlot` wrapper is gone).
+           With the button as a direct flex child of right-group, the
+           mobile `align-items: stretch` (Rev. 0.8f) now stretches the
+           button itself to right-group width (~95px), not a wrapper.
+           The button matches the toggle's width automatically without
+           any explicit width rule. */
     }
 }
 *,

@@ -1,19 +1,312 @@
 // src/server.js
+// Spec: specs/admin-auth-spec.md (rev 0.1). All admin auth code is
+// grouped under "ADMIN AUTH" headers below for easy audit.
 import express from "express";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import supabase from "./db.js";
 import { put } from "@vercel/blob";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
 
+// Trust Vercel proxy (1 hop). Free hardening; matters for any future
+// rate limiting (req.ip would otherwise be the LB IP, not the client).
+app.set("trust proxy", 1);
+
 // Middleware
 app.use(express.json({ limit: "10mb" }));
 
-// --- API Endpoints ---
+// ============================================
+// ADMIN AUTH (specs/admin-auth-spec.md §6)
+// ============================================
+
+// STRICT-FAIL: throw on startup if JWT_SECRET missing or too short.
+// Avoids silent production bugs from random-per-cold-start fallback.
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  throw new Error(
+    "[admin-auth] FATAL: JWT_SECRET env var must be set to a strong random string (>= 32 chars). " +
+    "Generate via: openssl rand -hex 32",
+  );
+}
+
+const COOKIE_NAME = "toskd_admin_sess";
+const COOKIE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SLIDING_REFRESH_THRESHOLD_MS = 12 * 60 * 60 * 1000; // refresh if < 12h remaining
+const BCRYPT_COST = 10;
+const MAX_USERNAME_LEN = 64;
+const MAX_PASSWORD_LEN = 1000;
+
+const BOOTSTRAP_USERNAME = process.env.BOOTSTRAP_ADMIN_USERNAME;
+const BOOTSTRAP_PASSWORD = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+
+const PUBLIC_DIR = join(__dirname, "..", "public");
+
+// --- Session helpers ---
+
+// Read + verify session cookie. Returns decoded JWT payload or null.
+function readSession(req) {
+  const cookies = req.headers.cookie || "";
+  const match = cookies.match(
+    new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`),
+  );
+  if (!match) return null;
+  try {
+    // Pin algorithm to HS256 to prevent alg:none attacks.
+    return jwt.verify(match[1], JWT_SECRET, { algorithms: ["HS256"] });
+  } catch (err) {
+    return null; // invalid or expired
+  }
+}
+
+// Set a fresh session cookie. Guard against writing after headers flushed
+// (Express 5 may stream earlier than Express 4).
+function setSessionCookie(res, payload) {
+  if (res.headersSent) return;
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "24h" });
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE_NAME}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE_MS / 1000}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
+  );
+}
+
+// --- requireAdmin middleware ---
+// SPEC DECISION: accept stale 24h sessions (C2). If admin is TRUNCATE'd
+// from DB, existing JWTs remain valid until exp. No per-request DB check
+// — keeps JWT stateless. Trade-off: known limitation L2.
+function requireAdmin(req, res, next) {
+  // Lowercase path (R19 fix): /Bank-soal.html bypasses lowercase list otherwise.
+  // Use local var because req.path is a getter-only in Express 5 — mutating
+  // it throws TypeError in ES module strict mode.
+  const path = req.path.toLowerCase();
+
+  const session = readSession(req);
+  if (!session) {
+    // CORS preflight (OPTIONS) — respond 204; never block.
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
+    }
+    // Content negotiation: HTML page → redirect to login, API → 401 JSON.
+    // R19 fix + Review fix: do NOT use req.accepts("html") — default fetch
+    // sends Accept: */* which would falsely match and redirect API calls.
+    // Plain .html path check is sufficient (browsers navigate to .html).
+    if (path.endsWith(".html")) {
+      const next_ = encodeURIComponent(req.originalUrl);
+      return res.redirect(302, `/login.html?next=${next_}`);
+    }
+    return res.status(401).json({ error: "admin login required" });
+  }
+
+  req.admin = session; // { adminId, username, iat, exp }
+
+  // Sliding refresh: if remaining life < 12h, re-issue cookie.
+  // SPEC DECISION (C6): every request — keeps impl simple, browser dedupes.
+  const now = Math.floor(Date.now() / 1000);
+  const remaining = (session.exp || 0) - now;
+  if (remaining > 0 && remaining < SLIDING_REFRESH_THRESHOLD_MS / 1000) {
+    setSessionCookie(res, {
+      adminId: session.adminId,
+      username: session.username,
+    });
+  }
+
+  next();
+}
+
+// --- Bootstrap: seed first admin from env vars on cold-start ---
+// Short-circuits if already done in this process. Idempotent: subsequent
+// cold-starts log a warning if env vars still set + table non-empty.
+let bootstrapDoneThisProcess = false;
+
+async function maybeBootstrapAdmin() {
+  if (!BOOTSTRAP_USERNAME || !BOOTSTRAP_PASSWORD) return;
+  // Dev guard: skip bootstrap outside production. Avoids log spam on every
+  // cold start when SUPABASE_URL is mocked or admins table is absent locally.
+  // To test bootstrap locally, run with `NODE_ENV=production node src/server.js`.
+  // We log a one-liner (not console.error) so it's visible in dev but doesn't
+  // look alarming. Lets the next person hitting a bootstrap issue immediately
+  // see "skipped (dev mode)" and know how to enable it.
+  if (process.env.NODE_ENV?.toLowerCase() !== "production") {
+    console.log("[admin-auth] Bootstrap skipped (dev mode). Set NODE_ENV=production to test.");
+    return;
+  }
+  if (bootstrapDoneThisProcess) return;
+
+  try {
+    const { count, error: countError } = await supabase
+      .from("admins")
+      .select("*", { count: "exact", head: true });
+
+    if (countError) throw countError;
+
+    if (count > 0) {
+      console.warn(
+        "[admin-auth] BOOTSTRAP_ADMIN_* env vars set but admins table not empty. " +
+        "DELETE the env vars from Vercel dashboard NOW to avoid plaintext password leak.",
+      );
+      bootstrapDoneThisProcess = true;
+      return;
+    }
+
+    if (BOOTSTRAP_PASSWORD.length > MAX_PASSWORD_LEN) {
+      throw new Error(
+        `[admin-auth] BOOTSTRAP_ADMIN_PASSWORD longer than ${MAX_PASSWORD_LEN} chars; aborting.`,
+      );
+    }
+
+    const password_hash = await bcrypt.hash(BOOTSTRAP_PASSWORD, BCRYPT_COST);
+    const { error: insertError } = await supabase
+      .from("admins")
+      .insert({ username: BOOTSTRAP_USERNAME, password_hash });
+
+    if (insertError) {
+      // UNIQUE violation = race condition (another instance beat us). Safe to ignore.
+      if (insertError.code === "23505") {
+        console.log("[admin-auth] Bootstrap race resolved by UNIQUE constraint.");
+        bootstrapDoneThisProcess = true;
+        return;
+      }
+      throw insertError;
+    }
+
+    bootstrapDoneThisProcess = true;
+    console.log(
+      `[admin-auth] Bootstrap admin "${BOOTSTRAP_USERNAME}" created. ` +
+      `DELETE BOOTSTRAP_ADMIN_USERNAME and BOOTSTRAP_ADMIN_PASSWORD env vars NOW.`,
+    );
+  } catch (err) {
+    // Rich error context: Node fetch errors stash the real network reason in
+    // `err.cause` (err.message is just "fetch failed"); Supabase PostgREST
+    // errors are plain objects with `message`/`code`/`details`. Print both.
+    console.error("[admin-auth] Bootstrap failed:", {
+      message: err?.message,
+      code: err?.code,
+      details: err?.details,
+      cause: err?.cause?.message || err?.cause,
+      stack: err?.stack,
+    });
+  }
+}
+
+// --- Admin auth endpoints ---
+
+// POST /api/admin/login
+app.post("/api/admin/login", async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    if (typeof username !== "string" || typeof password !== "string") {
+      return res.status(400).json({ error: "username + password required" });
+    }
+    if (username.length === 0 || password.length === 0) {
+      return res.status(400).json({ error: "username + password required" });
+    }
+    // Input length cap (DoS mitigation — bcrypt on 1MB input burns CPU).
+    if (
+      username.length > MAX_USERNAME_LEN ||
+      password.length > MAX_PASSWORD_LEN
+    ) {
+      return res.status(400).json({
+        error: `username or password too long (max ${MAX_USERNAME_LEN} / ${MAX_PASSWORD_LEN})`,
+      });
+    }
+
+    // Normalize username to lowercase for case-insensitive lookup.
+    const normalizedUsername = username.toLowerCase();
+
+    const { data: admin, error } = await supabase
+      .from("admins")
+      .select("id, username, password_hash")
+      .eq("username", normalizedUsername)
+      .single();
+
+    // Constant-time delay to prevent username enumeration.
+    if (error || !admin) {
+      await bcrypt.compare(
+        password,
+        "$2a$10$dummy.hash.to.prevent.timing.attacks............",
+      );
+      console.warn(
+        `[admin-auth] failed login for username="${normalizedUsername}" (no such user)`,
+      );
+      return res.status(401).json({ error: "invalid credentials" });
+    }
+
+    const valid = await bcrypt.compare(password, admin.password_hash);
+    if (!valid) {
+      console.warn(
+        `[admin-auth] failed login for username="${normalizedUsername}" (bad password)`,
+      );
+      return res.status(401).json({ error: "invalid credentials" });
+    }
+
+    // Update last_login_at (best-effort, does not block login).
+    void (async () => {
+      try {
+        await supabase
+          .from("admins")
+          .update({ last_login_at: new Date().toISOString() })
+          .eq("id", admin.id);
+      } catch (err) {
+        console.warn("[admin-auth] last_login_at update failed:", err);
+      }
+    })();
+
+    console.log(
+      `[admin-auth] successful login for username="${normalizedUsername}" (id=${admin.id})`,
+    );
+    setSessionCookie(res, { adminId: admin.id, username: admin.username });
+    res.json({ ok: true, username: admin.username });
+  } catch (err) {
+    console.error("[admin-auth] login error:", err);
+    res.status(500).json({ error: "login failed" });
+  }
+});
+
+// POST /api/admin/logout
+app.post("/api/admin/logout", (req, res) => {
+  if (!res.headersSent) {
+    res.setHeader(
+      "Set-Cookie",
+      `${COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
+    );
+  }
+  res.json({ ok: true });
+});
+
+// GET /api/admin/me
+app.get("/api/admin/me", (req, res) => {
+  const session = readSession(req);
+  if (!session) {
+    return res.status(401).json({ error: "not authenticated" });
+  }
+  res.json({ username: session.username });
+});
+
+// --- Protected CMS HTML routes (BEFORE static) ---
+// These MUST be declared before `app.use(express.static(...))` to prevent
+// the static handler from bypassing the requireAdmin middleware.
+const PROTECTED_HTML_ROUTES = [
+  "bank-soal.html",
+  "kelola-soal.html",
+  "paket-soal.html",
+  "paket-detail.html",
+];
+PROTECTED_HTML_ROUTES.forEach((filename) => {
+  app.get(`/${filename}`, requireAdmin, (req, res) => {
+    res.sendFile(join(PUBLIC_DIR, filename));
+  });
+});
+
+// ============================================
+// END ADMIN AUTH
+// ============================================
+
+// --- API Endpoints (existing, unprotected for now) ---
 
 // Get all questions
 app.get("/api/questions", async (req, res) => {
@@ -669,8 +962,24 @@ app.get("/api/scoreboard-all", async (req, res) => {
   }
 });
 
-// --- Static files (AFTER API routes) ---
-app.use(express.static(join(__dirname, "..", "public")));
+// --- Static files (AFTER API routes & protected HTML routes) ---
+app.use(express.static(PUBLIC_DIR));
+
+// Run bootstrap check (async, non-blocking — does not delay startup).
+// On Vercel serverless, this fires once per cold start. Idempotent.
+maybeBootstrapAdmin().catch((err) =>
+  console.error("[admin-auth] bootstrap uncaught error:", err),
+);
+
+// Local dev: listen on PORT. On Vercel this block is skipped because
+// Vercel imports the module as a serverless function (app.listen would
+// just hang). Enable with `pnpm start` for local curl testing.
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`[server] listening on http://localhost:${PORT}`);
+  });
+}
 
 // Export for Vercel serverless
 export default app;

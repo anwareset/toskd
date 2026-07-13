@@ -13,7 +13,6 @@ Platform CAT (Computer Assisted Test) untuk simulasi ujian SKD (Seleksi Kompeten
 - **Frontend**: HTML, CSS, VanillaJS
 - **Rich Text Editor**: Quill.js 1.3.7 (WYSIWYG editor dengan toolbar untuk bold, italic, image upload, dll)
 - **Math Rendering**: MathJax 3 CDN (support ekspresi matematika `$$\frac{a}{b}$$`)
-- **Package Manager**: PNPM
 
 ---
 
@@ -49,21 +48,29 @@ toskd/
 │   ├── select-pack.html          # Halaman pemilihan paket ujian
 │   ├── exam.html                 # Halaman ujian (real-time timer & grid lembar jawaban)
 │   ├── review.html               # Halaman hasil & pembahasan soal lengkap
-│   ├── bank-soal.html             # Menu CMS (Kelola Paket Soal, Kelola Soal)
-│   ├── paket-soal.html            # Kelola paket soal (CRUD)
-│   ├── kelola-soal.html           # Kelola bank soal (CRUD + Quill.js editor)
-│   ├── paket-detail.html          # Kelola relasi & urutan soal (Drag & Drop)
+│   ├── bank-soal.html             # Menu CMS (Kelola Paket Soal, Kelola Soal) — protected
+│   ├── paket-soal.html            # Kelola paket soal (CRUD) — protected
+│   ├── kelola-soal.html           # Kelola bank soal (CRUD + Quill.js editor) — protected
+│   ├── paket-detail.html          # Kelola relasi & urutan soal (Drag & Drop) — protected
+│   ├── login.html                # Halaman login admin (CMS protection)
 │   ├── scoreboard.html           # Papan peringkat peserta (Paging & filter)
 │   ├── css/
+│   │   ├── tokens.css            # Design tokens (CSS variables untuk color, spacing, dll)
 │   │   └── styles.css            # CSS Global & Responsive Variables
 │   └── js/
-│       ├── theme.js              # Theme manager & dynamic header injector
+│       ├── theme.js              # Theme manager & dynamic global header injector (auto-inject di semua page)
+│       ├── login.js              # Login form handler (POST /api/admin/login, redirect ke ?next=)
 │       ├── kelola-soal.js        # Quill.js editor + image upload integration
 │       └── [page].js             # Logic VanillaJS masing-masing halaman
 ├── src/
 │   ├── server.js                 # API Express.js (Vercel Serverless Function)
 │   └── db.js                     # Supabase client connection
-├── schema.sql                    # Skema database Supabase
+├── specs/                        # Design & implementation specs
+│   ├── admin-auth-spec.md        # JWT cookie auth, admin bootstrap, protected routes
+│   ├── bulk-add-questions-spec.md
+│   ├── bulk-delete-questions-spec.md
+│   └── [other specs].md
+├── schema.sql                    # Skema database Supabase (termasuk tabel admins)
 ├── vercel.json                   # Konfigurasi routing Vercel
 └── package.json
 ```
@@ -101,7 +108,7 @@ toskd/
 1. Buat project baru di Supabase Dashboard
 2. Buka **Project Settings → API** untuk mengambil:
    - **Project URL** → `SUPABASE_URL`
-   - **anon public key** → `SUPABASE_KEY`
+   - **service_role key** (JANGAN anon key) → `SUPABASE_KEY`. Wajib service_role supaya server bisa bypass RLS untuk read `password_hash` di tabel `admins`. Anon key + RLS policy "allow public read" = plaintext password leak.
 
 #### Vercel Blob (Storage Image)
 
@@ -115,9 +122,14 @@ Buat file `.env` di root folder project:
 
 ```env
 SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...          # service_role key (Wajib, bukan anon)
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxxxxxxxxxxx
+JWT_SECRET=<random-32+-chars>                                    # Generate: openssl rand -hex 32
+BOOTSTRAP_ADMIN_USERNAME=admin                                  # Opsional: untuk bootstrap admin pertama
+BOOTSTRAP_ADMIN_PASSWORD=<strong-password>                      # Opsional: akan di-hash bcrypt lalu di-insert
 ```
+
+**Catatan `BOOTSTRAP_ADMIN_*`**: env var ini dibaca sekali di cold-start. Jika tabel `admins` kosong, server akan otomatis hash password (bcrypt cost 10) dan insert admin pertama. **PENTING: DELETE kedua env var ini dari Vercel dashboard setelah admin pertama berhasil login** — server log warning setiap cold-start kalau masih ada (plaintext password leak risk). Lihat `specs/admin-auth-spec.md` §6.2 untuk detail bootstrap flow.
 
 ### 4. Setup Database
 
@@ -146,7 +158,7 @@ Akses platform di [`http://localhost:3000`](http://localhost:3000).
 
 ## 📚 API Endpoints
 
-Semua endpoint didefinisikan di `src/server.js` (Express.js, di-deploy sebagai Vercel Serverless Function). Backend menggunakan Supabase untuk database dan Vercel Blob untuk upload gambar. Total: **23 endpoint**, dikelompokkan berdasarkan resource.
+Semua endpoint didefinisikan di `src/server.js` (Express.js, di-deploy sebagai Vercel Serverless Function). Backend menggunakan Supabase untuk database dan Vercel Blob untuk upload gambar. Total: **26 endpoint** + **4 protected HTML routes**, dikelompokkan berdasarkan resource.
 
 ### 📝 Questions (8 endpoint)
 
@@ -195,3 +207,27 @@ Semua endpoint didefinisikan di `src/server.js` (Express.js, di-deploy sebagai V
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
 | POST | `/api/upload-image` | Upload gambar (base64) ke Vercel Blob. **Body:** `{ image, folder? }` (default folder: `questions`). **Returns:** `{ url }`. |
+
+### 🔐 Admin Auth (3 endpoint)
+
+CMS protection — lihat `specs/admin-auth-spec.md` untuk full design rationale.
+
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| POST | `/api/admin/login` | Login admin. **Body:** `{ username, password }`. **Returns:** `{ ok: true, username }` + Set-Cookie `toskd_admin_sess` (HttpOnly, SameSite=Strict, 24h expiry). Username di-normalize lowercase. Constant-time bcrypt compare untuk mencegah timing attack enumeration. |
+| POST | `/api/admin/logout` | Logout admin. Set-Cookie dengan `Max-Age=0` untuk hapus session cookie. Idempotent (selalu return `{ ok: true }`). |
+| GET | `/api/admin/me` | Cek session aktif. **Returns:** `{ username }` jika authenticated, atau `401 { error: "not authenticated" }` jika tidak. Dipakai oleh `theme.js` untuk render tombol Logout di global header. |
+
+### 🛡️ Protected HTML Routes (4 routes, di luar `/api/`)
+
+Route CMS HTML yang di-protect oleh `requireAdmin` middleware. Definisi di `src/server.js` sebagai `PROTECTED_HTML_ROUTES`. Jika user belum authenticated dan akses route ini:
+
+- **HTML page request** (`GET /bank-soal.html`): redirect `302` ke `/login.html?next=<encoded-original-url>`
+- **API request** (`/api/...`): return `401 { error: "admin login required" }`
+
+| Path | Description |
+|------|-------------|
+| `/bank-soal.html` | Menu CMS (Kelola Paket Soal, Kelola Soal) |
+| `/kelola-soal.html` | Kelola bank soal (CRUD + Quill.js editor) |
+| `/paket-soal.html` | Kelola paket soal (CRUD) |
+| `/paket-detail.html` | Kelola relasi & urutan soal (Drag & Drop) |

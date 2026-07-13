@@ -1,3 +1,113 @@
+// ============================================================================
+// wrapFetch: credentials: 'same-origin' (default tapi eksplisit) + 401 = "session
+// expired" toast (don't navigate — could lose unsaved Quill content); 5xx =
+// server error toast. Throws SESSION_EXPIRED / SERVER_ERROR_<status> so caller's
+// catch can early-return and avoid duplicate alerts (the toast is already shown).
+//
+// Headers: caller's `options.headers` ALWAYS win (spread LAST). Default
+// Content-Type: application/json only set if (a) body isn't FormData AND
+// (b) caller didn't set Content-Type. This is the bug-fix order from the
+// post-implementation thinker pass — the original spec had default spread
+// AFTER caller headers, which silently overrode caller's explicit types.
+//
+// KEEP IN SYNC: kelola-soal.js, paket-soal.js, paket-detail.js — spec §7.5
+// ============================================================================
+async function wrapFetch(url, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    credentials: "same-origin",
+    headers: {
+      ...(options.body &&
+      !(options.body instanceof FormData) &&
+      !options.headers?.["Content-Type"]
+        ? { "Content-Type": "application/json" }
+        : {}),
+      ...(options.headers || {}),
+    },
+  });
+
+  if (res.status === 401) {
+    handleSessionExpired();
+    throw new Error("wrapFetch:SESSION_EXPIRED");
+  }
+  if (res.status >= 500) {
+    showServerErrorToast();
+    throw new Error(`wrapFetch:SERVER_ERROR_${res.status}`);
+  }
+  return res;
+}
+
+function handleSessionExpired() {
+  // Try to preserve unsaved form state (best-effort). syncEditorsToTextareas()
+  // is called by form.onsubmit BEFORE wrapFetch, so the hidden <textarea>
+  // snapshot of Quill content is up-to-date by the time the 401 fires.
+  try {
+    const openModal = document.querySelector("dialog[open]");
+    if (openModal) {
+      const form = openModal.querySelector("form");
+      if (form) {
+        const snapshot = {};
+        for (const el of form.elements) {
+          if (el.name) snapshot[el.name] = el.value;
+        }
+        snapshot._timestamp = Date.now();
+        localStorage.setItem("toskd_unsaved_admin_form", JSON.stringify(snapshot));
+      }
+    }
+  } catch (err) {
+    // localStorage may be disabled — ignore
+  }
+
+  // Show non-blocking toast: "Session expired, please login again"
+  if (window.toskdSessionExpiredNotified) return;
+  window.toskdSessionExpiredNotified = true;
+  const msg = document.createElement("div");
+  msg.className = "session-expired-toast";
+  msg.innerHTML = `
+    <div style="
+      position: fixed; top: 20px; right: 20px; z-index: 9999;
+      background: var(--danger); color: white; padding: 16px 20px;
+      border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      max-width: 360px;
+    ">
+      <strong>⚠️ Sesi habis</strong>
+      <p style="margin: 8px 0 12px 0; font-size: 0.9rem">
+        Login ulang untuk melanjutkan. Data yang sedang Anda edit telah disimpan sementara.
+      </p>
+      <button id="relogin-now-btn" class="btn-primary" style="font-size: 0.9rem">
+        Login Ulang
+      </button>
+    </div>
+  `;
+  document.body.appendChild(msg);
+  document.getElementById("relogin-now-btn").onclick = () => {
+    const next_ = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.replace(`/login.html?next=${next_}`);
+  };
+}
+
+function showServerErrorToast() {
+  if (window.toskdServerErrorNotified) return;
+  window.toskdServerErrorNotified = true;
+  const msg = document.createElement("div");
+  msg.className = "server-error-toast";
+  msg.innerHTML = `
+    <div style="
+      position: fixed; top: 20px; right: 20px; z-index: 9999;
+      background: var(--warning, #b8860b); color: white; padding: 16px 20px;
+      border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      max-width: 360px;
+    ">
+      <strong>⚠️ Server error</strong>
+      <p style="margin: 8px 0 0 0; font-size: 0.9rem">
+        Aksi tidak dapat diselesaikan. Coba lagi dalam beberapa saat.
+      </p>
+    </div>
+  `;
+  document.body.appendChild(msg);
+  setTimeout(() => msg.remove(), 8000);
+}
+
 // DOM references
 const tableEl = document.getElementById("questions-table");
 const bodyEl = document.getElementById("questions-body");
@@ -50,7 +160,7 @@ const imageHandler = async function () {
         const base64Image = e.target.result;
 
         // Upload to server
-        const response = await fetch("/api/upload-image", {
+        const response = await wrapFetch("/api/upload-image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ image: base64Image, folder: "questions" }),
@@ -67,6 +177,8 @@ const imageHandler = async function () {
       };
       reader.readAsDataURL(file);
     } catch (error) {
+      // wrapFetch already shows toast for SESSION_EXPIRED / SERVER_ERROR_*
+      if (error.message === "SESSION_EXPIRED" || error.message.startsWith("SERVER_ERROR_")) return;
       console.error("Error uploading image:", error);
       alert("Gagal mengupload gambar. Coba lagi.");
     }
@@ -552,15 +664,14 @@ async function init() {
   document.getElementById("controls-bottom").style.display = "none";
 
   try {
-    const res = await fetch("/api/questions");
+    const res = await wrapFetch("/api/questions");
     questions = await res.json();
     loadingEl.style.display = "none";
     tableEl.style.display = "table";
 
-    renderTable();
-  } catch (e) {
-    loadingEl.innerHTML =
-      '<p style="color:var(--danger)">Gagal memuat bank soal.</p>';
+    renderTable();  } catch (e) {
+    if (e.message === "wrapFetch:SESSION_EXPIRED" || e.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
+    loadingEl.innerHTML = '<p style="color:var(--danger)">Gagal memuat bank soal.</p>';
     console.error("Failed to load questions:", e);
   }
 }
@@ -769,7 +880,7 @@ form.onsubmit = async (e) => {
   const url = id ? `/api/questions/${id}` : "/api/questions";
 
   try {
-    const res = await fetch(url, {
+    const res = await wrapFetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -778,6 +889,7 @@ form.onsubmit = async (e) => {
     modal.close();
     init();
   } catch (err) {
+    if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
     alert("Gagal menyimpan soal.");
     console.error("Save failed:", err);
   }
@@ -831,7 +943,7 @@ window.editQuestion = (id) => {
 window.deleteQuestion = async (id) => {
   try {
     // Check usage first
-    const usageRes = await fetch(`/api/questions/${id}/usage`);
+    const usageRes = await wrapFetch(`/api/questions/${id}/usage`);
     const usage = await usageRes.json();
 
     let msg = "Apakah Anda yakin ingin menghapus soal ini dari Bank Soal?";
@@ -841,10 +953,11 @@ window.deleteQuestion = async (id) => {
 
     if (!confirm(msg)) return;
 
-    const res = await fetch(`/api/questions/${id}`, { method: "DELETE" });
+    const res = await wrapFetch(`/api/questions/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error();
     init();
   } catch (err) {
+    if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
     alert("Gagal menghapus soal.");
     console.error("Delete failed:", err);
   }
@@ -921,15 +1034,15 @@ bulkDeleteBtn.onclick = async () => {
 
   try {
     const ids = Array.from(selectedIds);
-    const res = await fetch("/api/questions/bulk-usage", {
+    const res = await wrapFetch("/api/questions/bulk-usage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const usageMap = await res.json();
-    showBulkDeleteConfirmModal(ids, usageMap);
-  } catch (err) {
+    showBulkDeleteConfirmModal(ids, usageMap);  } catch (err) {
+    if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
     console.error("Bulk usage pre-fetch failed:", err);
     alert("Gagal memeriksa soal. Coba lagi.");
   } finally {
@@ -979,15 +1092,15 @@ bulkDeleteConfirmBtn.addEventListener("click", async () => {
   overlayMsg.textContent = `Menghapus ${ids.length} soal...`;
 
   try {
-    const res = await fetch("/api/questions/bulk-delete", {
+    const res = await wrapFetch("/api/questions/bulk-delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json(); // {deleted: [...], failed: [{id, reason}]}
-    handleBulkDeleteResponse(data, ids);
-  } catch (err) {
+    handleBulkDeleteResponse(data, ids);  } catch (err) {
+    if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
     console.error("Bulk delete submit failed:", err);
     alert("Gagal menghapus soal. Coba lagi.");
   } finally {
@@ -1350,7 +1463,7 @@ document.getElementById("q-bulk-form").onsubmit = async (e) => {
   };
 
   try {
-    const res = await fetch("/api/questions/bulk", {
+    const res = await wrapFetch("/api/questions/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1363,6 +1476,7 @@ document.getElementById("q-bulk-form").onsubmit = async (e) => {
     alert(`${data.inserted ?? validBlocks.length} soal berhasil ditambahkan`);
     init(); // refresh table to show new rows
   } catch (err) {
+    if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
     alert("Gagal menyimpan soal bulk. Coba lagi.");
     console.error("Bulk save failed:", err);
     saveBtn.disabled = false;

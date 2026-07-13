@@ -166,3 +166,6 @@ Thumbs.db
 # Specs
 specs/**
 *-spec.md
+
+# Supabase
+supabase/**

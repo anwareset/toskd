@@ -124,6 +124,45 @@
         </style>
     </head>
     <body>
+        <!-- client-side guard (admin-auth-spec.md §7.4) -->
+        <script>
+          (function () {
+            // Fail-open banner shown when server is unreachable. Extracted to
+            // helper so both the catch block (network error) AND the 5xx branch
+            // can use it. Critical: don't redirect to login on 5xx — user might
+            // be authenticated and the server is just temporarily down (Rev. 0.7).
+            function showServerDownBanner() {
+              const banner = document.createElement("div");
+              banner.style.cssText =
+                "position:fixed;top:0;left:0;right:0;padding:12px 16px;background:var(--danger);" +
+                "color:white;text-align:center;z-index:99999;font-size:0.9rem;";
+              banner.innerHTML =
+                "⚠️ Server tidak dapat dijangkau. CMS tidak dapat dimuat." +
+                " <button onclick=\"location.reload()\" style=\"margin-left:12px;background:white;color:var(--danger);" +
+                "border:0;padding:4px 10px;border-radius:4px;cursor:pointer\">Coba lagi</button>";
+              document.body.appendChild(banner);
+              const main = document.querySelector(".site-wrapper");
+              if (main) main.style.visibility = "hidden";
+            }
+            (async function () {
+              try {
+                const res = await fetch("/api/admin/me", { credentials: "same-origin" });
+                if (res.status === 401) {
+                  // Not authenticated → redirect to login
+                  const next = encodeURIComponent(window.location.pathname + window.location.search);
+                  window.location.replace(`/login.html?next=${next}`);
+                } else if (!res.ok) {
+                  // 5xx or other server error → fail-open banner, don't trap in login loop
+                  showServerDownBanner();
+                }
+                // 2xx: authenticated, continue
+              } catch (err) {
+                // Network error → fail-open banner
+                showServerDownBanner();
+              }
+            })();
+          })();
+        </script>
         <div class="site-wrapper">
             <div class="container container--wide" style="flex: 1">
                 <div class="header">
