@@ -65,11 +65,6 @@ toskd/
 ├── src/
 │   ├── server.js                 # API Express.js (Vercel Serverless Function)
 │   └── db.js                     # Supabase client connection
-├── specs/                        # Design & implementation specs
-│   ├── admin-auth-spec.md        # JWT cookie auth, admin bootstrap, protected routes
-│   ├── bulk-add-questions-spec.md
-│   ├── bulk-delete-questions-spec.md
-│   └── [other specs].md
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins)
 ├── vercel.json                   # Konfigurasi routing Vercel
 └── package.json
@@ -129,7 +124,7 @@ BOOTSTRAP_ADMIN_USERNAME=admin                                  # Opsional: untu
 BOOTSTRAP_ADMIN_PASSWORD=<strong-password>                      # Opsional: akan di-hash bcrypt lalu di-insert
 ```
 
-**Catatan `BOOTSTRAP_ADMIN_*`**: env var ini dibaca sekali di cold-start. Jika tabel `admins` kosong, server akan otomatis hash password (bcrypt cost 10) dan insert admin pertama. **PENTING: DELETE kedua env var ini dari Vercel dashboard setelah admin pertama berhasil login** — server log warning setiap cold-start kalau masih ada (plaintext password leak risk). Lihat `specs/admin-auth-spec.md` §6.2 untuk detail bootstrap flow.
+**Catatan `BOOTSTRAP_ADMIN_*`**: env var ini dibaca sekali di cold-start. Jika tabel `admins` kosong, server akan otomatis hash password (bcrypt cost 10) dan insert admin pertama. **PENTING: DELETE kedua env var ini dari Vercel dashboard setelah admin pertama berhasil login** — server log warning setiap cold-start kalau masih ada (plaintext password leak risk).
 
 ### 4. Setup Database
 
@@ -209,8 +204,6 @@ Semua endpoint didefinisikan di `src/server.js` (Express.js, di-deploy sebagai V
 | POST | `/api/upload-image` | Upload gambar (base64) ke Vercel Blob. **Body:** `{ image, folder? }` (default folder: `questions`). **Returns:** `{ url }`. |
 
 ### 🔐 Admin Auth (3 endpoint)
-
-CMS protection — lihat `specs/admin-auth-spec.md` untuk full design rationale.
 
 | Method | Endpoint | Deskripsi |
 |--------|----------|-----------|
