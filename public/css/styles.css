@@ -562,6 +562,34 @@ tbody tr:hover {
     background: var(--bg);
 }
 
+/* ==== scoreboard.html: clickable participant name ==== */
+/* Each row's Nama Peserta cell renders as <a class="participant-link">,
+   deep-linking to /review.html?id=<id> (pembahasan review page).
+   - color: var(--primary) so the link reads as interactive against
+     the default td color, but not screaming
+   - text-decoration: none by default — underlines in dense tables
+     look noisy; the hover/focus underline + color shift do the
+     affordance work instead
+   - hover: color shifts to --primary-hover + underline appears —
+     redundant with the cursor, but matches the project's pattern
+     (see .global-header-link)
+   - focus-visible: 2px --primary outline with 2px offset, matching
+     the project's a11y convention for keyboard-navigable links */
+.participant-link {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+.participant-link:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+}
+.participant-link:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
 /* Exam Layout */
 .exam-header {
     display: flex;

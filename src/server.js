@@ -942,13 +942,16 @@ app.put("/api/packs/:id/questions", async (req, res) => {
   }
 });
 
-// Get scoreboard - enhanced with optional pack_id filter and created_at
+// Get scoreboard - enhanced with optional pack_id filter and created_at.
+// Includes `id` so scoreboard.html can deep-link each row to
+// /review.html?id=<id> (the review page reads ?id and fetches via
+// /api/exam/:id/results).
 app.get("/api/scoreboard-all", async (req, res) => {
   try {
     let query = supabase
       .from("exam_results")
       .select(
-        "participant_name, score, status, created_at, pack_id, question_packs(name)",
+        "id, participant_name, score, status, created_at, pack_id, question_packs(name)",
       )
       .order("score", { ascending: false });
     const { pack_id } = req.query;
