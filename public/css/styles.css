@@ -1293,6 +1293,28 @@ tbody tr:hover {
     white-space: nowrap;
 }
 
+/* ==== Question content cells: premise list marker ====
+   Companion to `.img-marker`. New-format questions (added via
+   bulk-add v2) store content as `<ol><li>…</li></ol><p>…</p>`.
+   The <ol> is a block element that breaks the parent's 1-line
+   constraint (white-space: nowrap + text-overflow: ellipsis),
+   so we strip it in `previewHtmlForCell()` (kelola-soal.js /
+   paket-detail.js) and replace it with this inline chip showing
+   the premise count. Mirrors `.img-marker` styling so both
+   compact-preview chips look like siblings. */
+.premise-marker {
+    display: inline-block;
+    background: var(--surface-header);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
 /* ==== Question content cells: tighten MathJax output ====
    MathJax CommonHTML (`tex-mml-chtml.js`) renders formulas sized via
    the root `<mjx-container>`'s font-size. By default block math
@@ -1556,4 +1578,76 @@ details.bulk-delete-id-list[open] summary {
     /* border-top var(--border) would be a light-gray line on indigo bg;
        match bg color so the separation is via color contrast alone. */
     border-top-color: var(--primary);
+}
+
+/* ==== kelola-soal.html: Bulk Add v2 — new format preview ====
+   Spec: bulk-add-format-v2-spec.md §5.1
+   New-format blocks (with premise lists) render <ol><li>…</li></ol>
+   followed by <p>question</p> in the Preview tab. We give them a
+   scoped class so the bullet style + spacing match the look of the
+   exam question rendering. Old-format blocks (no premises) fall back
+   to .bulk-preview-question-plain — a single <div> for the question. */
+.bulk-preview-ol {
+    margin: 0 0 12px 0;
+    padding-left: 24px;
+    color: var(--text);
+}
+.bulk-preview-ol li {
+    margin-bottom: 4px;
+    line-height: 1.5;
+}
+.bulk-preview-question {
+    margin: 0 0 12px 0;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.6;
+}
+.bulk-preview-question-plain {
+    margin: 0 0 12px 0;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.6;
+}
+/* Each option row in the Preview tab. The A./B./etc. prefix lives in
+   .bulk-option-key so it can be bold + colored independently of the
+   option text. The correct option is highlighted green to match the
+   single-question editor's `var(--success)` convention. */
+.bulk-option-line {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 2px 0;
+    line-height: 1.5;
+    color: var(--text);
+}
+.bulk-option-key {
+    font-weight: 700;
+    min-width: 24px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+.bulk-option-correct .bulk-option-key {
+    color: var(--success);
+}
+.bulk-option-correct {
+    color: var(--success);
+    font-weight: 600;
+}
+/* Pembahasan block: bordered box on the left in --primary tint, matches
+   the styling of .review-explanation in the exam result page. */
+.bulk-preview-pembahasan {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: var(--primary-light);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 8px 8px 0;
+    line-height: 1.6;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+/* "Lihat contoh" expander: <pre> sample uses overflow-x:auto +
+   word-break so long premise text wraps without horizontal scroll on
+   narrow viewports. */
+.bulk-format-help pre {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }

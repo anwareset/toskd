@@ -354,24 +354,16 @@ function esc(s) {
   return d.innerHTML;
 }
 
-// Strip every <img> in a Quill-rendered HTML string and prepend a
-// single "📷 Ada Gambar" chip so the table preview cell stays compact
-// — rendering full images inside table rows blows out row heights and
-// adds nothing useful to a quick-glance preview.
+// previewHtmlForCell — imported from public/js/bulk-parser.js via the
+// globalThis.bulkParser side-effect (see <script type="module"
+// src="/js/bulk-parser.js"> in kelola-soal.html). Strip block
+// elements (<ol>, <img>) from a Quill-rendered HTML string and
+// replace with compact inline markers so the table preview cell
+// stays 1-line. See bulk-parser.js for the full implementation
+// and rationale (spec: bulk-add-format-v2-spec.md §10.1).
 //
-// Done in JS rather than CSS because the parent uses `-webkit-line-
-// clamp: 3`, which would clip any CSS-`::after`-based chip past line 3.
-// Prepending the chip to the rendered HTML parks it on line 1, well
-// inside the 3-line budget regardless of where the original image sat
-// in the source. Marker styling lives in `styles.css` under `.img-marker`.
-function imgToMarker(html) {
-  if (!html) return "";
-  if (!/<img\b/i.test(html)) return html;
-  return (
-    '<span class="img-marker">📷 Ada Gambar</span> ' +
-    html.replace(/<img\b[^>]*>/gi, "")
-  );
-}
+// We re-bind to a local const for readability at call sites:
+//   const cell = previewHtmlForCell(q.content);
 
 // Pagination & Search State
 let rowsPerPage = 10;
@@ -423,7 +415,7 @@ function renderTable() {
                    aria-label="Pilih soal #${globalIdx}">
           </td>
           <td>${globalIdx}</td>
-          <td>${imgToMarker(q.content)}</td>
+          <td>${window.bulkParser.previewHtmlForCell(q.content)}</td>
           <td><strong>${esc(q.question_type || "text")}</strong></td>
           <td><span class="btn-success" style="padding:2px 8px;border-radius:4px;font-size:0.8rem">${q.correct_answer}</span></td>
           <td>
@@ -1191,103 +1183,73 @@ function initBulkQuillEditor() {
 }
 
 // Parse plain-text paste content into an array of block records.
-// Supports multi-line pembahasan: lines.slice(7).join('\n').
-// Each block: { idx, status ('valid'|'invalid'), errors, content, A, B,
-//   C, D, E, key, explanation, question_type }.
-// Empty separator rows and trailing '---' are tolerated (last block
-// is captured even without trailing separator — Round 1 decision).
+// Spec: bulk-add-format-v2-spec.md
+//
+// The actual parsing logic lives in public/js/bulk-parser.js (loaded
+// as `<script type="module">` in kelola-soal.html, side-effect
+// attaches to `globalThis.bulkParser`). This wrapper just reads the
+// current Tipe Soal dropdown, calls the pure parser, and updates
+// the summary + preview DOM.
+//
+// Each block: { idx, status ('valid'|'invalid'), errors, content,
+//   premises, question, options, correct_answer, explanation,
+//   question_type }.
+//   - For new-format blocks: `content` is HTML `<ol>…<p>…</p>`,
+//     `premises` is a string array (may be empty for old format),
+//     `question` is the text AFTER all premises.
+//   - For old-format blocks: `content` is plain text (backwards
+//     compat with v1), `premises` is [].
 function parseBulkInput() {
   if (!window.bulkPasteEditor) {
     window.lastBulkParse = [];
-    updateBulkSummary([], 0, 0);
+    updateBulkSummary([], 0, 0, 0);
     return;
   }
 
-  const rawText = window.bulkPasteEditor.getText().trim();
-  if (!rawText) {
+  const rawText = window.bulkPasteEditor.getText();
+  const questionType =
+    document.getElementById("bulk-q-question-type")?.value ||
+    "TWK Pilar Negara";
+
+  // Defensive: if the parser module failed to load (e.g. the ESM
+  // script tag was removed or the browser is very old), bail with
+  // an empty parse rather than throwing. The user sees no preview
+  // and a console error to investigate.
+  if (!window.bulkParser || typeof window.bulkParser.parseBulkText !== "function") {
+    console.error("[bulk-add] window.bulkParser is not available — bulk-parser.js module failed to load");
     window.lastBulkParse = [];
-    updateBulkSummary([], 0, 0);
+    updateBulkSummary([], 0, 0, 0);
     return;
   }
 
-  // Split around '---' line (allow surrounding whitespace and CRLF).
-  // An empty trailing chunk (paste ends with '\n---') is filtered out.
-  const blocks = rawText.split(/\r?\n\s*---\s*\r?\n?/);
-
-  const parsed = blocks
-    .map((blk, idx) => {
-      const trimmed = blk.trim();
-      if (!trimmed) return null;
-
-      const lines = trimmed.split(/\r?\n/).map((l) => l.trim());
-
-      if (lines.length < 8) {
-        return {
-          idx,
-          status: "invalid",
-          errors: [`Hanya ${lines.length} baris (perlu minimal 8)`],
-        };
-      }
-
-      // Strict 8-line check anything > 8 is invalid to keep parser simple.
-      // Per thinker recommendation, line 8+ for pembahasan via slice(7).
-      // We enforce exactly 8 because multi-line pembahasan gets joined.
-      // If user wants multi-line pembahasan, they paste it as line 8+,
-      // parser slices [7..end]. So semantics: line 8+ allowed via slicing.
-      const content = lines[0];
-      const A = lines[1] || "";
-      const B = lines[2] || "";
-      const C = lines[3] || "";
-      const D = lines[4] || "";
-      const E = lines[5] || "";
-      const key = (lines[6] || "").toUpperCase();
-      const explanation = lines.slice(7).join("\n"); // multi-line allowed
-
-      const errors = [];
-      if (!content) errors.push("pertanyaan kosong");
-      if (!A) errors.push("opsi A kosong");
-      if (!B) errors.push("opsi B kosong");
-      if (!C) errors.push("opsi C kosong");
-      if (!D) errors.push("opsi D kosong");
-      if (!E) errors.push("opsi E kosong");
-      if (!["A", "B", "C", "D", "E"].includes(key)) {
-        errors.push(`kunci invalid: "${lines[6] || ""}"`);
-      }
-      if (!explanation) errors.push("pembahasan kosong");
-
-      return {
-        idx,
-        status: errors.length === 0 ? "valid" : "invalid",
-        errors,
-        content,
-        A,
-        B,
-        C,
-        D,
-        E,
-        key,
-        explanation,
-        question_type:
-          document.getElementById("bulk-q-question-type")?.value ||
-          "TWK Pilar Negara",
-      };
-    })
-    .filter(Boolean);
+  const parsed = window.bulkParser.parseBulkText(rawText, questionType);
 
   window.lastBulkParse = parsed;
   const validCount = parsed.filter((b) => b.status === "valid").length;
   const invalidCount = parsed.filter((b) => b.status === "invalid").length;
-  updateBulkSummary(parsed, validCount, invalidCount);
+  const newFormatCount = parsed.filter(
+    (b) => b.status === "valid" && Array.isArray(b.premises) && b.premises.length > 0,
+  ).length;
+  updateBulkSummary(parsed, validCount, invalidCount, newFormatCount);
   renderBulkPreview(parsed, validCount, invalidCount);
 }
 
-function updateBulkSummary(parsed, valid, invalid) {
+function updateBulkSummary(parsed, valid, invalid, newFormatCount) {
   const summary = document.getElementById("bulk-preview-summary");
   if (!summary) return;
   if (parsed.length === 0) {
     summary.textContent = "Belum ada soal terdeteksi";
-  } else if (invalid === 0) {
-    summary.textContent = `${parsed.length} soal valid terdeteksi ✓`;
+    return;
+  }
+  if (invalid === 0) {
+    const oldFormatCount = parsed.length - newFormatCount;
+    if (newFormatCount === parsed.length) {
+      summary.textContent = `${parsed.length} soal valid (semua dengan premise) terdeteksi ✓`;
+    } else if (newFormatCount === 0) {
+      summary.textContent = `${parsed.length} soal valid (tanpa premise) terdeteksi ✓`;
+    } else {
+      summary.textContent = `${parsed.length} soal valid (${newFormatCount} dengan premise, ${oldFormatCount} tanpa) terdeteksi ✓`;
+    }
   } else {
     summary.textContent = `${valid} valid · ${invalid} invalid dari ${parsed.length} blok`;
   }
@@ -1317,25 +1279,55 @@ function renderBulkPreview(parsedBlocks, validCount, invalidCount) {
               .map((e) => `• ${esc(e)}`)
               .join("<br>")}</div>`
           : "";
-      const previewLines = [
-        `<div class="bulk-q-line"><strong>${esc(
-          b.content || "(pertanyaan kosong)"
-        )}</strong></div>`,
-        `<div class="bulk-q-line"><em>Tipe: ${esc(
-          b.question_type || "?"
-        )}</em></div>`,
-        `<div class="bulk-q-line">A. ${esc(b.A || "(kosong)")}</div>`,
-        `<div class="bulk-q-line">B. ${esc(b.B || "(kosong)")}</div>`,
-        `<div class="bulk-q-line">C. ${esc(b.C || "(kosong)")}</div>`,
-        `<div class="bulk-q-line">D. ${esc(b.D || "(kosong)")}</div>`,
-        `<div class="bulk-q-line">E. ${esc(b.E || "(kosong)")}</div>`,
-        `<div class="bulk-q-line"><em>[Kunci: ${esc(
-          (b.key || "?").toUpperCase()
-        )}]</em></div>`,
-        `<div class="bulk-q-line"><em>Pembahasan:</em> ${esc(
-          b.explanation || "(kosong)"
-        )}</div>`,
-      ].join("");
+      // Question / premise rendering depends on format. v1 used
+      // b.A / b.B / b.key / b.content directly, but the v2 parser
+      // (public/js/bulk-parser.js) groups options as {A,B,C,D,E}
+      // (object) and exposes correct_answer / question / premises as
+      // separate fields. Old-format blocks have b.premises = [] and
+      // b.content = b.question (plain text) for backwards compat.
+      let questionHtml = "";
+      if (b.status === "valid") {
+        const isNewFormat =
+          Array.isArray(b.premises) && b.premises.length > 0;
+        if (isNewFormat) {
+          // <ol><li>…</li></ol> + <p>question</p> — the storage format
+          // matches what exam/review/paket-detail will render.
+          const olHtml = `<ol class="bulk-preview-ol">${b.premises
+            .map((p) => `<li>${esc(p)}</li>`)
+            .join("")}</ol>`;
+          questionHtml = `${olHtml}<p class="bulk-preview-question">${esc(b.question)}</p>`;
+        } else {
+          questionHtml = `<div class="bulk-preview-question-plain">${esc(b.question)}</div>`;
+        }
+      }
+
+      // Options A–E with the correct one highlighted. The A./B./etc.
+      // prefix is rendered HERE (in the UI) — the parser already
+      // stripped it from the stored value, so we re-add it for display.
+      let optionsHtml = "";
+      if (b.status === "valid" && b.options) {
+        optionsHtml = ["A", "B", "C", "D", "E"]
+          .map((k) => {
+            const isCorrect = b.correct_answer === k;
+            const cls = isCorrect
+              ? "bulk-option-line bulk-option-correct"
+              : "bulk-option-line";
+            const text = b.options[k] || "(kosong)";
+            return `<div class="${cls}"><span class="bulk-option-key">${k}.</span> ${esc(text)}</div>`;
+          })
+          .join("");
+      }
+
+      // Type + key + pembahasan footer.
+      let footerHtml = "";
+      if (b.status === "valid") {
+        const typeLine = b.question_type
+          ? `<div class="bulk-q-line"><em>Tipe: ${esc(b.question_type)}</em></div>`
+          : "";
+        const keyLine = `<div class="bulk-q-line"><em>[Kunci: ${esc(b.correct_answer)}]</em></div>`;
+        const pembahasanLine = `<div class="bulk-preview-pembahasan"><em>Pembahasan:</em><br>${esc(b.explanation).replace(/\n/g, "<br>")}</div>`;
+        footerHtml = typeLine + keyLine + pembahasanLine;
+      }
 
       return `
         <div class="bulk-preview-row ${b.status}">
@@ -1343,7 +1335,11 @@ function renderBulkPreview(parsedBlocks, validCount, invalidCount) {
           <div class="bulk-preview-body">
             <span class="bulk-status-badge ${badgeClass}">${badgeText}</span>
             ${errorBlock}
-            <div class="bulk-preview-fields">${previewLines}</div>
+            <div class="bulk-preview-fields">
+              ${questionHtml}
+              ${optionsHtml}
+              ${footerHtml}
+            </div>
           </div>
         </div>
       `;
@@ -1453,8 +1449,11 @@ document.getElementById("q-bulk-form").onsubmit = async (e) => {
   const payload = {
     questions: validBlocks.map((b) => ({
       content: b.content,
-      options: { A: b.A, B: b.B, C: b.C, D: b.D, E: b.E },
-      correct_answer: b.key,
+      // New parser stores options as {A, B, C, D, E} object with the
+      // A./B./etc. prefix already stripped (v1 bug fix). correct_answer
+      // is the uppercased single letter.
+      options: b.options,
+      correct_answer: b.correct_answer,
       explanation: b.explanation,
       question_type:
         document.getElementById("bulk-q-question-type")?.value ||

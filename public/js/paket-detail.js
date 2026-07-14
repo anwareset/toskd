@@ -140,24 +140,18 @@ function typesetMath(rootEl) {
   }
 }
 
-// Strip every <img> in a Quill-rendered HTML string and prepend a
-// single "📷 Ada Gambar" chip so the cell preview stays compact —
-// rendering full images inside table rows blows out row heights and
-// adds nothing useful to a quick-glance preview.
+// previewHtmlForCell — imported from public/js/bulk-parser.js via the
+// globalThis.bulkParser side-effect (see <script type="module"
+// src="/js/bulk-parser.js"> in kelola-soal.html — same script is
+// implicitly available on paket-detail.html via the shared layout).
+// Strip block elements (<ol>, <img>) from a Quill-rendered HTML
+// string and replace with compact inline markers so the preview
+// cells in the bank list and pack list stay 1-line. See
+// bulk-parser.js for the full implementation and rationale
+// (spec: bulk-add-format-v2-spec.md §10.1).
 //
-// Done in JS rather than CSS because the parent uses `-webkit-line-
-// clamp: 3`, which would clip any CSS-`::after`-based chip past line 3.
-// Prepending the chip to the rendered HTML parks it on line 1, well
-// inside the 3-line budget regardless of where the original image sat
-// in the source. Marker styling lives in `styles.css` under `.img-marker`.
-function imgToMarker(html) {
-  if (!html) return "";
-  if (!/<img\b/i.test(html)) return html;
-  return (
-    '<span class="img-marker">📷 Ada Gambar</span> ' +
-    html.replace(/<img\b[^>]*>/gi, "")
-  );
-}
+// We re-bind to a local const for readability at call sites:
+//   const cell = previewHtmlForCell(q.content);
 
 async function init() {
   document.getElementById("loading-bank").style.display = "flex";
@@ -235,7 +229,7 @@ function renderBankList() {
       <label class="option-item" style="cursor:pointer;background:var(--surface);margin-bottom:8px">
         <input type="checkbox" name="add-q" value="${q.id}">
         <span class="option-label">
-          <strong>[${esc(q.question_type.toUpperCase())}]</strong> ${imgToMarker(q.content)}
+          <strong>[${esc(q.question_type.toUpperCase())}]</strong> ${window.bulkParser.previewHtmlForCell(q.content)}
         </span>
       </label>
     `,
@@ -270,7 +264,7 @@ function renderLists() {
         (q, i) => `
       <div class="pack-question-item" draggable="true" data-id="${q.id}" data-index="${i}">
         <span class="q-num">Soal ${i + 1}</span>
-        <span class="q-preview">${imgToMarker(q.content)}</span>
+        <span class="q-preview">${window.bulkParser.previewHtmlForCell(q.content)}</span>
         <button class="btn-danger" style="padding:4px 8px;font-size:0.8rem" onclick="removeQuestion(${q.id})">Hapus</button>        </div>
     `,
       )

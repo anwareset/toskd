@@ -30,6 +30,7 @@ Platform CAT (Computer Assisted Test) untuk simulasi ujian SKD (Seleksi Kompeten
 - Toolbar: bold, italic, underline, strike, lists, links, image upload, formula
 - Upload gambar langsung ke Vercel Blob dari editor
 - Preview soal dengan MathJax rendering
+- Bulk Add Soal
 - Drag & drop urutan soal dalam paket
 
 ### 🏆 Scoreboard
@@ -60,11 +61,16 @@ toskd/
 │   └── js/
 │       ├── theme.js              # Theme manager & dynamic global header injector (auto-inject di semua page)
 │       ├── login.js              # Login form handler (POST /api/admin/login, redirect ke ?next=)
-│       ├── kelola-soal.js        # Quill.js editor + image upload integration
+│       ├── kelola-soal.js        # Quill.js editor + image upload integration + bulk add modal
+│       ├── paket-soal.js         # Pack CRUD + table render
+│       ├── paket-detail.js       # Pack soal relasi + bank list (drag & drop)
+│       ├── bulk-parser.js        # ESM parser: bulk-add (premise/lead-in/options/key) + previewHtmlForCell helper
 │       └── [page].js             # Logic VanillaJS masing-masing halaman
 ├── src/
 │   ├── server.js                 # API Express.js (Vercel Serverless Function)
 │   └── db.js                     # Supabase client connection
+├── tests/                        # Unit tests (Node built-in test runner)
+│   └── test-bulk-parser.mjs      # 42 unit tests untuk public/js/bulk-parser.js (jalankan: `pnpm test` — atau `node --test tests/test-bulk-parser.mjs` untuk single file)
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins)
 ├── vercel.json                   # Konfigurasi routing Vercel
 └── package.json
@@ -83,7 +89,7 @@ toskd/
    - Ditentukan per paket soal (contoh: 85 poin)
    - Status: "Lulus PG" atau "Tidak Lulus PG"
 
-3. **Limitasi Soal**:
+3. **Limitasi Paket Soal**:
    - Minimal 1 soal, maksimal 35 soal per paket
 
 ---

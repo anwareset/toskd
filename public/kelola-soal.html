@@ -654,8 +654,40 @@
                                 </details>
 
                                 <details class="data-section" open>
-                                    <summary>📝 Paste Soal (8 baris per blok + pemisah '---')</summary>
+                                    <summary>📝 Paste Soal (format baru: premise + pertanyaan + opsi + kunci + pembahasan)</summary>
                                     <div class="data-section-body">
+                                        <!-- Spec: bulk-add-format-v2-spec.md §5.1.1.
+                                             Lihat contoh: collapsible expander with a
+                                             copy-pasteable sample of the new format. -->
+                                        <details class="bulk-format-help" style="margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--surface-header);">
+                                            <summary style="cursor: pointer; font-weight: 600; color: var(--primary);">
+                                                💡 Lihat contoh format
+                                            </summary>
+                                            <div style="margin-top: 12px; font-size: 0.85rem; line-height: 1.7;">
+                                                <p style="margin-bottom: 8px; color: var(--text-muted);">
+                                                    Setiap soal dipisah baris <code style="background: var(--bg); padding: 1px 6px; border-radius: 3px;">---</code>.
+                                                    Awali premise dengan <code style="background: var(--bg); padding: 1px 6px; border-radius: 3px;">1)</code> / <code style="background: var(--bg); padding: 1px 6px; border-radius: 3px;">1.</code> / <code style="background: var(--bg); padding: 1px 6px; border-radius: 3px;">(1)</code>.
+                                                    Baris pertanyaan <strong>TIDAK boleh</strong> ber-prefix angka.
+                                                </p>
+                                                <pre style="background: var(--bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word;">1) Warga memanfaatkan teknologi digital untuk memperkenalkan budaya Indonesia secara positif.
+2) Masyarakat memeriksa kebenaran informasi digital sebelum membagikannya.
+3) Aparatur negara menggunakan teknologi untuk meningkatkan kualitas layanan publik.
+4) Warga lebih memilih konten global edukatif yang sesuai dengan kebutuhan.
+5) Tokoh masyarakat mengajak warga menggunakan teknologi secara bijak.
+6) Masyarakat mengikuti tren teknologi global sebagai bentuk keterbukaan terhadap inovasi.
+Manfaat utama dari penerapan nasionalisme dalam pemanfaatan teknologi ditunjukkan oleh perilaku…
+A. 1, 2, dan 4
+B. 2, 3, dan 5
+C. 2, 4, dan 6
+D. 1, 2, dan 5
+E. 3, 5, dan 6
+D
+Penerapan nasionalisme dalam pemanfaatan teknologi tercermin dari perilaku memperkenalkan budaya bangsa secara positif melalui teknologi digital (1), memeriksa kebenaran informasi sebelum menyebarkannya sebagai wujud tanggung jawab digital (2), serta ajakan tokoh masyarakat untuk menggunakan teknologi secara bijak (5). Ketiganya menunjukkan penguatan identitas dan kesadaran nasional dalam ranah digital. Pernyataan 3, 4, dan 6 lebih menekankan aspek pelayanan publik, preferensi konten, atau keterbukaan global yang tidak secara langsung mencerminkan nasionalisme.
+---
+(soal berikutnya)</pre>
+                                            </div>
+                                        </details>
+
                                         <p
                                             style="
                                                 color: var(--text-muted);
@@ -664,19 +696,20 @@
                                                 line-height: 1.6;
                                             "
                                         >
-                                            Format (plain text, satu blok per soal):<br />
-                                            <strong>Line 1</strong> = pertanyaan
-                                            <strong>· Line 2–6</strong> = opsi A, B, C, D, E
-                                            <strong>· Line 7</strong> = kunci (A–E)
-                                            <strong>· Line 8+</strong> = pembahasan
-                                            <strong>· ---</strong> = pemisah antar soal
+                                            Format per soal (plain text, blok dipisah <code>---</code>):<br>
+                                            <strong>Baris 1..N</strong> = premise bernomor 1, 2, 3, … (N ≤ 20) ·
+                                            <strong>Baris N+1</strong> = pertanyaan ·
+                                            <strong>Baris N+2..N+6</strong> = opsi A, B, C, D, E ·
+                                            <strong>Baris N+7</strong> = kunci (A–E) ·
+                                            <strong>Baris N+8+</strong> = pembahasan (boleh multi-baris)<br>
+                                            <em>Soal tanpa premise juga valid: baris 1 = pertanyaan langsung, lalu 5 opsi + kunci + pembahasan.</em>
                                         </p>
 
                                         <div class="form-group">
                                         <div
                                             id="bulk-q-paste-editor"
                                             class="quill-editor"
-                                            data-placeholder="Paste banyak soal di sini (plain text). Setiap soal 8 baris (pertanyaan, 5 opsi, kunci, pembahasan). Pisahkan dengan baris '---'."
+                                            data-placeholder="Paste banyak soal di sini (plain text). Format: premise (1) ... 2) ... 3) ...) lalu pertanyaan + 5 opsi + kunci + pembahasan. Pisahkan soal dengan baris '---'."
                                         ></div>
                                         </div>
 
@@ -816,6 +849,7 @@
                 2026
             </footer>
         </div>
+        <script type="module" src="/js/bulk-parser.js"></script>
         <script src="/js/kelola-soal.js"></script>
     </body>
 </html>
