@@ -1679,3 +1679,406 @@ details.bulk-delete-id-list[open] summary {
 .bulk-format-help pre {
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
+
+/* ==== Global header: Phase 1 redesign (sticky + hamburger + drawer) ====
+   Spec: specs/global-header-redesign-spec.md
+   All new rules only; the original Rev. 0.8 `.global-header` rule is
+   preserved verbatim. The sticky-top/z-index block below extends the
+   same selector via cascade — later `.global-header { }` block wins
+   for equal specificity on those 3 properties; the original grid /
+   padding / background properties are untouched. */
+
+/* (a) Sticky-on-scroll: keep the header pinned to the top of the
+   scroll viewport once the user has scrolled past.
+   z-index 50 places the header above page content (default 0) but
+   below the toast (z-index 1000). */
+.global-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+
+/* (b) Compaction on scroll: when theme.js (Phase 2) adds .is-scrolled
+   to the header, shrink vertical padding from 16/16 to 8/8. Whole
+   rule wrapped in prefers-reduced-motion:no-preference per the user's
+   explicit instruction — reduced-motion users skip BOTH the padding
+   change AND the transition, preserving the original larger header
+   without animation. */
+@media (prefers-reduced-motion: no-preference) {
+    .global-header.is-scrolled {
+        padding-top: 8px;
+        padding-bottom: 8px;
+        transition: padding 130ms ease-out;
+    }
+}
+
+/* (c) Hamburger button — tap target 40×40, three 2px `span` bars in a
+   24×24 visual box (gap 5px). Bar color follows the title:
+     - light theme: --on-primary (white) on indigo --primary bg
+     - dark theme: --text (light-gray) on --primary-light bg
+   Mobile-only: hidden at desktop ≥768px via the @media below.
+   `align-self: flex-end` is REQUIRED to override the mobile parent's
+   `align-items: stretch` (which would otherwise force the button to
+   100% width on the flex column). Without this the tap target is
+   full-width on mobile. */
+.global-header-hamburger {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 4px;
+    align-self: flex-end; /* override mobile parent's align-items:stretch */
+}
+.global-header-hamburger:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+.global-header-hamburger:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+/* Light-theme branded override: on the indigo --primary header bg,
+   the default --primary focus outline is invisible (indigo on indigo).
+   Mirror the project's existing .global-header-link:focus-visible pattern:
+   use --on-primary (white) for focus outline on light theme. Dark theme
+   keeps --primary because the header bg is --primary-light (#202347) — a
+   different shade from --primary, so the indigo outline reads. */
+[data-theme="light"] .global-header-hamburger:focus-visible {
+    outline: 2px solid var(--on-primary);
+}
+.global-header-hamburger > span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--on-primary);
+}
+[data-theme="dark"] .global-header-hamburger > span {
+    background: var(--text);
+}
+@media (min-width: 768px) {
+    .global-header-hamburger {
+        display: none;
+    }
+}
+
+/* (d) Full-screen overlay drawer — hidden until theme.js (Phase 2)
+   adds .is-open. Mobile-only. Sits below the sticky header's z-index
+   :50 so the hamburger remains clickable to close it.
+   The `.drawer-widgets` flex column centers all three widget groups
+   horizontally with EQUAL 48px vertical gaps between them (per
+   State 4 wireframe — no margin-top:auto). */
+.global-nav-drawer {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: var(--surface);
+    padding: 80px 24px 24px; /* top clears sticky header (~64-72px) */
+    overflow-y: auto;
+}
+.global-nav-drawer.is-open {
+    display: flex;
+    flex-direction: column;
+}
+.global-nav-drawer .drawer-widgets {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+}
+@media (min-width: 768px) {
+    .global-nav-drawer {
+        display: none !important;
+    }
+}
+
+/* ==== Phase 2 desktop/mobile bug-fix (2026-07-14) ====
+   Phase 2 wires the hamburger button into theme.js as the LAST child of
+   `.global-header-right`. On mobile (≤767px), the existing Rev. 0.8 CSS
+   at styles.css .global-header-right { ... align-self: flex-start; ... }
+   pins the right-group CONTAINER to the LEFT edge of the viewport (the
+   Rev. 0.8f design put toggle + logout at the bottom-left, mirroring
+   title at the top-left). But Rev. 0.9 mobile collapsed puts the
+   hamburger flush RIGHT per State 3 wireframe — and right-group, now
+   hosting ONLY the hamburger after matchMedia moves toggle+logout out
+   to the drawer, must sit on the right edge of the header column.
+
+   Override the existing `align-self: flex-start` to `flex-end` ONLY on
+   mobile: rightGroup sits at right edge, shrinks around its single
+   40-px child, and the hamburger's existing `align-self: flex-end`
+   pins it to the right-edge slice of rightGroup's already-right-edge
+   box (= right edge of viewport).
+
+   Desktop unchanged: the existing flex-start rule still applies at
+   ≥768px (the right group anchors to the right edge of the desktop
+   grid row, matching the desktop grid template). */
+@media (max-width: 767px) {
+    .global-header-right {
+        align-self: flex-end;
+    }
+}
+
+/* ==== Phase 2 bug-fix round 3 (2026-07-14) ====
+   Five corrections from the user's second visual test:
+
+   1. Drawer z-index should be BELOW the header. Earlier rounds raised
+      to 70 (above header z:50), which covered the header entirely.
+      User's intent: header + drawer form ONE unified indigo panel
+      (header on top z:50, drawer below filling viewport z:40).
+      Header stays visible during open state.
+
+   2. Drawer background should MATCH the header's. Header uses
+      different bg per theme (light = branded indigo var(--primary)
+      #3e63dd, dark = deeper indigo var(--primary-light) #202347
+      per Rev. 0.8 series). Replicate the same per-theme pattern
+      so the two elements form one seamless indigo panel.
+
+   3. Drawer content (navlinks, button labels) needs WHITE
+      --on-primary for contrast on indigo (matches header's text
+      color per Rev. 0.8c).
+
+   4. Theme toggle inside drawer needs INVERTED colors for visibility
+      on indigo: WHITE track + INDIGO thumb (vs the original dark
+      track + white thumb outside drawer). Round-2 color override
+      (white outline) would have been invisible on the new white
+      track, so it's removed — base indigo focus outline shows
+      clearly on the new white track.
+
+   5. Mobile title slightly misaligned with hamburger (intrinsic
+      line-height differs from hamburger's 40px). Set title
+      line-height: 40px on mobile to match.
+
+   Plus: Logout button inherits the base `.global-header-logout-btn`
+   (`var(--danger)` red filled + white text) in BOTH drawer and
+   desktop contexts — no drawer-specific override, so the button
+   looks identical everywhere per the user’s third visual test. */
+
+/* Mobile header: keep horizontal row + hide in-header nav (round-2)
+   + add line-height:40px so title aligns with the hamburger. */
+@media (max-width: 767px) {
+    .global-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .global-header > .global-header-nav {
+        display: none;
+    }
+    /* Override the existing mobile `.global-header-right { align-self: flex-end }`
+       rule (lines ~1824 from a prior Phase 2 attempt) so right-group is
+       center-aligned in the row (matching the title's center alignment).
+       Without this, align-self on the child BEATS align-items on the
+       parent, and the hamburger would bottom-align while the title is
+       center-aligned — the user's reported "title slightly too high"
+       symptom in the second visual test. */
+    .global-header-right {
+        align-self: center;
+    }
+    .global-header-title {
+        line-height: 40px;
+    }
+}
+
+/* 1+2. Drawer z-index BELOW header + per-theme bg matching the
+   header's branded/standard indigo. */
+.global-nav-drawer {
+    z-index: 40;
+}
+[data-theme="light"] .global-nav-drawer {
+    background: var(--primary);
+}
+[data-theme="dark"] .global-nav-drawer {
+    background: var(--primary-light);
+}
+
+/* 3. Drawer content: white readable on indigo. */
+.global-nav-drawer .drawer-widgets .global-header-link {
+    color: var(--on-primary);
+}
+
+/* 4. Toggle inside drawer: WHITE track + INDIGO thumb. align-self
+   center retained from round-2. */
+.global-nav-drawer .drawer-widgets .theme-toggle-btn {
+    align-self: center;
+}
+.global-nav-drawer .theme-toggle-btn {
+    background: var(--on-primary);
+}
+.global-nav-drawer .theme-toggle-btn::after {
+    background: var(--primary);
+}
+
+/* ==== Phase 2 bug-fix round 3 follow-up (2026-07-14) ====
+   Round-3 had removed the [data-theme-agnostic] .theme-toggle-btn:focus-
+   visible drawer override, assuming the base .theme-toggle-btn:focus-
+   visible rule would apply. Verification revealed: NO base rule exists.
+   Only [data-theme=\"light\"] .theme-toggle-btn:focus-visible is defined
+   (at line ~1599), with outline-color: var(--on-primary) (white).
+
+   This means:
+     - Light-mode drawer: the [data-theme=\"light\"] rule's WHITE
+       outline would draw on the new WHITE toggle track = invisible.
+     - Dark-mode (anywhere): NO focus-visible rule exists at all.
+   Add a drawer-context focus-visible rule with high specificity that
+   provides a visible outline on the WHITE toggle track in BOTH themes.
+   Use var(--primary) (#3e63dd, the SAME indigo in both themes per
+   tokens.css) so the outline is high-contrast against the white track:
+     - Light-mode drawer (white track on branded indigo bg): INDIGO
+       outline reads clearly.
+     - Dark-mode drawer  (white track on deeper indigo bg): INDIGO
+       outline reads clearly.
+     - outline-offset:2 px ensures the outline sits APART from the
+       indigo thumb inside the toggle's bounding box, so the
+       focused state is distinguishable from the resting state
+       even though both are indigo-colored. */
+.global-nav-drawer .drawer-widgets .theme-toggle-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ==== Phase 2 bug-fix round 4 (2026-07-14) ====
+   Per the user\u2019s 4th visual test feedback: the global nav drawer
+   currently fills the entire viewport (`inset: 0` from the Phase 1
+   base rule). Make it a contained panel: 64 px below the sticky
+   header (clears the ~64\u201372 px header) and 32 px above the viewport
+   bottom (gives visual breathing room so the panel doesn\u2019t feel
+   like a full-screen takeover).
+
+   Implemented as `top: 64px; bottom: 32px` longhand overrides, which
+   beat the Phase 1 `inset: 0` shorthand on a per-property basis
+   (same (0,1,0) specificity; later source order wins). The existing
+   `left: 0; right: 0` from the shorthand remain \u2014 the panel keeps
+   full viewport width. The header above (z:50) continues being
+   painted on top of any underlying drawer area in its own
+   ~56\u201372 px zone, so visual continuity is preserved.
+
+   ITERATION NOTE (round-4.1, 2026-07-14): the user\u2019s 4th visual test
+   reported the panel was still too full \u2014 the 32 px bottom margin we
+   set initially left too much trailing indigo under the logout
+   button. Tightened further: `bottom: auto` releases the bottom
+   anchor so the panel sizes to its content (navlinks + gaps +
+   toggle + logout + padding-bottom from Phase 1), and `padding-top:
+   24px` reduces the empty indigo strip above the first navlink. The
+   panel\u2019s bottom now sits ~24 px below the logout button (Phase 1\u2019s
+   padding-bottom), not 32 px above the viewport bottom.
+
+   CASCADE SAFETY NOTE: the round-4 longhand overrides cover
+   `top`, `bottom`, and `padding-top`. The drawer’s `left` and `right` continue to
+   come from the Phase 1 base rule’s `inset: 0` shorthand (same
+   (0,1,0) specificity; later source order wins for those properties
+   implicitly). If anyone later modifies the Phase 1 base `inset`
+   value (e.g., to `inset: 0 0 16px 0`), the drawer’s left/right
+   would silently drift. Coordinate any Phase 1 base rule changes
+   with this round-4 override. */
+
+
+.global-nav-drawer {
+    top: 64px;
+    bottom: auto;
+    padding-top: 24px;
+    max-height: calc(100vh - 80px); /* defensive cap: short viewports (landscape phones) scroll inside */
+}
+
+/* ==== Phase 2 bug-fix round 5 (2026-07-14) ====
+   Modal-drawer UX: when the drawer is open, the user focuses on the
+   drawer panel and the header. Three coordinated effects:
+   1. Lock the page scroll (body overflow:hidden) so accidental
+      vertical/horizontal scrolling of the underlying page is
+      prevented while the drawer is open.
+   2. Apply a blur + dim filter to all direct body children EXCEPT
+      `.global-header` and `.global-nav-drawer` so the page content
+      fades into the background visually.
+   3. (Implementation in theme.js) Clicking anywhere in the blurred
+      page content (any region not in the drawer or header) closes
+      the drawer — UX convenience so users don't have to find the
+      hamburger button again to dismiss.
+
+   The `body.is-drawer-open` class is toggled by theme.js whenever
+   the drawer opens/closes (in `closeDrawer()` and in the
+   hamburger-click open path). */
+
+body.is-drawer-open {
+    overflow: hidden;
+    touch-action: none;        /* iOS Safari: enforce gesture blocking */
+    overscroll-behavior: contain; /* prevent scroll-chaining to underlying content */
+}
+
+body.is-drawer-open > *:not(.global-header):not(.global-nav-drawer) {
+    filter: blur(4px) brightness(0.7);
+    transition: filter 180ms ease-out;
+}
+
+/* ==== Phase 2 bug-fix round 5 (2026-07-14) ====
+   Modal-drawer UX: when the drawer is open, the user focuses on the
+   drawer panel and the header. Per user's 5th visual test feedback:
+   1. Lock the page scroll (body overflow:hidden) so accidental
+      vertical/horizontal scrolling of the underlying page is
+      prevented while the drawer is open.
+   2. Apply a blur + dim filter to all direct body children EXCEPT
+      `.global-header` and `.global-nav-drawer` so the page content
+      fades into the background visually.
+   3. (Implementation in theme.js) Clicking anywhere in the blurred
+      page content (any region not in the drawer or header) closes
+      the drawer — UX convenience so users don't have to find the
+      hamburger button again to dismiss.
+
+   The `body.is-drawer-open` class is toggled by theme.js whenever
+   the drawer opens/closes (in `closeDrawer()` and in the
+   hamburger-click open path). The transition is short (180ms) so
+   the visual state change feels quick but not jarring. */
+
+body.is-drawer-open {
+    overflow: hidden;
+}
+
+body.is-drawer-open > *:not(.global-header):not(.global-nav-drawer) {
+    filter: blur(4px) brightness(0.7);
+    transition: filter 180ms ease-out;
+}
+
+
+/* ==== Phase 2 bug-fix round 6 (2026-07-14) ====
+   Round 5 added body scroll-lock + blur, but (a) iOS Safari ignores
+   `overflow: hidden` on body so the page underneath was still
+   scrollable, and (b) random clicks on the blurred content still
+   fired the underlying button onclick handlers (because click
+   events bubble back to the original target).
+
+   Round 6 fixes both:
+
+   1. iOS-safe scroll lock. Add `touch-action: none` +
+      `overscroll-behavior: contain` to body.is-drawer-open (above).
+      Plus the JS-driven `position: fixed` + scrollY capture/restore
+      in theme.js handles the case iOS Safari ignores overflow:hidden.
+
+   2. Add an invisible backdrop element that, when `.is-active`,
+      intercepts all pointer events on the page content (between the
+      page content z:auto and the drawer z:40). Clicks on the
+      backdrop don't reach the underlying buttons, so no onclick
+      fires — combined with the existing global click listener that
+      closes the drawer, random clicks safely collapse the drawer
+      without triggering any page interactions.
+
+   The backdrop sits below the drawer (z:25 < z:40 of the drawer)
+   but above the page content (z:25 > auto of the page content).
+   Header is z:50, so it remains on top of backdrop (interactive). */
+
+.global-nav-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    display: none;
+    background: transparent;
+    cursor: default;
+}
+
+.global-nav-drawer-backdrop.is-active {
+    display: block;
+}
