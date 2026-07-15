@@ -76,8 +76,23 @@
                 </div>
 
                 <div class="pack-detail-layout">
-                    <div>
+                    <div style="position: relative">
                         <h3>➕ Tambah Soal dari Bank Soal</h3>
+                        <!-- Add-to-pack loading overlay. Absolute-positioned
+                             over the bank panel (CSS #loading-add rule) so
+                             it dims every bank-side control during the POST
+                             loop. See paket-detail-add-to-pack-polish-spec.md
+                             §4.5–4.6. -->
+                        <div
+                            id="loading-add"
+                            class="loading-overlay"
+                            role="status"
+                            aria-live="polite"
+                            aria-label="Memasukkan soal"
+                            style="display: none"
+                        >
+                            <div class="spinner"></div>
+                        </div>
                         <div id="loading-bank" class="loading-overlay">
                             <div class="spinner"></div>
                         </div>

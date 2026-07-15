@@ -942,7 +942,8 @@ tbody tr:hover {
     color: var(--primary);
     min-width: 28px;
 }
-.pack-question-item .q-preview {
+.pack-question-item .q-preview,
+.option-item .option-label {
     flex: 1;
     white-space: nowrap;
     overflow: hidden;
@@ -2264,4 +2265,49 @@ body.is-drawer-open > *:not(.global-header):not(.global-nav-drawer) {
     .table-scroll-wrapper thead .sticky-col-right {
         background: var(--surface-header);
     }
+}
+
+/* =========================================================================
+   paket-detail.html — add-to-pack UX polish (paket-detail-add-to-pack-polish-spec.md)
+   Bank list scrollbar + loading overlay theming. The .q-preview parity
+   block above (lines ~945) shares typography + truncation with both rows.
+   ========================================================================= */
+
+/* Theme-aware vertical scrollbar inside the bank list. Firefox uses
+   scrollbar-color + scrollbar-width; WebKit uses pseudo-elements. Both
+   follow the existing token scheme (--surface for track, --text-muted
+   for thumb, --text on hover) so dark/light themes feel consistent. */
+.bank-list-container {
+    scrollbar-color: var(--text-muted) var(--surface);
+    scrollbar-width: thin;
+}
+.bank-list-container::-webkit-scrollbar {
+    width: 10px;
+}
+.bank-list-container::-webkit-scrollbar-track {
+    background: var(--surface);
+}
+.bank-list-container::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 5px;
+    border: 2px solid var(--surface);
+}
+.bank-list-container::-webkit-scrollbar-thumb:hover {
+    background: var(--text);
+}
+
+/* Absolute-positioned loading overlay scoped to the bank panel. Parent
+   div in paket-detail.html has `style="position:relative"` so this
+   overlay covers the entire left side during the POST loop. Theme-aware
+   backgrounds: light uses gentle white-out, dark uses alpha-black so
+   the dim layer reads on the dark indigo surface (no harsh #000). */
+#loading-add {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 8px;
+}
+:root[data-theme="dark"] #loading-add {
+    background: rgba(0, 0, 0, 0.55);
 }
