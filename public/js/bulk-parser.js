@@ -57,6 +57,48 @@ const VALID_KEYS = ["A", "B", "C", "D", "E"];
 const MAX_PREMISES = 20;
 const MAX_LINES_PER_BLOCK = 200;
 
+// Indonesian question-position cues used to validate a candidate question
+// line in the bare-premise new format. If the line before option A doesn't
+// end with ? / ! / … and doesn't contain any of these cues, we reject the
+// block — otherwise we'd silently mis-categorize one of the premises as
+// the question prompt.
+//
+// Notes:
+//   - `yang\s+(?:paling\s+)?(?:tepat|benar|logis)` accepts BOTH "Pernyataan
+//     yang paling benar adalah" AND "Pernyataan yang benar adalah".
+//   - `di\s+mana` (2 words) AND `dimana` (1 word) both match the
+//     Indonesian locative question word.
+//   - `paling(?:-|\s)+(?:tepat|benar|logis)` also catches the heading-only
+//     variant "Paling tepat adalah ..." without a "yang" prefix.
+// Indonesian question-position cues. The `(?:nya)?` suffix on `kesimpulan`
+// lets the cue match the formal-possessive form "Kesimpulannya adalah …"
+// (used heavily in TIU SKD/CAT questions), where the literal word
+// "kesimpulan" is followed by "nya" and a word boundary \b is therefore
+// absent immediately after the cue. Pre-existing \b anchors at the end
+// still guard "kesimpulan dengan" etc. when no suffix is present.
+// `dimana`/`kapan` are similarly relaxed below to handle the common
+// "diamanakah"/"kapankah" interrogation forms.
+const QUESTION_CUE_RE =
+  /\b(kesimpulan(?:nya)?|manakah|apakah|bagaimana|berdasarkan(?:\s+pernyataan)?|yang\s+(?:paling\s+)?(?:tepat|benar|logis)|paling(?:-|\s)+(?:tepat|benar|logis)|di\s+mana|dimana(?:kah)?|kapan(?:kah)?|mengapa(?:kah)?)\b/i;
+
+// Heuristic: line looks like a question prompt iff it ends with `?`, `!`,
+// or `…` OR its trimmed form matches a known Indonesian question-position
+// cue (case-insensitive). Used to guard the bare-premise new format
+// against silent mis-categorization when the user pastes N bare premises
+// with NO explicit question line before the options.
+function looksLikeQuestion(line) {
+  if (typeof line !== "string" || line.length === 0) return false;
+  const trimmed = line.trim();
+  if (
+    trimmed.endsWith("?") ||
+    trimmed.endsWith("!") ||
+    trimmed.endsWith("…")
+  ) {
+    return true;
+  }
+  return QUESTION_CUE_RE.test(trimmed);
+}
+
 // -------- Helpers ---------------------------------------------------------
 
 // HTML-escape a string for safe inclusion in `<li>` / `<p>` content.
@@ -81,12 +123,86 @@ function stripOptionPrefix(line) {
 }
 
 // Build the stored `content` HTML for a new-format block.
-// Format: `<ol><li>Premise 1</li>…</ol><p>question</p>` (no newlines).
-// Single-line string is intentional — keeps the DB row compact and
-// matches the single-question Quill pattern (one inline string).
+// Format: `<ol><li>Premise 1</li>…</ol><p>question</p>` (no newlines)
+// for blocks with an explicit question; `<ol>…</ol>` only for
+// blocks where the question is implicit (TIU silogisme style:
+// premises + options + key + explanation with no "Manakah
+// kesimpulan..." prompt). Single-line string is intentional —
+// keeps the DB row compact and matches the single-question
+// Quill pattern.
 function buildNewFormatContent(premises, question) {
   const liHtml = premises.map((p) => `<li>${escapeHtml(p)}</li>`).join("");
-  return `<ol>${liHtml}</ol><p>${escapeHtml(question)}</p>`;
+  // If the user did not provide an explicit question line, emit just
+  // the <ol>…</ol> without a trailing empty <p> tag.
+  return question
+    ? `<ol>${liHtml}</ol><p>${escapeHtml(question)}</p>`
+    : `<ol>${liHtml}</ol>`;
+}
+
+// Splits a single line into multiple sentences on ". " followed by
+// an uppercase letter. Handles the multi-premise-on-one-line
+// pattern common in Indonesian TIU silogisme exam items, where the
+// user pastes 2-3 premise sentences joined by ". " instead of as
+// separate lines.
+//
+// Examples:
+//   "Premise 1. Premise 2. Premis 3."
+//     → ["Premise 1.", "Premise 2.", "Premis 3."]
+//   "Semua hewan herbivora. Menurut para peneliti..."
+//     → ["Semua hewan herbivora.", "Menurut para peneliti..."]
+//
+// Known limitation: imperfect handling of abbreviations like
+// "Jl. Sudirman" → ["Jl", "Sudirman"]. False positives on
+// abbreviations are tolerable because downstream validation runs
+// the same checks on each split part — an extra junk premise is
+// harmless and the user can reformat if needed.
+// Splits a line into sentences at every ". " (period + whitespace) followed
+// by an uppercase Latin letter. Indonesian CAT premises are commonly joined
+// on a single line by authors who copy-paste from a doc, e.g.
+//
+//   "Semua warga negara wajib membayar pajak. Pajak digunakan untuk
+//    membiayai pembangunan fasilitas umum."
+//
+// → ["Semua warga negara wajib membayar pajak.",
+//    "Pajak digunakan untuk membiayai pembangunan fasilitas umum."]
+//
+// The split REGEX matches ". " (period + whitespace) followed by an
+// uppercase letter — so `String.split` consumes the period+space delimiter,
+// stripping the trailing period off each non-last chunk. We re-append "."
+// to non-last chunks via map() so the parsed `premises[]` preserves the
+// sentence-ending punctuation the user typed (matches expectations in
+// §8.28 + §8.30 + §8.31 tests).
+//
+// KNOWN LIMITATION: false-positively splits Indonesian abbreviations like
+// "Jl. Sudirman", "pt. Maju Bersama", "No. 5" — these abbreviations all
+// fit `. X` pattern where X is uppercase. Users with abbreviation-heavy
+// premises should hit Enter between sentences.
+function splitSentences(line) {
+  if (typeof line !== "string" || line.length === 0) return [line];
+  return line
+    .split(/\.\s+(?=[A-Z])/)
+    .map((s, i, arr) => (i < arr.length - 1 ? s + "." : s));
+}
+
+// Applies `splitSentences` to every line at index < boundaryIdx in
+// `lines`. Lines at index >= boundaryIdx pass through unchanged.
+// Returns the resulting array (possibly longer due to splits).
+//
+// Used by the bare-premise new format path to handle inputs where
+// multiple premise sentences are pasted on a single line — a
+// common pattern for Indonesian TIU silogisme exam items. The
+// caller should re-locate optIdx via `findExplicitOptionsIndex` on
+// the result because optIdx may have shifted after expansion.
+function expandToSentencesBefore(lines, boundaryIdx) {
+  const result = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (i < boundaryIdx) {
+      result.push(...splitSentences(lines[i]));
+    } else {
+      result.push(lines[i]);
+    }
+  }
+  return result;
 }
 
 // Strip every <ol> and <img> in a Quill-rendered HTML string and
@@ -151,6 +267,163 @@ function previewHtmlForCell(html) {
 }
 
 // -------- Per-format parsers ---------------------------------------------
+
+// Walks forward looking for the start of an explicit A./B./C./D./E. option
+// block — five consecutive lines whose prefixes match A., B., C., D., E.
+// (case-insensitive) in that order. Returns the index of the "A. ..." line,
+// or -1 if no such block exists.
+//
+// Used by the auto-detect loop in parseBlock to recognize the "bare-premise
+// new format" (Indonesian TIU silogisme style), where premises have no
+// numeric markers but the explicit A-E options give us a fixed anchor to
+// work backwards from: the line BEFORE A is the question, lines BEFORE
+// the question are the premises.
+//
+// We require at least 7 lines remaining after the start of A (5 options +
+// key + at least 1 explanation line). This filters out accidental matches
+// in fragments that don't have a full new-format structure.
+function findExplicitOptionsIndex(lines) {
+  // 5 options + key + min 1 line explanation
+  const MIN_LINES_AFTER = 7;
+  for (let i = 0; i <= lines.length - MIN_LINES_AFTER; i++) {
+    if (
+      /^A[\.\)]\s/i.test(lines[i]) &&
+      /^B[\.\)]\s/i.test(lines[i + 1]) &&
+      /^C[\.\)]\s/i.test(lines[i + 2]) &&
+      /^D[\.\)]\s/i.test(lines[i + 3]) &&
+      /^E[\.\)]\s/i.test(lines[i + 4])
+    ) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// Parse a "bare-premise new format" block on PRE-EXPANDED lines.
+// The caller (parseBlock) has already applied
+// `expandToSentencesBefore` to the original lines and re-located
+// `optIdx` to `newOptIdx` on the post-expansion array. This
+// function operates directly on the expanded array; no further
+// splitting is performed here.
+//
+// Two Indonesian CAT patterns supported:
+//   (a) Explicit question: 2+ bare premise lines + a
+//       "Manakah kesimpulan..." question line.
+//   (b) Implicit question: 2+ bare premise sentences (possibly
+//       joined on one line via ". ") followed directly by A-E
+//       options, with the conclusion left implicit. The question
+//       is stored as empty string and the content HTML omits the
+//       trailing <p> tag.
+//
+// Indonesian CAT pattern (TIU silogisme — explicit question):
+//   Premise 1
+//   Premise 2
+//   Question text
+//   A. ...
+//   B. ...
+//   C. ...
+//   D. ...
+//   E. ...
+//   <key>
+//   <explanation>
+//
+// Stored as the same `<ol>…<p>` HTML as the numbered new format
+// (or `<ol>…</ol>` if question is implicit), so the downstream
+// preview + exam/review renderers work without changes.
+function parseBarePremiseNewFormatBlock(expanded, idx, questionType, newOptIdx) {
+  const errors = [];
+
+  // Decide between (a) explicit-question and (b) implicit-question
+  // modes based on whether the candidate question line explicitly
+  // looks like a question prompt (ends with ?/!/… OR matches an
+  // Indonesian question-position cue: Kesimpulan/Manakah/Apakah/
+  // Bagaimana/Berdasarkan/yang (paling)? (tepat|benar|logis)/etc.).
+  const candidateQuestionLine = expanded[newOptIdx - 1];
+  const hasExplicitQuestion = looksLikeQuestion(candidateQuestionLine);
+
+  let premises;
+  let question;
+  if (hasExplicitQuestion) {
+    premises = expanded.slice(0, newOptIdx - 1).map((p) => p.trim());
+    question = candidateQuestionLine;
+  } else {
+    // No explicit question — all lines 0..newOptIdx-1 are premises,
+    // and the question is empty (implicit conclusion to be drawn
+    // by the test-taker from the premises themselves).
+    premises = expanded.slice(0, newOptIdx).map((p) => p.trim());
+    question = "";
+  }
+
+  if (premises.length < 2) {
+    errors.push("format bare-premise baru tapi premise kurang dari 2");
+    return { idx, status: "invalid", errors, question_type: questionType };
+  }
+  if (premises.length > MAX_PREMISES) {
+    errors.push(`terlalu banyak premise (max ${MAX_PREMISES})`);
+    return { idx, status: "invalid", errors, question_type: questionType };
+  }
+
+  for (let p = 0; p < premises.length; p++) {
+    if (premises[p].length === 0) {
+      errors.push(`premise ${p + 1} kosong`);
+      return { idx, status: "invalid", errors, question_type: questionType };
+    }
+  }
+
+  // Options A–E. The A-prefix was already verified by
+  // findExplicitOptionsIndex on the expanded lines; B/C/D/E are
+  // also verified.
+  const options = {
+    A: stripOptionPrefix(expanded[newOptIdx]),
+    B: stripOptionPrefix(expanded[newOptIdx + 1]),
+    C: stripOptionPrefix(expanded[newOptIdx + 2]),
+    D: stripOptionPrefix(expanded[newOptIdx + 3]),
+    E: stripOptionPrefix(expanded[newOptIdx + 4]),
+  };
+  for (const k of ["A", "B", "C", "D", "E"]) {
+    if (!options[k]) {
+      errors.push(`opsi ${k} kosong`);
+      return { idx, status: "invalid", errors, question_type: questionType };
+    }
+  }
+
+  // Key.
+  if (newOptIdx + 5 >= expanded.length) {
+    errors.push("kunci jawaban hilang");
+    return { idx, status: "invalid", errors, question_type: questionType };
+  }
+  const keyRaw = expanded[newOptIdx + 5].toUpperCase().trim();
+  if (!VALID_KEYS.includes(keyRaw)) {
+    errors.push(
+      `kunci tidak valid: "${expanded[newOptIdx + 5]}" (harus A/B/C/D/E)`,
+    );
+    return { idx, status: "invalid", errors, question_type: questionType };
+  }
+
+  // Explanation.
+  if (newOptIdx + 6 >= expanded.length) {
+    errors.push("pembahasan kosong");
+    return { idx, status: "invalid", errors, question_type: questionType };
+  }
+  const explanation = expanded.slice(newOptIdx + 6).join("\n").trim();
+  if (explanation.length === 0) {
+    errors.push("pembahasan kosong");
+    return { idx, status: "invalid", errors, question_type: questionType };
+  }
+
+  return {
+    idx,
+    status: "valid",
+    errors: [],
+    content: buildNewFormatContent(premises, question),
+    premises,
+    question,
+    options,
+    correct_answer: keyRaw,
+    explanation,
+    question_type: questionType,
+  };
+}
 
 function parseNewFormatBlock(lines, idx, questionType, leadInLine = null) {
   const errors = [];
@@ -389,6 +662,60 @@ function parseBlock(rawBlock, idx, questionType) {
     const premiseLines = leadInLine ? lines.slice(1) : lines;
     return parseNewFormatBlock(premiseLines, idx, questionType, leadInLine);
   }
+
+  // Bare-premise new format detection (Indonesian TIU silogisme style).
+  // The premises here have NO numeric marker (`1)`, `1.`, `(1)`); the
+  // question line follows as plain text; then explicit A-E options.
+  // We work BACKWARDS from the explicit A-E options to locate the
+  // question (line before A) and the premises (everything before that).
+  //
+  // Sentence-split BEFORE the gate. The user's premises may be
+  // joined on a single line with ". " (e.g. "P1. P2. P3."),
+  // shifting the effective optIdx after expansion. We must split
+  // BEFORE applying the bare-premise gate so the threshold sees
+  // the post-expansion `newOptIdx` (which may be > 1 even when the
+  // original `explicitOptIdx` was 1, as in block 6 / §8.31 where
+  // a single line holds 3 premises joined by ". ").
+  //
+  // Safety rails vs. old format (§8.2 / §8.10 / §8.18 / §8.21 /
+  // §8.23):
+  //   1. findExplicitOptionsIndex requires 5 explicit A-E lines
+  //      in order. If prefixes are missing, returns -1 and we
+  //      fall through to old format unchanged.
+  //   2. Standard old format (line 0 = question, line 1 = A) has
+  //      explicitOptIdx == 1 AND line 0 has no ". " followed by
+  //      uppercase (single sentence) → splitting yields no new
+  //      lines → newOptIdx stays at 1 → FAILS the `newOptIdx >= 2`
+  //      threshold → falls through to parseOldFormatBlock.
+  //      §8.23 is the regression guard for this path.
+  //   3. Hypothetical old-format inputs with 2+ intro lines (e.g.
+  //      "Intro 1.\nIntro 2.\nA. OptA\n...") would have explicitOptIdx
+  //      == 2 and the splitting wouldn't create new lines → newOptIdx
+  //      stays at 2 → enters bare-premise path with both intro
+  //      lines categorized as 2 premises + implicit question.
+  //      Acceptable degradation: unusual output but parser doesn't
+  //      crash. Documented as a known limitation of the
+  //      premises-only mode.
+  //   4. parseBarePremiseNewFormatBlock handles the question-line
+  //      detection internally (looksLikeQuestion at
+  //      `expanded[newOptIdx - 1]`) and allows empty-question
+  //      mode for premises-only inputs. Same premise-empty /
+  //      option-empty / key-valid / explanation-rule checks as
+  //      the numbered parser apply.
+  const explicitOptIdx = findExplicitOptionsIndex(lines);
+  if (explicitOptIdx >= 1) {
+    const expanded = expandToSentencesBefore(lines, explicitOptIdx);
+    const newOptIdx = findExplicitOptionsIndex(expanded);
+    if (newOptIdx >= 2) {
+      return parseBarePremiseNewFormatBlock(
+        expanded,
+        idx,
+        questionType,
+        newOptIdx,
+      );
+    }
+  }
+
   return parseOldFormatBlock(lines, idx, questionType);
 }
 
@@ -428,6 +755,8 @@ export {
   escapeHtml,
   previewHtmlForCell,
   isLeadIn,
+  findExplicitOptionsIndex,
+  looksLikeQuestion,
   PREMISE_RE,
   OPTION_RE,
   MAX_PREMISES,

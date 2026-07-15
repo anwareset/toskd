@@ -14,9 +14,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseBulkText,
+  parseBlock,
   escapeHtml,
   previewHtmlForCell,
   isLeadIn,
+  findExplicitOptionsIndex,
+  looksLikeQuestion,
   MAX_PREMISES,
   MAX_LINES_PER_BLOCK,
   PREMISE_RE,
@@ -952,4 +955,570 @@ test("bonus: lowercase option prefix 'a.' stripped too", () => {
     D: "optD",
     E: "optE",
   });
+});
+
+// ============================================================================
+// §8.22 Bare-premise new format (TIU silogisme — user's reported case)
+// ============================================================================
+// Indonesian TIU silogisme pattern: 2+ plain-text premise sentences with
+// NO numeric markers, followed by the actual question text (often
+// "Kesimpulan dari kedua premis tersebut adalah ..."), then A-E options,
+// then key, then explanation. The parser must auto-detect this from the
+// explicit A-E options block (working backwards to locate the question
+// line and the premises).
+test("§8.22 happy path: bare-premise new format (TIU SKD 2025 silogisme)", () => {
+  const input = [
+    "Tidak ada warga desa A yang memiliki sepeda warna kuning",
+    "Sepeda berwarna merah terparkir di depan kantor kecamatan X",
+    "Kesimpulan dari kedua premis tersebut adalah ... (TIU SKD 2025)",
+    "A. Sepeda berwarna merah yang terparkir di depan kantor kecamatan X berasal dari Desa A",
+    "B. Semua sepeda yang terparkir di depan kantor kecamatan X berasal dari Desa A",
+    "C. Sepeda berwarna merah yang terparkir di depan kantor kecamatan X mungkin berasal dari Desa A",
+    "D. Sepeda berwarna kuning terparkir di depan kantor kecamatan X",
+    "E. Tidak ada sepeda dari Desa A yang terparkir di depan kantor kecamatan X",
+    "C",
+    "Premis pertama menyatakan tidak ada warga Desa A yang memiliki sepeda kuning, sehingga warga Desa A memiliki sepeda berwarna lain. Premis kedua menyatakan bahwa sepeda berwarna merah terparkir di depan kantor kecamatan X (tanpa memberikan informasi asal pemiliknya), sehingga tidak bisa dipastikan dari mana sepeda tersebut berasal. Kesimpulan yang paling tepat dan tidak bertentangan dengan kedua premis adalah bahwa sepeda merah yang terparkir di depan kantor kecamatan X mungkin berasal dari Desa A, sehingga jawabannya adalah C.",
+  ].join("\n");
+
+  const r = parseBulkText(input, TYPE);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].status, "valid");
+  assert.deepEqual(r[0].errors, []);
+
+  // 2 bare premises captured
+  assert.deepEqual(r[0].premises, [
+    "Tidak ada warga desa A yang memiliki sepeda warna kuning",
+    "Sepeda berwarna merah terparkir di depan kantor kecamatan X",
+  ]);
+
+  // Question is the line immediately before option A (the "Kesimpulan..."
+  // prompt)
+  assert.equal(
+    r[0].question,
+    "Kesimpulan dari kedua premis tersebut adalah ... (TIU SKD 2025)",
+  );
+
+  // Options A-E stripped of prefix
+  assert.deepEqual(r[0].options, {
+    A: "Sepeda berwarna merah yang terparkir di depan kantor kecamatan X berasal dari Desa A",
+    B: "Semua sepeda yang terparkir di depan kantor kecamatan X berasal dari Desa A",
+    C: "Sepeda berwarna merah yang terparkir di depan kantor kecamatan X mungkin berasal dari Desa A",
+    D: "Sepeda berwarna kuning terparkir di depan kantor kecamatan X",
+    E: "Tidak ada sepeda dari Desa A yang terparkir di depan kantor kecamatan X",
+  });
+  assert.equal(r[0].correct_answer, "C");
+
+  // Explanation preserved (long Indonesian paragraph)
+  assert.ok(r[0].explanation.includes("Premis pertama"));
+  assert.ok(r[0].explanation.includes("jawabannya adalah C"));
+
+  // Content HTML: same `<ol>…<p>` shape as numbered new format
+  assert.ok(r[0].content.startsWith("<ol>"));
+  assert.ok(
+    r[0].content.includes(
+      "<li>Tidak ada warga desa A yang memiliki sepeda warna kuning</li>",
+    ),
+  );
+  assert.ok(
+    r[0].content.includes(
+      "<li>Sepeda berwarna merah terparkir di depan kantor kecamatan X</li>",
+    ),
+  );
+  assert.ok(r[0].content.includes("</ol>"));
+  assert.ok(
+    r[0].content.endsWith(
+      "<p>Kesimpulan dari kedua premis tersebut adalah ... (TIU SKD 2025)</p>",
+    ),
+  );
+});
+
+// ============================================================================
+// §8.23 Regression guard: optIdx < 3 falls through to old format (gate works)
+// ============================================================================
+// Uses a CLEAN optIdx=1 input (A. at line 1) that old format parses
+// successfully. This exercises the bare-premise gate (1 < 3 →
+// parseBarePremiseNewFormatBlock is NOT called) and lets us assert
+// directly on `r[0].premises === []` without fragile error-message
+// string matching.
+//
+// An optIdx=2 boundary case would also be valid for this guard, but
+// optIdx=2 input is structurally ambiguous — old format can't parse
+// it cleanly either (key "E. Opsi E" doesn't match VALID_KEYS), so
+// any assertion would have to handle both successful and
+// short-circuited old-format outcomes (which is what the previous
+// version of this test did). optIdx=1 is cleaner and consistent with
+// the §8.2 / §8.10 / §8.18 / §8.21 old-format tests.
+test("§8.23 fallback: optIdx < 3 falls through to old format", () => {
+  const input = [
+    "Silakan pilih opsi yang benar.",
+    "A. Opsi A",
+    "B. Opsi B",
+    "C. Opsi C",
+    "D. Opsi D",
+    "E. Opsi E",
+    "A",
+    "Pembahasan singkat.",
+  ].join("\n");
+
+  const r = parseBulkText(input, TYPE);
+  assert.equal(r.length, 1);
+  // optIdx = 1 → gate `optIdx >= 3` fails → parseBarePremiseNewFormatBlock
+  // NOT called → parseOldFormatBlock runs and validates cleanly.
+  assert.equal(r[0].status, "valid");
+  // CRITICAL: r[0].premises must be [] (proving bare-premise wasn't
+  // triggered, since BAR would have populated premises from lines
+  // 0..optIdx-1 = lines 0..0).
+  assert.deepEqual(r[0].premises, []);
+});
+
+// ============================================================================
+// §8.24 Regression guard: missing A-E prefixes must NOT trigger bare-premise
+// detection (this is the old-format territory from §8.10 + §8.18).
+// ============================================================================
+test("§8.24 fallback: missing explicit A-E prefixes falls through to old format", () => {
+  const input = [
+    "1) P1", // triggers the EXISTING numbered new-format path (parseNewFormatBlock)
+    "Q with ?",
+    "bare option (no A./B. prefix)",
+    "another bare option",
+    "yet another",
+    "still bare",
+    "last bare option",
+    "D", // key works for old format (key is on line 7 here, since no premises)
+    "Expl",
+  ].join("\n");
+
+  const r = parseBulkText(input, TYPE);
+  assert.equal(r.length, 1);
+  // Lines 0 is "1) P1" → triggers parseNewFormatBlock (existing
+  // numbered new-format path). Bare-premise detection is irrelevant.
+  assert.equal(r[0].status, "valid");
+  assert.deepEqual(r[0].premises, ["P1"]);
+});
+
+// ============================================================================
+// §8.25 findExplicitOptionsIndex unit tests for A-E block detection
+// ============================================================================
+test("§8.25a findExplicitOptionsIndex: returns 0 when A-E block starts at line 0", () => {
+  const lines = [
+    "A. one",
+    "B. two",
+    "C. three",
+    "D. four",
+    "E. five",
+    "F", // key (out of range but we have 5+1+? lines)
+    "Expl",
+  ];
+  assert.equal(findExplicitOptionsIndex(lines), 0);
+});
+
+test("§8.25b findExplicitOptionsIndex: returns correct offset when block is mid-stream", () => {
+  const lines = [
+    "P1",
+    "P2",
+    "Q?",
+    "A. one", // index 3
+    "B. two",
+    "C. three",
+    "D. four",
+    "E. five",
+    "A",
+    "Expl",
+  ];
+  assert.equal(findExplicitOptionsIndex(lines), 3);
+});
+
+test("§8.25c findExplicitOptionsIndex: returns -1 when no A-E block exists", () => {
+  const lines = [
+    "P1",
+    "P2",
+    "Q?",
+    "bare", // NOT A.
+    "bare",
+    "bare",
+    "bare",
+    "bare",
+    "D",
+    "Expl",
+  ];
+  assert.equal(findExplicitOptionsIndex(lines), -1);
+});
+
+test("§8.25d findExplicitOptionsIndex: returns -1 when too few lines remain after A", () => {
+  // Need 5 options + key + ≥1 explanation = 7 lines after A. With only
+  // 6 lines after A (5 options + key, no explanation), the loop bound
+  // `i <= lines.length - 7` evaluates to `i <= -1` → no iterations → -1.
+  const lines = ["A. x", "B. x", "C. x", "D. x", "E. x", "A"];
+  assert.equal(findExplicitOptionsIndex(lines), -1);
+});
+
+test("§8.25e findExplicitOptionsIndex: case-insensitive prefix matching", () => {
+  const lines = [
+    "P1",
+    "P2",
+    "Q?",
+    "a. one", // lowercase A
+    "b. two",
+    "c. three",
+    "d. four",
+    "e. five",
+    "A",
+    "Expl",
+  ];
+  assert.equal(findExplicitOptionsIndex(lines), 3);
+});
+
+// ============================================================================
+// §8.26 Happy path: N bare premises with no question line is VALID
+// ============================================================================
+// With the §8.28+ sentence-splitting + question-detection extension,
+// the "premises + no question" pattern is now accepted as valid with
+// an EMPTY question (the conclusion is left implicit — common for
+// Indonesian TIU silogisme items where the test-taker must derive
+// it from the premises). This replaces the previous round's stricter
+// guard reject. The previous test name "§8.26 invalid: 3 bare
+// premises with no question line is rejected" was retired.
+test("§8.26 happy path: 3 bare premises with no question line is valid (implicit question)", () => {
+  const input = [
+    "Semua warga negara wajib membayar pajak.",
+    "Pajak digunakan untuk membiayai pembangunan fasilitas umum.",
+    "Beberapa fasilitas umum sudah berdiri sejak lama.",
+    "A. Opsi A",
+    "B. Opsi B",
+    "C. Opsi C",
+    "D. Opsi D",
+    "E. Opsi E",
+    "A",
+    "Penjelasan untuk tiga premis tanpa baris pertanyaan eksplisit.",
+  ].join("\n");
+
+  const r = parseBulkText(input, TYPE);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].status, "valid");
+  // 3 premises captured, NO question line.
+  assert.equal(r[0].premises.length, 3);
+  assert.deepEqual(r[0].premises, [
+    "Semua warga negara wajib membayar pajak.",
+    "Pajak digunakan untuk membiayai pembangunan fasilitas umum.",
+    "Beberapa fasilitas umum sudah berdiri sejak lama.",
+  ]);
+  assert.equal(r[0].question, ""); // implicit
+  // Options A-E preserved.
+  assert.deepEqual(r[0].options, {
+    A: "Opsi A",
+    B: "Opsi B",
+    C: "Opsi C",
+    D: "Opsi D",
+    E: "Opsi E",
+  });
+  assert.equal(r[0].correct_answer, "A");
+  // Content HTML: <ol>…</ol> ONLY (no trailing <p></p> for empty
+  // question — clean output, avoids an empty paragraph in the
+  // downstream exam/review renderers).
+  assert.ok(r[0].content.startsWith("<ol>"));
+  assert.ok(r[0].content.endsWith("</ol>"));
+  assert.ok(
+    !r[0].content.includes("<p>"),
+    `content must NOT contain <p> when question is empty; got: ${r[0].content}`,
+  );
+});
+
+// ============================================================================
+// §8.27 looksLikeQuestion unit tests
+// ============================================================================
+test("§8.27a looksLikeQuestion: line ending with '?' is a question", () => {
+  assert.equal(looksLikeQuestion("Apakah benar?"), true);
+});
+test("§8.27b looksLikeQuestion: line ending with '!' is a question", () => {
+  assert.equal(looksLikeQuestion("Perhatikan!"), true);
+});
+test("§8.27c looksLikeQuestion: line ending with '…' is a question", () => {
+  assert.equal(looksLikeQuestion("Pilih yang paling tepat…"), true);
+});
+test("§8.27d looksLikeQuestion: 'Kesimpulan' cue is a question", () => {
+  assert.equal(
+    looksLikeQuestion(
+      "Kesimpulan dari kedua premis tersebut adalah ... (TIU SKD 2025)",
+    ),
+    true,
+  );
+});
+test("§8.27e looksLikeQuestion: 'Manakah' cue is a question", () => {
+  assert.equal(
+    looksLikeQuestion("Manakah opsi yang paling logis"),
+    true,
+  );
+});
+test("§8.27f looksLikeQuestion: 'Berdasarkan pernyataan' cue is a question", () => {
+  assert.equal(
+    looksLikeQuestion("Berdasarkan pernyataan di atas, maka ..."),
+    true,
+  );
+});
+test("§8.27g looksLikeQuestion: 'yang paling tepat' cue is a question", () => {
+  assert.equal(looksLikeQuestion("Pernyataan yang paling tepat adalah"), true);
+});
+test("§8.27h looksLikeQuestion: plain premise is NOT a question", () => {
+  assert.equal(
+    looksLikeQuestion(
+      "Tidak ada warga desa A yang memiliki sepeda warna kuning",
+    ),
+    false,
+  );
+});
+test("§8.27i looksLikeQuestion: empty / non-string is NOT a question", () => {
+  assert.equal(looksLikeQuestion(""), false);
+  assert.equal(looksLikeQuestion(null), false);
+  assert.equal(looksLikeQuestion(undefined), false);
+});
+test("§8.27j looksLikeQuestion: 'Pernyataan yang benar adalah' (no 'paling') matches", () => {
+  // Cue is now `yang\s+(?:paling\s+)?(?:tepat|benar|logis)` so the
+  // "paling" between "yang" and the adjective is OPTIONAL.
+  assert.equal(looksLikeQuestion("Pernyataan yang benar adalah"), true);
+  assert.equal(looksLikeQuestion("Opsi yang tepat adalah"), true);
+  assert.equal(looksLikeQuestion("Pernyataan yang logis adalah"), true);
+});
+test("§8.27k looksLikeQuestion: 'Di mana ...' (TWO words) matches the cue", () => {
+  // Cue is now `dimana` OR `di\s+mana`.
+  assert.equal(looksLikeQuestion("Di mana letak kantor kecamatan X?"), true);
+  assert.equal(looksLikeQuestion("Dimana rumah sakit terdekat?"), true);
+});
+test("§8.27l looksLikeQuestion: 'Paling tepat adalah ...' (cued without 'yang') matches", () => {
+  // Cue `paling(?:-|\s)+(?:tepat|benar|logis)` catches this heading-only variant.
+  assert.equal(
+    looksLikeQuestion("Paling tepat adalah opsi A atau B?"),
+    true,
+  );
+});
+test("§8.27m looksLikeQuestion: 'YANG PALING TEPAT' (caps) matches (regex is /i)", () => {
+  assert.equal(
+    looksLikeQuestion("PERNYATAAN YANG PALING TEPAT ADALAH"),
+    true,
+  );
+});
+
+// ============================================================================
+// §8.28 Happy path: multi-premise on one line + explicit question (TIU 2024)
+// ============================================================================
+// Common Indonesian TIU silogisme pattern where 2 premise sentences
+// are joined on a single line with ". " (instead of proper \n
+// separators) followed by an explicit "Manakah kesimpulan..." question
+// line. The parser must:
+//   1. Split line 0 on ". " (after "herbivora." before "Menurut")
+//   2. Re-locate optIdx on the expanded lines (2 → 3 after split)
+//   3. Recognize "Manakah kesimpulan..." as a question line
+//   4. Treat the 2 split sentences as premises
+test("§8.28 happy path: multi-premise on one line + explicit question (sentence split + Manakah ... cue)", () => {
+  const input = [
+    "Semua hewan yang berada di Kebun Binatang A merupakan hewan herbivora. Menurut para peneliti dari Universitas Haluoleo, hewan herbivora adalah hewan dengan rasa takut yang tinggi.",
+    "Manakah kesimpulan yang paling tepat berdasarkan premis di atas... (TIU CPNS 2024)",
+    "A. Hewan yang berada di Kebun Binatang A memiliki rasa takut yang tinggi.",
+    "B. Beberapa hewan herbivora memiliki rasa takut yang tinggi.",
+    "C. Semua hewan herbivora berada di Kebun Binatang A.",
+    "D. Semua hewan dengan rasa takut yang tinggi berada di Kebun Binatang A.",
+    "E. Hewan yang berada di Kebun Binatang A merupakan hewan langka.",
+    "A",
+    "Premis pertama menyatakan bahwa semua hewan di Kebun Binatang A merupakan hewan herbivora. Premis kedua menyatakan bahwa semua hewan herbivora memiliki rasa takut yang tinggi. Maka kesimpulan yang tepat adalah semua hewan yang berada di Kebun Binatang A memiliki rasa takut yang tinggi.",
+  ].join("\n");
+
+  const r = parseBulkText(input, TYPE);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].status, "valid");
+  assert.deepEqual(r[0].errors, []);
+
+  // 2 split premises captured from line 0
+  assert.deepEqual(r[0].premises, [
+    "Semua hewan yang berada di Kebun Binatang A merupakan hewan herbivora.",
+    "Menurut para peneliti dari Universitas Haluoleo, hewan herbivora adalah hewan dengan rasa takut yang tinggi.",
+  ]);
+
+  // Question = the "Manakah kesimpulan..." line
+  assert.equal(
+    r[0].question,
+    "Manakah kesimpulan yang paling tepat berdasarkan premis di atas... (TIU CPNS 2024)",
+  );
+  assert.deepEqual(r[0].options, {
+    A: "Hewan yang berada di Kebun Binatang A memiliki rasa takut yang tinggi.",
+    B: "Beberapa hewan herbivora memiliki rasa takut yang tinggi.",
+    C: "Semua hewan herbivora berada di Kebun Binatang A.",
+    D: "Semua hewan dengan rasa takut yang tinggi berada di Kebun Binatang A.",
+    E: "Hewan yang berada di Kebun Binatang A merupakan hewan langka.",
+  });
+  assert.equal(r[0].correct_answer, "A");
+
+  // Content HTML: standard <ol>...<p> shape with both premises + question
+  assert.ok(r[0].content.startsWith("<ol>"));
+  assert.ok(r[0].content.includes("<p>"));
+  assert.ok(
+    r[0].content.includes(
+      "<li>Semua hewan yang berada di Kebun Binatang A merupakan hewan herbivora.</li>",
+    ),
+  );
+  assert.ok(
+    r[0].content.includes(
+      "<li>Menurut para peneliti dari Universitas Haluoleo, hewan herbivora adalah hewan dengan rasa takut yang tinggi.</li>",
+    ),
+  );
+  assert.ok(
+    r[0].content.endsWith(
+      "<p>Manakah kesimpulan yang paling tepat berdasarkan premis di atas... (TIU CPNS 2024)</p>",
+    ),
+  );
+});
+
+// ============================================================================
+// §8.29 Happy path: 2 bare premise lines + NO question (premises-only)
+// ============================================================================
+// Indonesian TIU silogisme pattern where the user types 2 separate
+// bare premise lines followed directly by A-E options, NO question
+// line in between. The conclusion is left implicit — the parser
+// accepts this with an empty question string.
+test("§8.29 happy path: 2 bare premise lines + no question line (implicit-question mode)", () => {
+  const input = [
+    "Semua petani di Desa Sukamaju suka bekerja keras.",
+    "Sebagian petani di Desa Sukamaju adalah pedagang.",
+    "A. Semua petani di Desa Sukamaju adalah pedagang dan suka bekerja keras",
+    "B. Sebagian petani di Desa Sukamaju merupakan pedagang dan suka bekerja keras",
+    "C. Ada pedagang di Desa Sukamaju yang tidak suka bekerja keras",
+    "D. Sebagian petani di Desa Sukamaju adalah pedagang yang tidak suka bekerja keras",
+    "E. Semua petani yang suka bekerja keras berasal dari Desa Sukamaju",
+    "B",
+    "Premis 1: Semua petani di Desa Sukamaju suka bekerja keras. Premis 2: Sebagian petani di Desa Sukamaju adalah pedagang. Kesimpulan yang tepat adalah sebagian petani di Desa Sukamaju merupakan pedagang dan suka bekerja keras.",
+  ].join("\n");
+
+  const r = parseBulkText(input, TYPE);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].status, "valid");
+  assert.deepEqual(r[0].errors, []);
+
+  // 2 separate-line premises + EMPTY question
+  assert.deepEqual(r[0].premises, [
+    "Semua petani di Desa Sukamaju suka bekerja keras.",
+    "Sebagian petani di Desa Sukamaju adalah pedagang.",
+  ]);
+  assert.equal(r[0].question, ""); // implicit
+  assert.deepEqual(r[0].options, {
+    A: "Semua petani di Desa Sukamaju adalah pedagang dan suka bekerja keras",
+    B: "Sebagian petani di Desa Sukamaju merupakan pedagang dan suka bekerja keras",
+    C: "Ada pedagang di Desa Sukamaju yang tidak suka bekerja keras",
+    D: "Sebagian petani di Desa Sukamaju adalah pedagang yang tidak suka bekerja keras",
+    E: "Semua petani yang suka bekerja keras berasal dari Desa Sukamaju",
+  });
+  assert.equal(r[0].correct_answer, "B");
+
+  // Content HTML: <ol>…</ol> ONLY (no <p> since question empty)
+  assert.ok(r[0].content.startsWith("<ol>"));
+  assert.ok(r[0].content.endsWith("</ol>"));
+  assert.ok(!r[0].content.includes("<p>"));
+});
+
+// ============================================================================
+// §8.30 Happy path: premise + premise+question on same line
+// ============================================================================
+// Pattern where line 0 is a single-sentence premise and line 1
+// combines a 2nd premise ("Naruto tidak rajin belajar.") with a
+// question prompt ("Kesimpulannya adalah") joined by ". ". The
+// parser must split line 1, recognize that both the 2nd premise and
+// the question-prompt are present, and treat the latter as the
+// question (matched by the "kesimpulan" cue).
+test("§8.30 happy path: premise + premise+question joined on line 1 (sentence split + kesimpulan cue)", () => {
+  const input = [
+    "Jika Naruto rajin belajar maka dia akan memperoleh Indeks Prestasi yang baik.",
+    "Naruto tidak rajin belajar. Kesimpulannya adalah",
+    "A. Naruto memperoleh Indeks Prestasi yang baik",
+    "B. Naruto memperoleh Indeks Prestasi yang baik walau-pun tidak rajin belajar",
+    "C. Naruto adalah anak yang pintar",
+    "D. Naruto tidak mendapat Indeks Prestasi yang baik",
+    "E. Tidak dapat disimpulkan.",
+    "E",
+    "Premis 1: p -> q (Jika Naruto rajin belajar maka dia akan memperoleh Indeks Prestasi yang baik). Premis 2: ~p (Naruto tidak rajin belajar). Dalam logika formal, bentuk ~p dari p -> q tidak menghasilkan kesimpulan yang valid (Denying the Antecedent), sehingga tidak dapat disimpulkan (TDDS).",
+  ].join("\n");
+
+  const r = parseBulkText(input, TYPE);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].status, "valid");
+
+  // 2 premises (line 0 + the 2nd split-off part of line 1)
+  assert.deepEqual(r[0].premises, [
+    "Jika Naruto rajin belajar maka dia akan memperoleh Indeks Prestasi yang baik.",
+    "Naruto tidak rajin belajar.",
+  ]);
+  // Question = the "Kesimpulannya adalah" portion of line 1
+  assert.equal(r[0].question, "Kesimpulannya adalah");
+  assert.deepEqual(r[0].options, {
+    A: "Naruto memperoleh Indeks Prestasi yang baik",
+    B: "Naruto memperoleh Indeks Prestasi yang baik walau-pun tidak rajin belajar",
+    C: "Naruto adalah anak yang pintar",
+    D: "Naruto tidak mendapat Indeks Prestasi yang baik",
+    E: "Tidak dapat disimpulkan.",
+  });
+  assert.equal(r[0].correct_answer, "E");
+
+  // Content HTML: standard <ol>...<p> shape
+  assert.ok(r[0].content.startsWith("<ol>"));
+  assert.ok(r[0].content.includes("<p>"));
+  assert.ok(
+    r[0].content.endsWith("<p>Kesimpulannya adalah</p>"),
+    `content should end with the question-line <p>; got: ${r[0].content}`,
+  );
+});
+
+// ============================================================================
+// §8.31 Happy path: 3 sentences on 1 line + no question (implicit)
+// ============================================================================
+// Pattern where line 0 contains 3 premise sentences all joined by
+// ". ", followed directly by A-E options with NO question line at
+// all. The parser must:
+//   1. Split line 0 into 3 sentences on ". " (after each sentence)
+//   2. Locate optIdx on the expanded lines (1 → 3 after split)
+//   3. Recognize there is no explicit question (last line
+//      "Goku..." doesn't match any cue)
+//   4. Treat all 3 split sentences as premises with empty question
+test("§8.31 happy path: 3 sentences on one line + no question line (implicit, multi-sentence split)", () => {
+  const input = [
+    "Jika tubuh sehat, maka jiwa akan sehat pula. Jika jiwa sehat, maka proses hidup akan dijalani dengan sehat. Goku memiliki tubuh yang tidak sehat.",
+    "A. Proses hidup Goku dijalani dengan tidak sehat.",
+    "B. Proses hidup Goku dijalani dengan sehat.",
+    "C. Goku memiliki jiwa yang tidak sehat.",
+    "D. Goku memiliki jiwa yang sehat.",
+    "E. Tidak dapat disimpulkan.",
+    "E",
+    "Premis 1: Jika tubuh sehat, maka jiwa akan sehat pula (p -> q). Premis 2: Jika jiwa sehat, maka proses hidup akan dijalani dengan sehat (q -> r). Gabungan P1 & P2: p -> r. Premis 3 menyatakan Goku memiliki tubuh yang tidak sehat (~p). Bentuk ~p dari p -> r tidak menghasilkan kesimpulan yang valid, sehingga tidak dapat disimpulkan (TDDS).",
+  ].join("\n");
+
+  const r = parseBulkText(input, TYPE);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].status, "valid");
+
+  // 3 split premises + empty question
+  assert.deepEqual(r[0].premises, [
+    "Jika tubuh sehat, maka jiwa akan sehat pula.",
+    "Jika jiwa sehat, maka proses hidup akan dijalani dengan sehat.",
+    "Goku memiliki tubuh yang tidak sehat.",
+  ]);
+  assert.equal(r[0].question, ""); // implicit
+  assert.deepEqual(r[0].options, {
+    A: "Proses hidup Goku dijalani dengan tidak sehat.",
+    B: "Proses hidup Goku dijalani dengan sehat.",
+    C: "Goku memiliki jiwa yang tidak sehat.",
+    D: "Goku memiliki jiwa yang sehat.",
+    E: "Tidak dapat disimpulkan.",
+  });
+  assert.equal(r[0].correct_answer, "E");
+
+  // Content HTML: <ol>…</ol> only (no <p>) since question is empty
+  assert.ok(r[0].content.startsWith("<ol>"));
+  assert.ok(r[0].content.endsWith("</ol>"));
+  assert.ok(!r[0].content.includes("<p>"));
+  // All 3 premises appear as <li> entries
+  assert.ok(
+    r[0].content.includes(
+      "<li>Jika tubuh sehat, maka jiwa akan sehat pula.</li>",
+    ),
+  );
+  assert.ok(
+    r[0].content.includes(
+      "<li>Goku memiliki tubuh yang tidak sehat.</li>",
+    ),
+  );
 });
