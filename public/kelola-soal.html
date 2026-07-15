@@ -3,7 +3,8 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-        <title>Kelola Bank Soal</title>
+        <link rel="icon" href="/assets/toskd-emoticon.svg" type="image/svg+xml">
+        <title>TOSKD</title>
         <link rel="stylesheet" href="/css/tokens.css" />
         <link rel="stylesheet" href="/css/styles.css" />
         <script src="/js/theme.js"></script>
@@ -808,12 +809,11 @@ Penerapan nasionalisme dalam pemanfaatan teknologi tercermin dari perilaku mempe
                                 soal dari Bank Soal.
                             </p>
                             <div
-                                id="confirm-pack-impact"
+                                id="confirm-soal-impact"
                                 class="bulk-delete-pack-list"
-                                style="display: none;"
                             >
-                                <strong>⚠️ Soal-soal ini digunakan di paket:</strong>
-                                <ul id="confirm-pack-list"></ul>
+                                <strong>📊 Detail soal yang akan dihapus:</strong>
+                                <ul id="confirm-soal-list"></ul>
                             </div>
                             <p style="color: var(--text-muted); font-size: 0.9rem">
                                 Tindakan ini menghapus soal secara permanen dan
@@ -821,14 +821,6 @@ Penerapan nasionalisme dalam pemanfaatan teknologi tercermin dari perilaku mempe
                                 dibatalkan.
                             </p>
                         </div>
-
-                        <details class="bulk-delete-id-list">
-                            <summary>Lihat daftar ID soal yang akan dihapus</summary>
-                            <div
-                                id="confirm-id-list"
-                                style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted); padding: 8px;"
-                            ></div>
-                        </details>
 
                         <div class="modal-buttons">
                             <button

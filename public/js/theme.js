@@ -55,7 +55,7 @@
 
     const title = document.createElement("a");
     title.className = "global-header-title";
-    title.textContent = "TOSKD CAT";
+    title.textContent = "TOSKD";
     title.href = "/";
 
     let nav = null;

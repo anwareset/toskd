@@ -129,9 +129,7 @@ const bulkDeleteConfirmBtn = document.getElementById("bulk-delete-confirm-btn");
 const bulkDeleteCancelBtn = document.getElementById("bulk-delete-cancel-btn");
 const confirmTotalCountEl = document.getElementById("confirm-total-count");
 const modalConfirmCountEl = document.getElementById("modal-confirm-count");
-const confirmPackImpactEl = document.getElementById("confirm-pack-impact");
-const confirmPackListEl = document.getElementById("confirm-pack-list");
-const confirmIdListEl = document.getElementById("confirm-id-list");
+const confirmSoalListEl = document.getElementById("confirm-soal-list");
 
 let questions = [];
 
@@ -354,6 +352,37 @@ function esc(s) {
   return d.innerHTML;
 }
 
+// getFilteredQuestions() — shared case-insensitive substring filter over
+// the module-level `questions` array, scoped to `q.content` (with HTML
+// tags stripped) OR `q.question_type`. Replaces 5 inline copies that
+// previously duplicated the same 7-line block in: renderTable,
+// updateSelectionUI, the select-all header handler, and the 2 next-page
+// bounds-check handlers (top + bottom bar). Single source of truth so
+// a future tweak to the search surface (e.g., add options.A-E match
+// or add soal id number) changes ONE place, not 5.
+//
+// State inputs are `questions` (cache populated by /api/questions in
+// init() + refreshed on every mutation) and `searchTerm` (module-level,
+// written by the search-input handler). Both are well-defined by the
+// time any caller fires — renderTable only runs from event handlers that
+// mutate AFTER init() has populated `questions`; the search input wires
+// `searchTerm` synchronously inside its handler before the next
+// reapplyView() call.
+//
+// O(N) per call but bounded by user input event rate + question count
+// (~thousands). No memoization — adding a cache would require tracking
+// `questions` mutation (init / add / edit / delete) for invalidation,
+// more complexity than the savings warrant.
+function getFilteredQuestions() {
+  const term = searchTerm.toLowerCase();
+  if (!term) return questions;
+  return questions.filter((q) => {
+    const contentText = (q.content || "").replace(/<[^>]*>/g, "").toLowerCase();
+    const typeText = (q.question_type || "").toLowerCase();
+    return contentText.includes(term) || typeText.includes(term);
+  });
+}
+
 // previewHtmlForCell — imported from public/js/bulk-parser.js via the
 // globalThis.bulkParser side-effect (see <script type="module"
 // src="/js/bulk-parser.js"> in kelola-soal.html). Strip block
@@ -371,12 +400,7 @@ let currentPage = 0;
 let searchTerm = "";
 
 function renderTable() {
-  const filtered = questions.filter((q) => {
-    const contentText = (q.content || "").replace(/<[^>]*>/g, "").toLowerCase();
-    const typeText = (q.question_type || "").toLowerCase();
-    const term = searchTerm.toLowerCase();
-    return contentText.includes(term) || typeText.includes(term);
-  });
+  const filtered = getFilteredQuestions();
 
   const totalPages = Math.ceil(filtered.length / rowsPerPage) || 1;
   if (currentPage >= totalPages) {
@@ -466,16 +490,9 @@ function renderTable() {
 // (cross-page selection tracked via counter pill text per Section 3.1).
 function updateSelectionUI() {
   const total = selectedIds.size;
-  // Compute "on this page" subset using same filter logic as renderTable
-  // (duplicated here intentionally — extracting a shared helper felt like
-  // premature abstraction for a 5-line filter that may evolve independently
-  // per design notes in spec Section 7 R5).
-  const filtered = questions.filter((q) => {
-    const contentText = (q.content || "").replace(/<[^>]*>/g, "").toLowerCase();
-    const typeText = (q.question_type || "").toLowerCase();
-    const term = searchTerm.toLowerCase();
-    return contentText.includes(term) || typeText.includes(term);
-  });
+  // Compute "on this page" subset using the shared getFilteredQuestions()
+  // helper — same surface as renderTable (matches contentText or tipe).
+  const filtered = getFilteredQuestions();
   const start = currentPage * rowsPerPage;
   const pageData = filtered.slice(start, start + rowsPerPage);
   const onThisPage = pageData.filter((q) => selectedIds.has(q.id)).length;
@@ -533,46 +550,54 @@ function setupCheckboxDelegation() {
   });
 }
 
-// ==== Bulk Delete: confirmation modal (per spec Section 4.8) ====
-// Phase 2 (CP3 stub) — opens the dialog with current selectedIds count +
-// (Phase 2) pack impact list. POST /api/questions/bulk-usage pre-fetch
-// is NOT wired here (Phase 2 Step 8 / 10). For now we pass an empty
-// usageMap {} and the modal shows "no pack impact" placeholder. Real
-// Phase 2 will swap this for a fetch + showBulkDeleteConfirmModal call.
+// ==== Bulk Delete: confirmation modal — per-soal detail (Round 6 redesign) ====
+//
+// Per user request: the modal should list each SELECTED soal and the
+// packs it's used in (NOT an aggregated unique-pack list). Format per
+// row (matches the user's stated example):
+//
+//     Soal #<id> tipe <type> digunakan di paket <packs>
+//     Soal #<id> tipe <type> tidak terkait paket manapun
+//
+// Soals are rendered in id-ascending order for determinism (stable
+// across re-opens, matches DB insertion order which the admin user
+// most recently added).
+//
+// The block is now ALWAYS shown when the modal opens (no display:none
+// toggling) — the list always has N rows (one per selected id), even
+// when all are orphan soal. The `bulkDeleteBtn` is `disabled` when
+// `selectedIds.size === 0`, so this modal can't practically be opened
+// with an empty selection; defensively the function renders gracefully
+// with an empty ul in that case.
 function showBulkDeleteConfirmModal(ids, usageMap) {
-  const totalIds = ids.length;
-  confirmTotalCountEl.textContent = totalIds;
-  modalConfirmCountEl.textContent = totalIds;
+  confirmTotalCountEl.textContent = ids.length;
+  modalConfirmCountEl.textContent = ids.length;
 
-  // Aggregate pack impact across all selected ids (dedupe sets).
-  const allImpactedPacks = new Set();
-  for (const id of ids) {
-    const usage = usageMap[id];
-    if (usage?.used && Array.isArray(usage.packs)) {
-      for (const packName of usage.packs) allImpactedPacks.add(packName);
-    }
-  }
+  // Build id → question lookup ONCE so each row's tipe is a constant-
+  // time read instead of an O(N) array scan per soal. The questions
+  // cache is refreshed by init() before bulkDeleteBtn can be used, so
+  // every selected id is guaranteed to be present (or moderately stale
+  // which is acceptable — modal is just informational).
+  const qById = new Map(questions.map((q) => [q.id, q]));
+  // Sort ids ascending by numeric value; Set/Array.from iterates in
+  // insertion order, but id-ascending matches DB insertion order which
+  // is what the user expects.
+  const sortedIds = ids.slice().sort((a, b) => a - b);
 
-  confirmPackListEl.innerHTML = "";
-  if (allImpactedPacks.size > 0) {
-    confirmPackImpactEl.style.display = "block";
-    for (const packName of allImpactedPacks) {
-      const li = document.createElement("li");
-      li.textContent = packName;
-      confirmPackListEl.appendChild(li);
-    }
-  } else {
-    confirmPackImpactEl.style.display = "none";
-  }
+  const rowHtml = sortedIds
+    .map((id) => {
+      const q = qById.get(id);
+      const tipe = q?.question_type || "—";
+      const usage = usageMap[id];
+      const hasPacks =
+        usage?.used && Array.isArray(usage.packs) && usage.packs.length > 0;
+      const packsText = hasPacks ? usage.packs.join(", ") : "tidak terkait paket manapun";
+      const verb = hasPacks ? "digunakan" : "tidak terkait";
+      return `<li>Soal <strong>#${id}</strong> tipe <em>${esc(tipe)}</em> ${verb} di paket <strong>${esc(packsText)}</strong></li>`;
+    })
+    .join("");
 
-  // Collapsible id list — keep modest cap to avoid huge DOM (cap 1000 map).
-  // Phase 2 may want pagination within <details>; for v1 we slice.
-  const MAX_IDS_SHOWN = 1000;
-  const shown = ids.slice(0, MAX_IDS_SHOWN);
-  const suffix = ids.length > MAX_IDS_SHOWN
-    ? ` … (${ids.length - MAX_IDS_SHOWN} more)`
-    : "";
-  confirmIdListEl.textContent = shown.join(", ") + suffix;
+  confirmSoalListEl.innerHTML = rowHtml;
 
   bulkDeleteConfirmModal.showModal();
 }
@@ -611,12 +636,7 @@ document
   });
 
 document.getElementById("next-page-btn-top").addEventListener("click", () => {
-  const filteredCount = questions.filter((q) => {
-    const contentText = (q.content || "").replace(/<[^>]*>/g, "").toLowerCase();
-    const typeText = (q.question_type || "").toLowerCase();
-    const term = searchTerm.toLowerCase();
-    return contentText.includes(term) || typeText.includes(term);
-  }).length;
+  const filteredCount = getFilteredQuestions().length;
   const totalPages = Math.ceil(filteredCount / rowsPerPage) || 1;
   if (currentPage < totalPages - 1) {
     currentPage++;
@@ -627,14 +647,7 @@ document.getElementById("next-page-btn-top").addEventListener("click", () => {
 document
   .getElementById("next-page-btn-bottom")
   .addEventListener("click", () => {
-    const filteredCount = questions.filter((q) => {
-      const contentText = (q.content || "")
-        .replace(/<[^>]*>/g, "")
-        .toLowerCase();
-      const typeText = (q.question_type || "").toLowerCase();
-      const term = searchTerm.toLowerCase();
-      return contentText.includes(term) || typeText.includes(term);
-    }).length;
+    const filteredCount = getFilteredQuestions().length;
     const totalPages = Math.ceil(filteredCount / rowsPerPage) || 1;
     if (currentPage < totalPages - 1) {
       currentPage++;
@@ -663,6 +676,15 @@ async function init() {
   try {
     const res = await wrapFetch("/api/questions");
     questions = await res.json();
+    // Default sort: newest-soal first. Stable by Date comparison;
+    // ties preserve DB order (V8 sort is stable). Re-applied on
+    // every init() so add/delete/refresh keeps newest-at-top invariant.
+    // Falls back to epoch 0 if a row is missing created_at.
+    questions.sort(
+      (a, b) =>
+        new Date(b.created_at || 0).getTime() -
+        new Date(a.created_at || 0).getTime(),
+    );
     loadingEl.style.display = "none";
     tableEl.style.display = "table";
     // Mirror the inert toggle for the wrapper now that the table is
@@ -979,12 +1001,7 @@ setupCheckboxDelegation();
 // Header checkbox: select/deselect all rows on current page only. Other
 // pages retain their selection (counter pill text reflects total + per-page).
 selectAllCheckbox.addEventListener("change", (e) => {
-  const filtered = questions.filter((q) => {
-    const contentText = (q.content || "").replace(/<[^>]*>/g, "").toLowerCase();
-    const typeText = (q.question_type || "").toLowerCase();
-    const term = searchTerm.toLowerCase();
-    return contentText.includes(term) || typeText.includes(term);
-  });
+  const filtered = getFilteredQuestions();
   const start = currentPage * rowsPerPage;
   const pageData = filtered.slice(start, start + rowsPerPage);
   if (e.target.checked) {
@@ -992,7 +1009,16 @@ selectAllCheckbox.addEventListener("change", (e) => {
   } else {
     pageData.forEach((q) => selectedIds.delete(q.id));
   }
-  updateSelectionUI();
+  // Re-render the body so the row checkboxes visually reflect the
+  // updated `selectedIds`. The header checkbox's `checked` state was
+  // already set by the user's click; only the row DOM nodes need to
+  // re-sync. renderTable() ends with updateSelectionUI(), which also
+  // re-asserts the 3-state header from selectedIds (defensive in case
+  // the state machine ever drifts). Without renderTable(), the row
+  // `<input>`s would still appear unchecked even though selectedIds
+  // is correct (the `isSelected` attribute is set in the HTML
+  // template, not on a live DOM node).
+  renderTable();
 });
 
 // Pill × button: clear all selections.

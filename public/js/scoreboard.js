@@ -104,6 +104,15 @@ function reapplyView() {
         return name.includes(term) || pack.includes(term);
       });
 
+  // 1b. Pre-compute stable-id ranking for the No column (spec §4.2).
+  // Each row's No is its 1-based position in the original
+  // /api/scoreboard-all response (allResults). Stays attached across
+  // sort/filter/pagination since allResults never re-orders.
+  // Computed once per reapplyView() call (O(N) construction, O(1) per
+  // pageData lookup); cheaper than per-row indexOf on every render.
+  const rankById = new Map();
+  allResults.forEach((r, i) => rankById.set(r.id, i + 1));
+
   // 2. Sort.
   filteredResults.sort(comparator(sortColumn, sortDir));
 
@@ -119,7 +128,7 @@ function reapplyView() {
   if (filteredResults.length === 0) {
     renderEmpty();
   } else {
-    renderTable();
+    renderTable(rankById);
     renderPaginationBars(totalPages);
     updateSortIndicators();
   }
@@ -140,12 +149,16 @@ function comparator(col, dir) {
   };
 }
 
-function renderTable() {
+function renderTable(rankById) {
   const start = (currentPage - 1) * rowsPerPage;
   const pageData = filteredResults.slice(start, start + rowsPerPage);
   bodyEl.innerHTML = pageData
     .map((r, i) => {
-      const globalIdx = start + i + 1;
+      // Stable id (spec §4.2): row's 1-based position in the original
+      // /api/scoreboard-all response (allResults). Stable across sort /
+      // filter / pagination — sort moves ROWS, not their No. Falls back
+      // to em-dash for missing or corrupted r.id.
+      const globalIdx = rankById.get(r.id) ?? "—";
       const d = new Date(r.created_at).toLocaleDateString("id-ID");
       const sc = r.status === "Lulus PG" ? "status-pass" : "status-fail";
       // Participant name deep-links to the pembahasan review page.
