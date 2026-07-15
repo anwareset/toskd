@@ -122,6 +122,19 @@ let bankRowsPerPage = 10;
 let bankCurrentPage = 0;
 let bankSearchTerm = "";
 
+// tentativeSelections — Set<number> of question IDs the user has ticked
+// for add-to-pack. Outlives each renderBankList()'s innerHTML rewrite so
+// selections persist across page changes, search filter changes, and
+// rows-per-page changes. Reset on full page reload only.
+//
+// Single source of truth for "is this question selected to be added?"
+// across the UI: updateAddButtonLabel reads Set.size; the render template
+// applies `checked` attribute when Set.has(id); addBtn.onclick reads
+// checked = Array.from(Set).filter(availableIds.has). After successful
+// add, the loop's success-count prefixes are deleted from Set so
+// re-render doesn't re-check them.
+let tentativeSelections = new Set();
+
 function esc(s) {
   const d = document.createElement("div");
   d.textContent = s;
@@ -227,7 +240,7 @@ function renderBankList() {
       .map(
         (q) => `
       <label class="option-item" style="cursor:pointer;background:var(--surface);margin-bottom:8px">
-        <input type="checkbox" name="add-q" value="${q.id}">
+        <input type="checkbox" name="add-q" value="${q.id}"${tentativeSelections.has(parseInt(q.id, 10)) ? " checked" : ""}>
         <span class="option-label">
           <strong>[${esc(q.question_type.toUpperCase())}]</strong> ${window.bulkParser.previewHtmlForCell(q.content)}
         </span>
@@ -236,6 +249,7 @@ function renderBankList() {
       )
       .join("");
     typesetMath(bankList);
+    updateAddButtonLabel();
   }
 
   // Show/hide controls
@@ -353,10 +367,98 @@ document.getElementById("bank-search-input").addEventListener("input", (e) => {
   renderBankList();
 });
 
+// ============================================================================
+// updateAddButtonLabel — count-aware button text (spec §4.4). Reads the
+// current count of checked `add-q` checkboxes and rewrites addBtn.textContent.
+// N=0 keeps the default Indonesian label; N>=1 inserts the count.
+// ============================================================================
+function updateAddButtonLabel() {
+  // Read from tentativeSelections (the Set), not live DOM, so the label
+  // reflects the user's TOTAL checked count across ALL pages / filter
+  // states \u2014 not just checkboxes currently rendered.
+  const n = tentativeSelections.size;
+  addBtn.textContent =
+    n === 0
+      ? "Masukkan Soal Terpilih ke Paket"
+      : `Masukkan ${n} Soal Terpilih ke Paket`;
+}
+
+// Delegates a single change listener so check/uncheck between renders is
+// captured. The checkbox DOM nodes are rebuilt by `renderBankList()` so
+// per-node listeners would not survive; a parent-level delegation does.
+// The Set.toggle keeps the source-of-truth in sync with the DOM check
+// state so subsequent renders can re-apply the checked attribute.
+bankList.addEventListener("change", (e) => {
+  if (e.target.matches('input[name="add-q"]')) {
+    const id = parseInt(e.target.value, 10);
+    if (e.target.checked) {
+      tentativeSelections.add(id);
+    } else {
+      tentativeSelections.delete(id);
+    }
+    updateAddButtonLabel();
+  }
+});
+
+// setControlsLocked — lock or unlock every bank-side control during the
+// add-to-pack POST loop (spec §4.6). Reads addBtn.disabled as the single
+// source of truth for "is the panel busy" so drag/removeQ guards share
+// the same state without a parallel flag.
+// `locked=true` ⇒ all bank inputs/selects/buttons + addBtn + saveBtn
+// become disabled; `locked=false` ⇒ re-enable everything (saveBtn only
+// re-enables per its own logic — keep it disabled if user hasn't dragged).
+function setControlsLocked(locked) {
+  bankList.querySelectorAll('input[name="add-q"]').forEach((el) => {
+    el.disabled = locked;
+  });
+  document.getElementById("bank-rows-per-page-top").disabled = locked;
+  document.getElementById("bank-rows-per-page-bottom").disabled = locked;
+  document.getElementById("bank-prev-btn-top").disabled = locked;
+  document.getElementById("bank-prev-btn-bottom").disabled = locked;
+  document.getElementById("bank-next-btn-top").disabled = locked;
+  document.getElementById("bank-next-btn-bottom").disabled = locked;
+  document.getElementById("bank-search-input").disabled = locked;
+  // Cursor focus on disabled inputs is jarring — blur it explicitly.
+  if (locked && document.activeElement === document.getElementById("bank-search-input")) {
+    document.activeElement.blur();
+  }
+  addBtn.disabled = locked;
+  // saveBtn stays disabled after unlock unless pack has drag-reorder
+  // state. We track this cheaply by toggling disabled here and letting
+  // handleDrop + renderLists own the re-enable logic for that button.
+  if (locked) saveBtn.disabled = true;
+}
+
 addBtn.onclick = async () => {
-  const checked = Array.from(
-    bankList.querySelectorAll('input[name="add-q"]:checked'),
-  ).map((el) => parseInt(el.value));
+  // ---- Source-of-truth resolution ----
+  // tentativeSelections is the user's intent (across all pages / filters).
+  // availableIds is the server's authoritative "still addable" list
+  // (already filtered to NOT be in packQuestions + search filter).
+  // Same apply-search logic as renderBankList() to stay consistent.
+  const packIds = new Set(packQuestions.map((q) => q.id));
+  let availableForSubmit = allQuestions.filter((q) => !packIds.has(q.id));
+  if (bankSearchTerm) {
+    const term = bankSearchTerm.toLowerCase();
+    availableForSubmit = availableForSubmit.filter((q) => {
+      const ct = (q.content || "").replace(/<[^>]*>/g, "").toLowerCase();
+      const tt = (q.question_type || "").toLowerCase();
+      return ct.includes(term) || tt.includes(term);
+    });
+  }
+  const availableIds = new Set(availableForSubmit.map((q) => q.id));
+
+  // Drain ghost IDs from tentativeSelections: anything the user had
+  // selected but is no longer available (server-side deletion, race
+  // with another tab, etc.). Without this, the button label would lie
+  // ("Masukkan 5 Soal...") while we actually POST fewer.
+  for (const id of Array.from(tentativeSelections)) {
+    if (!availableIds.has(id)) tentativeSelections.delete(id);
+  }
+  updateAddButtonLabel();
+
+  const checked = Array.from(tentativeSelections).filter((id) =>
+    availableIds.has(id),
+  );
   if (!checked.length) {
     alert("Pilih soal yang ingin dimasukkan!");
     return;
@@ -367,18 +469,76 @@ addBtn.onclick = async () => {
     return;
   }
 
-  for (let i = 0; i < checked.length; i++) {
-    const qNum = packQuestions.length + 1;
-    await wrapFetch(`/api/packs/${packId}/questions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question_id: checked[i], question_number: qNum }),
-    });
+  // Spec §4.5–4.7: full-panel overlay + lock controls + partial-failure
+  // tracking. The synchronous alert() at the end runs AFTER the overlay
+  // is hidden so the user sees the refreshed (or partially-updated)
+  // bank list under the dialog instead of a frozen spinner.
+  const overlay = document.getElementById("loading-add");
+  overlay.style.display = "flex";
+  setControlsLocked(true);
+
+  let successCount = 0;
+  let isSessionOrServerErr = false;
+  let alertMessage = null;
+  try {
+    for (let i = 0; i < checked.length; i++) {
+      const qNum = packQuestions.length + 1;
+      await wrapFetch(`/api/packs/${packId}/questions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question_id: checked[i],
+          question_number: qNum,
+        }),
+      });
+      successCount = i + 1;
+    }
+  } catch (err) {
+    if (
+      err.message === "wrapFetch:SESSION_EXPIRED" ||
+      err.message.startsWith("wrapFetch:SERVER_ERROR_")
+    ) {
+      isSessionOrServerErr = true;
+    } else if (successCount > 0 && successCount < checked.length) {
+      alertMessage = `${successCount} dari ${checked.length} soal berhasil ditambahkan ke paket. Sisanya gagal dan dapat dicoba lagi.`;
+    } else {
+      alertMessage = "Gagal menambahkan soal ke paket.";
+    }
+  } finally {
+    overlay.style.display = "none";
   }
-  init();
+
+  if (isSessionOrServerErr) {
+    // Toast already visible. Just unlock + return (no init, no Set
+    // cleanup — preserve user's full selection for retry).
+    setControlsLocked(false);
+    return;
+  }
+
+  // Cleanup successfully-added IDs from tentativeSelections so the
+  // re-rendered bank list after init() doesn't re-check them.
+  //   - Full success (successCount === checked.length): drop them all.
+  //   - Partial failure (successCount > 0 && < checked.length): drop
+  //     only the first successCount IDs; the rest stay checked so the
+  //     user can re-click add after addressing the failure cause.
+  for (let i = 0; i < successCount; i++) {
+    tentativeSelections.delete(checked[i]);
+  }
+  updateAddButtonLabel();
+
+  await init();
+  setControlsLocked(false);
+
+  if (alertMessage) {
+    alert(alertMessage);
+  } else if (successCount === checked.length) {
+    alert(`${checked.length} soal berhasil ditambahkan ke paket`);
+  }
 };
 
 window.removeQuestion = async (qId) => {
+  // Spec §4.6 — guard against clicks while add-to-pack loop is mid-flight.
+  if (addBtn.disabled) return;
   if (!confirm("Hapus soal ini dari paket?")) return;
   try {
     const res = await wrapFetch(`/api/packs/${packId}/questions/${qId}`, {
@@ -406,6 +566,11 @@ function setupDragAndDrop() {
 }
 
 function handleDragStart(e) {
+  // Spec §4.6 — lock drag-reorder while add-to-pack loop is busy.
+  if (addBtn.disabled) {
+    e.preventDefault();
+    return;
+  }
   this.classList.add("dragging");
   dragSourceEl = this;
   e.dataTransfer.effectAllowed = "move";
@@ -418,6 +583,8 @@ function handleDragOver(e) {
 }
 
 function handleDrop(e) {
+  // Spec §4.6 — defensive guard against drop events firing after lock.
+  if (addBtn.disabled) return;
   if (e.stopPropagation) e.stopPropagation();
   if (dragSourceEl !== this) {
     const srcIdx = parseInt(dragSourceEl.dataset.index);
