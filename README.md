@@ -55,6 +55,8 @@ toskd/
 │   ├── paket-detail.html          # Kelola relasi & urutan soal (Drag & Drop) — protected
 │   ├── login.html                # Halaman login admin (CMS protection)
 │   ├── scoreboard.html           # Papan peringkat peserta (Paging & filter)
+│   ├── assets/
+│   │   └── toskd-emoticon.svg    # Logo SVG (browser tab favicon + global header brand mark)
 │   ├── css/
 │   │   ├── tokens.css            # Design tokens (CSS variables untuk color, spacing, dll)
 │   │   └── styles.css            # CSS Global & Responsive Variables
@@ -68,6 +70,7 @@ toskd/
 │       └── [page].js             # Logic VanillaJS masing-masing halaman
 ├── src/
 │   ├── server.js                 # API Express.js (Vercel Serverless Function)
+│   ├── blob.js                   # Vercel Blob storage helper (signed-token upload/delete)
 │   └── db.js                     # Supabase client connection
 ├── tests/                        # Unit tests (Node built-in test runner)
 │   └── test-bulk-parser.mjs      # 42 unit tests untuk public/js/bulk-parser.js (jalankan: `pnpm test` — atau `node --test tests/test-bulk-parser.mjs` untuk single file)
