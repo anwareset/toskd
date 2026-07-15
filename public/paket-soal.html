@@ -65,6 +65,63 @@
                     </div>
                 </div>
 
+                <!-- Top Pagination & Search Controls
+                     (paket-soal-pagination-spec.md §10.1) -->
+                <div
+                    class="pagination-bar pagination-bar--precise"
+                    id="controls-top"
+                    style="display: none;"
+                >
+                    <div class="pagination-bar-left">
+                        <label
+                            for="rows-per-page-top"
+                            class="pagination-label"
+                            >Tampilkan:</label
+                        >
+                        <select
+                            id="rows-per-page-top"
+                            class="pagination-select"
+                        >
+                            <option value="10" selected>10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                        <span class="pagination-text">baris</span>
+                    </div>
+                    <div class="pagination-bar-center">
+                        <input
+                            type="text"
+                            id="search-input"
+                            class="pagination-search"
+                            placeholder="Cari paket..."
+                            aria-label="Cari paket soal berdasarkan nama"
+                        />
+                    </div>
+                    <div class="pagination-bar-right">
+                        <button
+                            class="btn-secondary pagination-btn"
+                            id="prev-page-btn-top"
+                            type="button"
+                        >
+                            Sebelumnya
+                        </button>
+                        <span
+                            id="page-info-top"
+                            class="pagination-info"
+                            aria-live="polite"
+                            >Halaman 1 dari 1</span
+                        >
+                        <button
+                            class="btn-secondary pagination-btn"
+                            id="next-page-btn-top"
+                            type="button"
+                        >
+                            Selanjutnya
+                        </button>
+                    </div>
+                </div>
+
                 <div id="loading" class="loading-overlay">
                     <div class="spinner"></div>
                 </div>
@@ -73,15 +130,102 @@
                     <thead>
                         <tr>
                             <th>No</th>
-                            <th>Nama Paket</th>
-                            <th>Durasi (Menit)</th>
-                            <th>Passing Grade</th>
-                            <th>Jumlah Soal</th>
+                            <th
+                                class="sortable"
+                                data-sort-column="name"
+                                tabindex="0"
+                                aria-sort="none"
+                            >
+                                Nama Paket<span class="sort-indicator"></span>
+                            </th>
+                            <th
+                                class="sortable"
+                                data-sort-column="duration_minutes"
+                                tabindex="0"
+                                aria-sort="none"
+                            >
+                                Durasi (Menit)<span class="sort-indicator"></span>
+                            </th>
+                            <th
+                                class="sortable"
+                                data-sort-column="passing_grade"
+                                tabindex="0"
+                                aria-sort="none"
+                            >
+                                Passing Grade<span class="sort-indicator"></span>
+                            </th>
+                            <th
+                                class="sortable"
+                                data-sort-column="question_count"
+                                tabindex="0"
+                                aria-sort="none"
+                            >
+                                Jumlah Soal<span class="sort-indicator"></span>
+                            </th>
                             <th>Aksi</th>
                         </tr>
                     </thead>
                     <tbody id="pack-body"></tbody>
                 </table>
+
+                <p
+                    id="empty-msg"
+                    style="
+                        display: none;
+                        color: var(--text-muted);
+                        text-align: center;
+                        padding: 40px;
+                    "
+                ></p>
+
+                <!-- Bottom Pagination Controls (no search input — match
+                     the kelola-soal.html bottom-bar layout, which omits
+                     search and centers rows-per-page + prev/next only).
+                     Spec §10.1 -->
+                <div
+                    class="pagination-bar pagination-bar--bottom pagination-bar--precise"
+                    id="controls-bottom"
+                    style="display: none;"
+                >
+                    <div class="pagination-bar-left">
+                        <label
+                            for="rows-per-page-bottom"
+                            class="pagination-label"
+                            >Tampilkan:</label
+                        >
+                        <select
+                            id="rows-per-page-bottom"
+                            class="pagination-select"
+                        >
+                            <option value="10" selected>10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="pagination-bar-right">
+                        <button
+                            class="btn-secondary pagination-btn"
+                            id="prev-page-btn-bottom"
+                            type="button"
+                        >
+                            Sebelumnya
+                        </button>
+                        <span
+                            id="page-info-bottom"
+                            class="pagination-info"
+                            aria-live="polite"
+                            >Halaman 1 dari 1</span
+                        >
+                        <button
+                            class="btn-secondary pagination-btn"
+                            id="next-page-btn-bottom"
+                            type="button"
+                        >
+                            Selanjutnya
+                        </button>
+                    </div>
+                </div>
 
                 <dialog id="pack-modal" class="modal">
                     <div class="modal-content">

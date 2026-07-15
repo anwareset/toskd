@@ -17,47 +17,130 @@
                         ← Kembali
                     </button>
                 </div>
-                <div
-                    style="
-                        display: flex;
-                        gap: 16px;
-                        align-items: center;
-                        margin-bottom: 20px;
-                        flex-wrap: wrap;
-                    "
-                >
-                    <label style="font-weight: 600">Paket Soal:</label>
-                    <select
-                        id="pack-filter"
-                        class="input-field"
-                        style="width: auto; margin-top: 0"
-                    ></select>
-                    <label style="font-weight: 600">Urutkan:</label>
-                    <select
-                        id="sort-filter"
-                        class="input-field"
-                        style="width: auto; margin-top: 0"
-                    >
-                        <option value="score_desc">Skor (Tertinggi)</option>
-                        <option value="date_desc">Tanggal (Terbaru)</option>
-                    </select>
-                </div>
+
                 <div id="loading" class="loading-overlay">
                     <div class="spinner"></div>
                 </div>
-                <table id="score-table" style="display: none">
+
+                <!--
+                  Top pagination & search controls.
+                  Spec: scoreboard-pagination-spec.md §5.1
+                  Markup parity with kelola-soal.html's top bar:
+                    - Left: rows-per-page dropdown (10/25/50/100)
+                    - Center: search input (replaces the old Paket Soal filter)
+                    - Right: Sebelumnya | Halaman X dari Y | Selanjutnya trio
+                  The class `pagination-bar--precise` triggers CSS Grid 1fr/auto/1fr on
+                  the right cluster (so the page-info sits at the geometric center
+                  of the right cluster) and `order: -1` + `flex-basis: 100%` on the
+                  .pagination-bar-center (so the search rises to its own full-width
+                  row on desktop).
+                -->
+                <div
+                    class="pagination-bar pagination-bar--precise"
+                    id="controls-top"
+                    style="display: none"
+                >
+                    <div class="pagination-bar-left">
+                        <label for="rows-per-page-top" class="pagination-label"
+                            >Tampilkan:</label
+                        >
+                        <select
+                            id="rows-per-page-top"
+                            class="pagination-select"
+                        >
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                        <span class="pagination-text">baris</span>
+                    </div>
+                    <div class="pagination-bar-center">
+                        <input
+                            type="text"
+                            id="search-input"
+                            class="pagination-search"
+                            placeholder="Cari peserta atau paket soal…"
+                            aria-label="Cari peserta atau paket soal"
+                        />
+                    </div>
+                    <div class="pagination-bar-right">
+                        <button
+                            class="btn-secondary pagination-btn"
+                            id="prev-page-btn-top"
+                            type="button"
+                            aria-label="Halaman sebelumnya"
+                        >
+                            Sebelumnya
+                        </button>
+                        <span
+                            id="page-info-top"
+                            class="pagination-info"
+                            aria-live="polite"
+                            >Halaman 1 dari 1</span
+                        >
+                        <button
+                            class="btn-secondary pagination-btn"
+                            id="next-page-btn-top"
+                            type="button"
+                            aria-label="Halaman selanjutnya"
+                        >
+                            Selanjutnya
+                        </button>
+                    </div>
+                </div>
+
+                <table
+                    id="score-table"
+                    class="table-condensed"
+                    style="display: none"
+                >
                     <thead>
                         <tr>
+                            <!--
+                              No column: NOT sortable (per Round 1 — user listed
+                              only 5 sortable headers: Nama, Paket, Skor, Status,
+                              Tanggal). The row number is recomputed by
+                              scoreboard.js as (currentPage - 1) * perPage + i + 1
+                              so numbering continues across pages.
+                            -->
                             <th>No</th>
-                            <th>Nama Peserta</th>
-                            <th>Paket Soal</th>
-                            <th>Skor</th>
-                            <th>Status</th>
-                            <th>Tanggal</th>
+                            <th
+                                class="sortable"
+                                data-sort-column="participant_name"
+                            >
+                                Nama Peserta
+                            </th>
+                            <th
+                                class="sortable"
+                                data-sort-column="question_packs.name"
+                            >
+                                Paket Soal
+                            </th>
+                            <th class="sortable" data-sort-column="score">
+                                Skor
+                            </th>
+                            <th class="sortable" data-sort-column="status">
+                                Status
+                            </th>
+                            <th
+                                class="sortable"
+                                data-sort-column="created_at"
+                            >
+                                Tanggal
+                            </th>
                         </tr>
                     </thead>
                     <tbody id="score-body"></tbody>
                 </table>
+
+                <!--
+                  Empty message placeholder. scoreboard.js sets the textContent
+                  before display:block based on cause:
+                    - allResults.length === 0 → "Belum ada data hasil ujian."
+                    - filteredResults.length === 0 (search yields zero) →
+                      "Tidak ada hasil yang cocok dengan pencarian…"
+                -->
                 <p
                     id="empty-msg"
                     style="
@@ -66,18 +149,61 @@
                         text-align: center;
                         padding: 40px;
                     "
-                >
-                    Belum ada data hasil ujian.
-                </p>
+                ></p>
+
+                <!--
+                  Bottom pagination controls.
+                  Spec: scoreboard-pagination-spec.md §5.3
+                  Same structure as top minus the search row. Synced to the top
+                  dropdown via JS so changing rows-per-page anywhere updates
+                  both dropdowns visually.
+                -->
                 <div
-                    id="pagination"
-                    style="
-                        display: flex;
-                        gap: 8px;
-                        justify-content: center;
-                        margin-top: 20px;
-                    "
-                ></div>
+                    class="pagination-bar pagination-bar--bottom pagination-bar--precise"
+                    id="controls-bottom"
+                    style="display: none"
+                >
+                    <div class="pagination-bar-left">
+                        <label
+                            for="rows-per-page-bottom"
+                            class="pagination-label"
+                            >Tampilkan:</label
+                        >
+                        <select
+                            id="rows-per-page-bottom"
+                            class="pagination-select"
+                        >
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="pagination-bar-right">
+                        <button
+                            class="btn-secondary pagination-btn"
+                            id="prev-page-btn-bottom"
+                            type="button"
+                            aria-label="Halaman sebelumnya"
+                        >
+                            Sebelumnya
+                        </button>
+                        <span
+                            id="page-info-bottom"
+                            class="pagination-info"
+                            aria-live="polite"
+                            >Halaman 1 dari 1</span
+                        >
+                        <button
+                            class="btn-secondary pagination-btn"
+                            id="next-page-btn-bottom"
+                            type="button"
+                            aria-label="Halaman selanjutnya"
+                        >
+                            Selanjutnya
+                        </button>
+                    </div>
+                </div>
             </div>
             <footer class="footer">
                 Untuk latihan SKD · Made with ♥️ in

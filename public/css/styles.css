@@ -2082,3 +2082,82 @@ body.is-drawer-open > *:not(.global-header):not(.global-nav-drawer) {
 .global-nav-drawer-backdrop.is-active {
     display: block;
 }
+
+/* ==== scoreboard.html: sortable header affordances ====
+   Spec: scoreboard-pagination-spec.md §7.
+
+   The 5 sortable <th> cells in #score-table carry `class="sortable"`
+   plus `data-sort-column="..."`. JS handles the click + state. CSS
+   provides:
+     - cursor:pointer so the column reads as clickable
+     - hover bg darkens to var(--border) so active-column-ness is discoverable
+     - focus-visible outline for keyboard navigation
+     - .sort-indicator (▲/▼) glyph rendered by JS gets ~0.85em font + 6px gap
+   Scoping: prefixed with #score-table to avoid colliding with the
+   generic `th` rules earlier in the file (e.g. table headers in
+   bank-soal.html, paket-soal.html). The "No" column does NOT have
+   `sortable` class so this rule does not apply to it.
+*/
+#score-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+#score-table th.sortable:hover {
+    background: var(--border);
+}
+#score-table th.sortable:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+/* ▲/▼ glyph rendered by scoreboard.js into the active sort column.
+   font-size 0.85em + margin-left 6px matches the existing `.pagination-info`
+   small-text idiom in this stylesheet. vertical-align: baseline aligns
+   the arrow bottom with the column label baseline — visually balanced
+   with the spreadsheet-X convention users expect. */
+#score-table th .sort-indicator {
+    font-size: 0.85em;
+    margin-left: 6px;
+    vertical-align: baseline;
+}
+
+/* ==== paket-soal.html: sortable header affordances ====
+   Spec: paket-soal-pagination-spec.md §8.1 / §8.2.
+
+   The 4 sortable <th> cells in #pack-table carry `class="sortable"`
+   plus `data-sort-column="..."` (name / duration_minutes / passing_grade
+   / question_count). JS handles the click + state via delegation on
+   <thead>; CSS provides:
+     - cursor:pointer so the column reads as clickable
+     - user-select:none so multi-click text selection doesn't fight sort
+     - hover bg darkens to var(--border) so active-column-ness is discoverable
+     - focus-visible outline for keyboard (Enter/Space on tabindex="0")
+     - .sort-indicator (▲/▼) glyph rendered by JS gets ~0.85em + 6px gap
+
+   Scoping: prefixed with #pack-table to avoid colliding with the
+   #score-table th.sortable block above and the generic th rules earlier
+   in this file (e.g. table headers in bank-soal.html, scoreboard.html).
+   The "No" and "Aksi" columns do NOT carry `sortable` class, so this
+   rule does not apply to them — they're styled by the generic `th`
+   rule alone.
+
+   Sort indicator baseline alignment matches #score-table for visual
+   consistency between the two sortable pages.
+*/
+#pack-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+#pack-table th.sortable:hover {
+    background: var(--border);
+}
+#pack-table th.sortable:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+#pack-table th .sort-indicator {
+    font-size: 0.85em;
+    margin-left: 6px;
+    vertical-align: baseline;
+}
