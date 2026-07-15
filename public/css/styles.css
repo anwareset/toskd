@@ -318,16 +318,20 @@ body {
 
    Selector `.pagination-bar.pagination-bar--precise` matches BOTH the
    top bar (`#controls-top`) AND the bottom bar (`#controls-bottom`),
-   since both share the `pagination-bar--precise` modifier. The table
-   is matched by its unique id `questions-table`. The page header is
-   matched by its single class `header`.
+   since both share the `pagination-bar--precise` modifier.   The table-scroll-wrapper matches the new `<div class="table-scroll-wrapper">`
+   that wraps every CMS data table on mobile (kelola-soal.html,
+   paket-soal.html, scoreboard.html) per kelola-soal-mobile-table-spec.md.
+   The wrapper itself replaces the former `> #questions-table` selector
+   because the table is no longer a direct child of `.container--wide` —
+   it lives inside the wrapper now. The wrapper inherits the same
+   width-alignment intent as the original selector.
 
    `!important` is used to guarantee override against any inherited or
    future-added max-width / width cap, so the elements visibly extend to
    the same x-coordinates as the global header content above. */
 .container--wide > .header,
 .container--wide > .pagination-bar.pagination-bar--precise,
-.container--wide > #questions-table {
+.container--wide > .table-scroll-wrapper {
     width: 100% !important;
     max-width: none !important;
 }
@@ -2160,4 +2164,70 @@ body.is-drawer-open > *:not(.global-header):not(.global-nav-drawer) {
     font-size: 0.85em;
     margin-left: 6px;
     vertical-align: baseline;
+}
+
+/* ==== CMS tables: horizontal scroll on mobile (≤767 px) ====
+   Spec: kelola-soal-mobile-table-spec.md §10.
+
+   Three tables get the same wrapper treatment:
+     - #questions-table (kelola-soal.html)
+     - #pack-table      (paket-soal.html)
+     - #score-table     (scoreboard.html)
+
+   On phones, the natural table width (~700-800px) exceeds the
+   viewport. The wrapper provides internal horizontal scroll without
+   page-level horizontal overflow. Sticky-left + sticky-right cells
+   keep the action-anchored columns visible while the user scrolls the
+   content area. At desktop widths (≥768 px) the wrapper is inert
+   (no overflow; sticky rules don't apply).
+
+   No JS edits — keyboard a11y (Tab → wrapper, ←/→ arrow scroll)
+   is browser-native via the `tabindex="0"` on the wrapper. */
+
+/* (a) Wrapper behavior — always present, harmless at desktop. */
+.table-scroll-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    /* iOS momentum scroll (deprecated but harmless; no-op on modern Safari) */
+    -webkit-overflow-scrolling: touch;
+}
+/* Wrapper is a focusable landmark (region + tabindex=0 in HTML). Show
+   the focused state with a snug inset outline so keyboard users see
+   WHICH region has focus without it pushing adjacent content outward. */
+.table-scroll-wrapper:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+}
+
+/* (b) Per-page minimum table widths so columns never reflow on mobile.
+   Mobile users always scroll horizontally; desktop users see the
+   normal fit-to-container layout. The min-width only kicks in when
+   the wrapper is narrower than the min — at desktop the container
+   is wide enough that min-width is satisfied trivially. */
+.table-scroll-wrapper #questions-table { min-width: 800px; }
+.table-scroll-wrapper #pack-table      { min-width: 700px; }
+.table-scroll-wrapper #score-table     { min-width: 700px; }
+
+/* (c) Sticky left/right cells ONLY at mobile width. Re-assert the
+   surface background explicitly so sticky cells don't show through
+   to scrolling rows underneath. z-index 2 keeps the sticky cells
+   layered above scrolled content. The darker thead-bg re-assert
+   below restores `--surface-header` on sticky th cells in BOTH
+   themes (light surface ≈ #fff matches surface-header visually, but
+   dark mode surface=#161618 vs surface-header=#20212a — must
+   re-assert explicitly or sticky thead cells appear in the wrong
+   shade). */
+@media (max-width: 767px) {
+    .table-scroll-wrapper .sticky-col-left,
+    .table-scroll-wrapper .sticky-col-right {
+        position: sticky;
+        background: var(--surface);
+        z-index: 2;
+    }
+    .table-scroll-wrapper .sticky-col-left  { left: 0; }
+    .table-scroll-wrapper .sticky-col-right { right: 0; }
+    .table-scroll-wrapper thead .sticky-col-left,
+    .table-scroll-wrapper thead .sticky-col-right {
+        background: var(--surface-header);
+    }
 }

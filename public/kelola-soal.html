@@ -256,29 +256,36 @@
                     </div>
                 </div>
 
-                <table
-                    id="questions-table"
-                    class="table-condensed"
-                    style="display: none"
+                <div
+                    class="table-scroll-wrapper"
+                    role="region"
+                    aria-label="Tabel daftar soal Bank Soal"
+                    tabindex="0"
                 >
-                    <thead>
-                        <tr>
-                            <th class="col-checkbox">
-                                <input
-                                    type="checkbox"
-                                    id="select-all-checkbox"
-                                    aria-label="Pilih semua soal di halaman ini"
-                                >
-                            </th>
-                            <th>No</th>
-                            <th>Konten Soal (Preview)</th>
-                            <th>Tipe Soal</th>
-                            <th>Kunci Jawaban</th>
-                            <th>Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody id="questions-body"></tbody>
-                </table>
+                    <table
+                        id="questions-table"
+                        class="table-condensed"
+                        style="display: none"
+                    >
+                        <thead>
+                            <tr>
+                                <th class="col-checkbox sticky-col-left">
+                                    <input
+                                        type="checkbox"
+                                        id="select-all-checkbox"
+                                        aria-label="Pilih semua soal di halaman ini"
+                                    >
+                                </th>
+                                <th>No</th>
+                                <th>Konten Soal (Preview)</th>
+                                <th>Tipe Soal</th>
+                                <th>Kunci Jawaban</th>
+                                <th class="sticky-col-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="questions-body"></tbody>
+                    </table>
+                </div>
 
                 <!-- Bottom Pagination Controls (refactored) -->
                 <div

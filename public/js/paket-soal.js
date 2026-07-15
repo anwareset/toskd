@@ -261,12 +261,12 @@ function renderBody(pageData, startIdx) {
       const count = state.countsById[p.id];
       return `
         <tr>
-          <td>${startIdx + i + 1}</td>
+          <td class="sticky-col-left">${startIdx + i + 1}</td>
           <td title="${esc(p.name)}">${esc(p.name)}</td>
           <td>${p.duration_minutes} Menit</td>
           <td>${p.passing_grade}</td>
           <td>${count ?? 0} Soal</td>
-          <td>
+          <td class="sticky-col-right">
             <button class="btn-secondary" onclick="editPack(${p.id})">Edit</button>
             <button class="btn-primary" onclick="location.href='/paket-detail.html?packId=${p.id}'">Lihat Soal</button>
             <button class="btn-danger" onclick="deletePack(${p.id})">Hapus</button>
@@ -309,6 +309,9 @@ function updateEmptyState(total, query) {
   }
   emptyMsgEl.style.display = "block";
   tableEl.style.display = "none";
+  // Wrapper is tab-indexed (region) — opt it out of focus + a11y tree
+  // whenever its inner table is hidden. (See spec §6 + a11y audit.)
+  tableEl.closest(".table-scroll-wrapper")?.toggleAttribute("inert", true);
 
   // state.packs.length === 0 means the server returned no packs at all.
   // (If state.packs has rows but filtered is empty, the user is searching.)
@@ -354,6 +357,7 @@ function updateSortIndicators() {
 async function init() {
   loadingEl.style.display = "flex";
   tableEl.style.display = "none";
+  tableEl.closest(".table-scroll-wrapper")?.toggleAttribute("inert", true);
   controlsTopEl.style.display = "none";
   controlsBottomEl.style.display = "none";
   emptyMsgEl.style.display = "none";
@@ -395,6 +399,8 @@ async function init() {
 
     loadingEl.style.display = "none";
     tableEl.style.display = "table";
+    // Wrapper becomes focusable again now that the table is visible.
+    tableEl.closest(".table-scroll-wrapper")?.toggleAttribute("inert", false);
     reapplyView();
   } catch (e) {
     if (

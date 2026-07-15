@@ -57,6 +57,9 @@ const DEFAULT_DIR = {
 async function init() {
   loadingEl.style.display = "flex";
   tableEl.style.display = "none";
+  // Wrapper is tab-indexed (region) — opt out of focus + a11y tree while
+  // the inner table is hidden. (See spec §6 + a11y audit.)
+  tableEl.closest(".table-scroll-wrapper")?.toggleAttribute("inert", true);
   emptyEl.style.display = "none";
   controlsTopEl.style.display = "none";
   controlsBottomEl.style.display = "none";
@@ -151,11 +154,15 @@ function renderTable() {
       const nameCell = r.id
         ? `<a class="participant-link" href="/review.html?id=${encodeURIComponent(r.id)}" title="Lihat pembahasan untuk ${esc(r.participant_name)}">${esc(r.participant_name)}</a>`
         : esc(r.participant_name);
-      return `<tr><td>${globalIdx}</td><td>${nameCell}</td><td>${esc(r.question_packs?.name || "-")}</td><td>${r.score}</td><td class="${sc}">${r.status}</td><td>${d}</td></tr>`;
+      // Spec: kelola-soal-mobile-table-spec §6.2 — sticky-left on the No
+      // column only (scoreboard has no Aksi column → no sticky-right).
+      return `<tr><td class="sticky-col-left">${globalIdx}</td><td>${nameCell}</td><td>${esc(r.question_packs?.name || "-")}</td><td>${r.score}</td><td class="${sc}">${r.status}</td><td>${d}</td></tr>`;
     })
     .join("");
 
   tableEl.style.display = "table";
+  // Remove `inert` now that the table is renderable.
+  tableEl.closest(".table-scroll-wrapper")?.toggleAttribute("inert", false);
   controlsTopEl.style.display = "flex";
   controlsBottomEl.style.display = "flex";
   emptyEl.style.display = "none";
@@ -168,6 +175,7 @@ function renderEmpty() {
     ? "Belum ada data hasil ujian."
     : "Tidak ada hasil yang cocok dengan pencarian…";
   tableEl.style.display = "none";
+  tableEl.closest(".table-scroll-wrapper")?.toggleAttribute("inert", true);
   emptyEl.style.display = "block";
   controlsTopEl.style.display = "none";
   controlsBottomEl.style.display = "none";

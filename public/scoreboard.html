@@ -90,49 +90,58 @@
                     </div>
                 </div>
 
-                <table
-                    id="score-table"
-                    class="table-condensed"
-                    style="display: none"
+                <div
+                    class="table-scroll-wrapper"
+                    role="region"
+                    aria-label="Tabel scoreboard hasil ujian"
+                    tabindex="0"
                 >
-                    <thead>
-                        <tr>
-                            <!--
-                              No column: NOT sortable (per Round 1 — user listed
-                              only 5 sortable headers: Nama, Paket, Skor, Status,
-                              Tanggal). The row number is recomputed by
-                              scoreboard.js as (currentPage - 1) * perPage + i + 1
-                              so numbering continues across pages.
-                            -->
-                            <th>No</th>
-                            <th
-                                class="sortable"
-                                data-sort-column="participant_name"
-                            >
-                                Nama Peserta
-                            </th>
-                            <th
-                                class="sortable"
-                                data-sort-column="question_packs.name"
-                            >
-                                Paket Soal
-                            </th>
-                            <th class="sortable" data-sort-column="score">
-                                Skor
-                            </th>
-                            <th class="sortable" data-sort-column="status">
-                                Status
-                            </th>
-                            <th
-                                class="sortable"
-                                data-sort-column="created_at"
-                            >
-                                Tanggal
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody id="score-body"></tbody>
-                </table>
+                    <table
+                        id="score-table"
+                        class="table-condensed"
+                        style="display: none"
+                    >
+                        <thead>
+                            <tr>
+                                <!--
+                                  No column: NOT sortable (per Round 1 — user listed
+                                  only 5 sortable headers: Nama, Paket, Skor, Status,
+                                  Tanggal). The row number is recomputed by
+                                  scoreboard.js as (currentPage - 1) * perPage + i + 1
+                                  so numbering continues across pages. Marked
+                                  sticky-col-left so the visual row index stays
+                                  pinned on mobile (kelola-soal-mobile-table-spec §6.2).
+                                -->
+                                <th class="sticky-col-left">No</th>
+                                <th
+                                    class="sortable"
+                                    data-sort-column="participant_name"
+                                >
+                                    Nama Peserta
+                                </th>
+                                <th
+                                    class="sortable"
+                                    data-sort-column="question_packs.name"
+                                >
+                                    Paket Soal
+                                </th>
+                                <th class="sortable" data-sort-column="score">
+                                    Skor
+                                </th>
+                                <th class="sortable" data-sort-column="status">
+                                    Status
+                                </th>
+                                <th
+                                    class="sortable"
+                                    data-sort-column="created_at"
+                                >
+                                    Tanggal
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="score-body"></tbody>
+                    </table>
+                </div>
 
                 <!--
                   Empty message placeholder. scoreboard.js sets the textContent

@@ -126,47 +126,54 @@
                     <div class="spinner"></div>
                 </div>
 
-                <table id="pack-table" class="table-condensed" style="display: none">
-                    <thead>
-                        <tr>
-                            <th>No</th>
-                            <th
-                                class="sortable"
-                                data-sort-column="name"
-                                tabindex="0"
-                                aria-sort="none"
-                            >
-                                Nama Paket<span class="sort-indicator"></span>
-                            </th>
-                            <th
-                                class="sortable"
-                                data-sort-column="duration_minutes"
-                                tabindex="0"
-                                aria-sort="none"
-                            >
-                                Durasi (Menit)<span class="sort-indicator"></span>
-                            </th>
-                            <th
-                                class="sortable"
-                                data-sort-column="passing_grade"
-                                tabindex="0"
-                                aria-sort="none"
-                            >
-                                Passing Grade<span class="sort-indicator"></span>
-                            </th>
-                            <th
-                                class="sortable"
-                                data-sort-column="question_count"
-                                tabindex="0"
-                                aria-sort="none"
-                            >
-                                Jumlah Soal<span class="sort-indicator"></span>
-                            </th>
-                            <th>Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pack-body"></tbody>
-                </table>
+                <div
+                    class="table-scroll-wrapper"
+                    role="region"
+                    aria-label="Tabel daftar paket soal"
+                    tabindex="0"
+                >
+                    <table id="pack-table" class="table-condensed" style="display: none">
+                        <thead>
+                            <tr>
+                                <th class="sticky-col-left">No</th>
+                                <th
+                                    class="sortable"
+                                    data-sort-column="name"
+                                    tabindex="0"
+                                    aria-sort="none"
+                                >
+                                    Nama Paket<span class="sort-indicator"></span>
+                                </th>
+                                <th
+                                    class="sortable"
+                                    data-sort-column="duration_minutes"
+                                    tabindex="0"
+                                    aria-sort="none"
+                                >
+                                    Durasi (Menit)<span class="sort-indicator"></span>
+                                </th>
+                                <th
+                                    class="sortable"
+                                    data-sort-column="passing_grade"
+                                    tabindex="0"
+                                    aria-sort="none"
+                                >
+                                    Passing Grade<span class="sort-indicator"></span>
+                                </th>
+                                <th
+                                    class="sortable"
+                                    data-sort-column="question_count"
+                                    tabindex="0"
+                                    aria-sort="none"
+                                >
+                                    Jumlah Soal<span class="sort-indicator"></span>
+                                </th>
+                                <th class="sticky-col-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pack-body"></tbody>
+                    </table>
+                </div>
 
                 <p
                     id="empty-msg"

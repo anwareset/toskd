@@ -404,10 +404,9 @@ function renderTable() {
   const pageData = filtered.slice(start, start + rowsPerPage);  bodyEl.innerHTML = pageData
     .map((q, idx) => {
       const globalIdx = start + idx + 1;
-      const isSelected = selectedIds.has(q.id);
-      return `
+      const isSelected = selectedIds.has(q.id);      return `
         <tr>
-          <td class="col-checkbox">
+          <td class="col-checkbox sticky-col-left">
             <input type="checkbox"
                    class="row-checkbox"
                    data-id="${q.id}"
@@ -418,10 +417,11 @@ function renderTable() {
           <td>${window.bulkParser.previewHtmlForCell(q.content)}</td>
           <td><strong>${esc(q.question_type || "text")}</strong></td>
           <td><span class="btn-success" style="padding:2px 8px;border-radius:4px;font-size:0.8rem">${q.correct_answer}</span></td>
-          <td>
+          <td class="sticky-col-right">
             <button class="btn-secondary" onclick="editQuestion(${q.id})">Edit</button>
             <button class="btn-danger" onclick="deleteQuestion(${q.id})">Hapus</button>
-          </td>        </tr>
+          </td>
+        </tr>
     `;
     })
     .join("");
@@ -652,6 +652,11 @@ document.getElementById("search-input").addEventListener("input", (e) => {
 async function init() {
   loadingEl.style.display = "flex";
   tableEl.style.display = "none";
+  // Wrapper is tab-indexed (region) and stays focusable if its inner table
+  // is hidden. Use `inert` to opt the wrapper out of the focus order AND
+  // the a11y tree while the table is hidden. (Fix from code-review of
+  // kelola-soal-mobile-table-spec implementation.)
+  tableEl.closest(".table-scroll-wrapper")?.toggleAttribute("inert", true);
   document.getElementById("controls-top").style.display = "none";
   document.getElementById("controls-bottom").style.display = "none";
 
@@ -660,6 +665,9 @@ async function init() {
     questions = await res.json();
     loadingEl.style.display = "none";
     tableEl.style.display = "table";
+    // Mirror the inert toggle for the wrapper now that the table is
+    // visible. (See init() comment above for rationale.)
+    tableEl.closest(".table-scroll-wrapper")?.toggleAttribute("inert", false);
 
     renderTable();  } catch (e) {
     if (e.message === "wrapFetch:SESSION_EXPIRED" || e.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
