@@ -106,14 +106,35 @@ body.is-drawer-open .global-header {
 }
 /* ==== Theme toggle button (Rev. 0.8h: minimalist toggle switch) ==== */
 /* Standard "toggle switch" pattern from Material Design / iOS HIG:
-   - Pill-shaped track (hardcoded dark #11181c, always dark per user request)
-   - White circular thumb that slides left/right via CSS transform
-   - Thumb position indicates state: left = light mode, right = dark mode
+   - Pill-shaped track + circular thumb, both theme-aware (per current
+     data-theme). Per user request 2026-07-16, the toggle reflects the
+     active theme — no longer a constant-dark track.
+   - Light mode : WHITE track (#ffffff) + INDIGO thumb (#3e63dd)
+   - Dark mode  : DARK track (#11181c) + WHITE thumb (#ffffff)
+   - Thumb slides left/right via CSS transform to indicate state
+     (left = light mode, right = dark mode) — BOTH the position AND the
+     palette swap together
    - Uses ARIA role="switch" + aria-checked for accessibility (set in theme.js)
-   - The [data-theme="dark"] on documentElement drives the thumb position
+   - The [data-theme="dark"] on documentElement drives colors + thumb position
    - No text — the visual thumb position is the state indicator
    - No :hover background change (per iOS HIG: cursor: pointer is enough
-     feedback; changing track color would conflict with toggle semantics) */
+     feedback; changing track color would conflict with toggle semantics)
+
+   These base rules apply uniformly to BOTH the header toggle (desktop +
+   mobile right-group stack) AND the in-drawer toggle (mobile drawer
+   widget) — the former `.global-nav-drawer .theme-toggle-btn { … }`
+   color overrides were removed so both locations share identical
+   theme-driven colors.
+
+   REVERT NOTE 2026-07-16: a tokens.css swap (var(--surface) /
+   var(--text) / var(--primary)) was tried here but the user reverted
+   it — in dark mode `--text` resolves to `#ecedee` and `--surface` to
+   `#161618`, which made the toggle visually invert (light track +
+   near-black thumb) and didn't match expectations. Keeping explicit
+   hex literals so dark-mode colors stay exactly #11181c + #ffffff.
+   If palette centralization is wanted later, introduce dedicated
+   toggle-specific tokens in tokens.css (e.g. --toggle-track-dark)
+   rather than wire the toggle to --text / --surface. */
 .theme-toggle-btn {
     position: relative;
     width: 44px;
@@ -121,8 +142,14 @@ body.is-drawer-open .global-header {
     padding: 0;
     border: none;
     border-radius: 12px; /* pill = height / 2 */
-    background: #11181c; /* dark track (always dark, slate-12) */
+    /* Light-mode defaults. [data-theme="dark"] overrides below flip them. */
+    background: #ffffff;
     cursor: pointer;
+    /* Animate track color so the theme toggle feels synchronized with
+       the thumb's existing transform animation. Same easing + duration
+       as the ::after transition so color and slide move in unison.
+       Per user request 2026-07-16. */
+    transition: background-color 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
 }
 .theme-toggle-btn::after {
     content: "";
@@ -132,11 +159,21 @@ body.is-drawer-open .global-header {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: white;
+    background: #3e63dd; /* indigo thumb on white track (light mode) */
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-    transition: transform 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
+    /* Animate BOTH the thumb slide AND its color so the thumb's
+       position + icon-color change move together (per user request
+       2026-07-16). Same easing + duration as the track transition. */
+    transition: transform 0.25s cubic-bezier(0.4, 0.0, 0.2, 1),
+        background-color 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+/* Dark mode: track flips to slate-12, thumb flips to white, AND thumb
+   slides to the right to indicate the active state. */
+[data-theme="dark"] .theme-toggle-btn {
+    background: #11181c;
 }
 [data-theme="dark"] .theme-toggle-btn::after {
+    background: #ffffff;
     transform: translateX(20px); /* slide to right (active/dark mode) */
 }
 
@@ -1942,16 +1979,16 @@ tbody tr:hover {
     color: var(--on-primary);
 }
 
-/* 4. Toggle inside drawer: WHITE track + INDIGO thumb. align-self
-   center retained from round-2. */
+/* 4. Toggle inside drawer: alignment only — track + thumb colors come
+   from the base .theme-toggle-btn rules above (theme-aware hex literals:
+   dark = #11181c / #ffffff, light = #ffffff / #3e63dd). The earlier
+   "always white track + always indigo thumb" overrides were removed per
+   the user's request 2026-07-16 that the header and drawer toggles share
+   identical theme-driven colors. A brief tokens.css swap was tried
+   later the same day and reverted (see REVERT NOTE in the base rule
+   comment above). align-self center retained from round-2. */
 .global-nav-drawer .drawer-widgets .theme-toggle-btn {
     align-self: center;
-}
-.global-nav-drawer .theme-toggle-btn {
-    background: var(--on-primary);
-}
-.global-nav-drawer .theme-toggle-btn::after {
-    background: var(--primary);
 }
 
 /* ==== Phase 2 bug-fix round 3 follow-up (2026-07-14) ====

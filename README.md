@@ -61,13 +61,17 @@ toskd/
 │   │   ├── tokens.css            # Design tokens (CSS variables untuk color, spacing, dll)
 │   │   └── styles.css            # CSS Global & Responsive Variables
 │   └── js/
-│       ├── theme.js              # Theme manager & dynamic global header injector (auto-inject di semua page)
-│       ├── login.js              # Login form handler (POST /api/admin/login, redirect ke ?next=)
-│       ├── kelola-soal.js        # Quill.js editor + image upload integration + bulk add modal
-│       ├── paket-soal.js         # Pack CRUD + table render
-│       ├── paket-detail.js       # Pack soal relasi + bank list (drag & drop)
-│       ├── bulk-parser.js        # ESM parser: bulk-add (premise/lead-in/options/key) + previewHtmlForCell helper
-│       └── [page].js             # Logic VanillaJS masing-masing halaman
+│       ├── theme.js              # Theme manager + dynamic global header injector (auto-inject di semua page, kecuali exam/review)
+│       ├── main.js               # Halaman index (landing — navigasi utama: Mulai Ujian, Bank Soal, Scoreboard)
+│       ├── select-pack.js        # Halaman Pilih Paket — listing paket + validasi 1–35 soal + modal nama peserta
+│       ├── exam.js               # Halaman ujian — timer persist (wall-clock + sid + multi-tab sync) + answer grid (hijau/merah)
+│       ├── review.js             # Halaman pembahasan — skor + status Lulus/Tidak + per-soal pembahasan (benar/salah)
+│       ├── scoreboard.js         # Halaman scoreboard — pagination + sortable headers + search filter (sticky-left No column)
+│       ├── login.js              # Login admin form handler (POST /api/admin/login, redirect ke ?next=, auto-fill username dari cookie session)
+│       ├── kelola-soal.js        # Kelola bank soal: CRUD + Quill.js editor (full toolbar) + image upload ke Vercel Blob + bulk-add modal
+│       ├── paket-soal.js         # Kelola paket soal: CRUD + passing grade + duration + table render (sortable + pagination)
+│       ├── paket-detail.js       # Relasi soal ↔ paket: drag-and-drop reorder + tentative selection + partial-failure add-to-pack
+│       └── bulk-parser.js        # ESM parser untuk bulk-add soal format v2 (premise list + lead-in + options A–E + key) + previewHtmlForCell helper
 ├── src/
 │   ├── server.js                 # API Express.js (Vercel Serverless Function)
 │   ├── blob.js                   # Vercel Blob storage helper (signed-token upload/delete)
