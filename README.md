@@ -50,7 +50,7 @@ toskd/
 │   ├── exam.html                 # Halaman ujian (real-time timer & grid lembar jawaban)
 │   ├── review.html               # Halaman hasil & pembahasan soal lengkap
 │   ├── bank-soal.html             # Menu CMS (Kelola Paket Soal, Kelola Soal) — protected
-│   ├── paket-soal.html            # Kelola paket soal (CRUD) — protected
+│   ├── paket-soal.html            # Kelola paket soal (CRUD) - protected
 │   ├── kelola-soal.html           # Kelola bank soal (CRUD + Quill.js editor) — protected
 │   ├── paket-detail.html          # Kelola relasi & urutan soal (Drag & Drop) — protected
 │   ├── login.html                # Halaman login admin (CMS protection)
@@ -62,11 +62,11 @@ toskd/
 │   │   └── styles.css            # CSS Global & Responsive Variables
 │   └── js/
 │       ├── theme.js              # Theme manager + dynamic global header injector (auto-inject di semua page, kecuali exam/review)
-│       ├── main.js               # Halaman index (landing — navigasi utama: Mulai Ujian, Bank Soal, Scoreboard)
-│       ├── select-pack.js        # Halaman Pilih Paket — listing paket + validasi 1–35 soal + modal nama peserta
-│       ├── exam.js               # Halaman ujian — timer persist (wall-clock + sid + multi-tab sync) + answer grid (hijau/merah)
-│       ├── review.js             # Halaman pembahasan — skor + status Lulus/Tidak + per-soal pembahasan (benar/salah)
-│       ├── scoreboard.js         # Halaman scoreboard — pagination + sortable headers + search filter (sticky-left No column)
+│       ├── main.js               # Halaman index (landing - navigasi utama: Mulai Ujian, Bank Soal, Scoreboard)
+│       ├── select-pack.js        # Halaman Pilih Paket - listing paket + validasi 1–35 soal + modal nama peserta
+│       ├── exam.js               # Halaman ujian - timer persist (wall-clock + sid + multi-tab sync) + answer grid (hijau/merah)
+│       ├── review.js             # Halaman pembahasan - skor + status Lulus/Tidak + per-soal pembahasan (benar/salah)
+│       ├── scoreboard.js         # Halaman scoreboard - pagination + sortable headers + search filter (sticky-left No column)
 │       ├── login.js              # Login admin form handler (POST /api/admin/login, redirect ke ?next=, auto-fill username dari cookie session)
 │       ├── kelola-soal.js        # Kelola bank soal: CRUD + Quill.js editor (full toolbar) + image upload ke Vercel Blob + bulk-add modal
 │       ├── paket-soal.js         # Kelola paket soal: CRUD + passing grade + duration + table render (sortable + pagination)
@@ -77,7 +77,7 @@ toskd/
 │   ├── blob.js                   # Vercel Blob storage helper (signed-token upload/delete)
 │   └── db.js                     # Supabase client connection
 ├── tests/                        # Unit tests (Node built-in test runner)
-│   └── test-bulk-parser.mjs      # 42 unit tests untuk public/js/bulk-parser.js (jalankan: `pnpm test` — atau `node --test tests/test-bulk-parser.mjs` untuk single file)
+│   └── test-bulk-parser.mjs      # 42 unit tests untuk public/js/bulk-parser.js (jalankan: `pnpm test` atau `node --test tests/test-bulk-parser.mjs` untuk single file)
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins)
 ├── vercel.json                   # Konfigurasi routing Vercel
 └── package.json
@@ -137,7 +137,7 @@ BOOTSTRAP_ADMIN_USERNAME=admin                                  # Opsional: untu
 BOOTSTRAP_ADMIN_PASSWORD=<strong-password>                      # Opsional: akan di-hash bcrypt lalu di-insert
 ```
 
-**Catatan `BOOTSTRAP_ADMIN_*`**: env var ini dibaca sekali di cold-start. Jika tabel `admins` kosong, server akan otomatis hash password (bcrypt cost 10) dan insert admin pertama. **PENTING: DELETE kedua env var ini dari Vercel dashboard setelah admin pertama berhasil login** — server log warning setiap cold-start kalau masih ada (plaintext password leak risk).
+**Catatan `BOOTSTRAP_ADMIN_*`**: env var ini dibaca sekali di cold-start. Jika tabel `admins` kosong, server akan otomatis hash password (bcrypt cost 10) dan insert admin pertama. **PENTING: DELETE kedua env var ini dari Vercel dashboard setelah admin pertama berhasil login**. Server log warning setiap cold-start kalau masih ada (plaintext password leak risk).
 
 ### 4. Setup Database
 
@@ -175,7 +175,7 @@ Semua endpoint didefinisikan di `src/server.js` (Express.js, di-deploy sebagai V
 | GET | `/api/questions` | Daftar semua soal |
 | POST | `/api/questions` | Tambah soal baru (dengan optional upload gambar inline ke Vercel Blob) |
 | POST | `/api/questions/bulk` | Bulk tambah banyak soal (max 500 per request, atomic via PostgREST single transaction) |
-| POST | `/api/questions/bulk-usage` | Pre-check pack usage untuk banyak soal sekaligus. **Body:** `{ ids: [1..1000] }`. **Returns:** `Record<idStr, { used, packs }>`. Single round-trip via PostgREST `IN` query — bukan loop per-id. |
+| POST | `/api/questions/bulk-usage` | Pre-check pack usage untuk banyak soal sekaligus. **Body:** `{ ids: [1..1000] }`. **Returns:** `Record<idStr, { used, packs }>`. Single round-trip via PostgREST `IN` query - bukan loop per-id. |
 | POST | `/api/questions/bulk-delete` | Bulk delete dengan **best-effort per-id semantics** (bukan atomic). **Body:** `{ ids: [1..1000] }`. **Returns:** `{ deleted: [ids], failed: [{ id, reason }] }` untuk partial-failure reporting. |
 | PUT | `/api/questions/:id` | Update soal (dengan optional image upload) |
 | DELETE | `/api/questions/:id` | Hapus soal (auto-unlink dari `pack_questions` via FK CASCADE) |
