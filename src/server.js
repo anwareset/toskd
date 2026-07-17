@@ -300,13 +300,104 @@ PROTECTED_HTML_ROUTES.forEach((filename) => {
   app.get(`/${filename}`, requireAdmin, (req, res) => {
     res.sendFile(join(PUBLIC_DIR, filename));
   });
-});
-
-// ============================================
+});// ============================================
 // END ADMIN AUTH
 // ============================================
 
-// --- API Endpoints (existing, unprotected for now) ---
+// ============================================
+// TKP SCORING (specs/tkp-scoring-spec.md §6 / §10)
+// ============================================
+// Server-authoritative scoring for TKP items uses per-option bobot
+// from `option_scores` (admin-set per-question via single-question
+// modal or via `Bobot:` line in bulk-parser, see §9.2). Non-TKP items
+// keep the original binary scoring (correct=5, incorrect=0).
+
+// Single source of truth for "is this question a TKP one?". Mirrors
+// the client-side `isTkpType()` helper in kelola-soal.js. Keeps the
+// server's branch logic identical to the client's.
+function isTkp(question) {
+  return (
+    typeof question?.question_type === "string" &&
+    question.question_type.toUpperCase().startsWith("TKP")
+  );
+}
+
+// Per-soal score (mirror §6.1). Returns a numeric contribution that
+// `computePackScore` sums across all questions in a pack.
+//   - TWK/TIU (binary): upperAns === q.correct_answer ? 5 : 0
+//   - TKP (weighted): option_scores[upperAns] ?? 0
+//   - TKP without answer: 0
+//   - Legacy migration safety (§11.2): TKP rows with NULL or empty
+//     option_scores are scored as binary (correct=5, incorrect=0) so
+//     existing results remain valid until admin fills bobot per-question.
+//     Without this fallback, legacy TKP rows would silently regress to
+//     0 every time their containing pack is re-submitted.
+//
+// Defensive normalizations (these mirror the V1-V4 server validation that
+// runs on POST/PUT — they handle malformed-but-already-persisted rows):
+//   - `ans` uppercased ONCE at the top so the equality branches AND the
+//     TKP lookup share the same invariant (option_scores keys are
+//     uppercase, correct_answer is uppercase; we never rely on the
+//     caller's case).
+//   - `q.option_scores` checked for null AND empty-shape (defence for any
+//     legacy rows where shape validation was bypassed).
+function scoreForQuestion(q, ans) {
+  const upperAns =
+    typeof ans === "string" ? ans.toUpperCase().trim() : ans;
+  if (!isTkp(q)) {
+    return upperAns && upperAns === q.correct_answer ? 5 : 0;
+  }
+  if (
+    q.option_scores == null ||
+    typeof q.option_scores !== "object" ||
+    Object.keys(q.option_scores).length === 0
+  ) {
+    return upperAns && upperAns === q.correct_answer ? 5 : 0;
+  }
+  if (!upperAns) return 0;
+  // ?? (not ||) to match spec §6.1 verbatim; lets a malformed legacy
+  // row's NaN propagate instead of silently masking it (operator sees
+  // the bug, not a misleading 0).
+  return Number(q.option_scores[upperAns] ?? 0);
+}
+
+// V1-V4 server-side validation (mirror §10). Returns null on success,
+// or { error } suitable for a 400 response shape.
+//   - strict=true  → V1 enforce: TKP rows MUST have option_scores
+//                    (used by single-question POST/PUT where admin
+//                    explicitly committed a value).
+//   - strict=false → V1 relaxed for bulk-import: TKP rows with null
+//                    option_scores are allowed through; admin fills
+//                    bobot later via the single-question modal.
+function validateOptionScores(questionType, optionScores, { strict = true } = {}) {
+  if (!isTkp({ question_type: questionType })) {
+    return null; // V5 relaxed: non-TKP option_scores is inert
+  }
+  if (optionScores === null || optionScores === undefined) {
+    return strict ? { error: "tkp scores required" } : null;
+  }
+  if (
+    typeof optionScores !== "object" ||
+    Array.isArray(optionScores)
+  ) {
+    return { error: "tkp scores shape" };
+  }
+  for (const k of ["A", "B", "C", "D", "E"]) {
+    if (!(k in optionScores)) {
+      return { error: "tkp scores shape" };
+    }
+  }
+  const values = ["A", "B", "C", "D", "E"].map((k) => optionScores[k]);
+  if (values.some((v) => !Number.isInteger(v) || v < 1 || v > 5)) {
+    return { error: "tkp scores range" };
+  }
+  if (new Set(values).size !== 5) {
+    return { error: "tkp scores must be exactly {1..5}" };
+  }
+  return null;
+}
+
+// --- API Endpoints (existing, unprotected for now)---
 
 // Get all questions
 app.get("/api/questions", async (req, res) => {
@@ -353,15 +444,39 @@ app.post("/api/questions/bulk", async (req, res) => {
       ) {
         return res.status(400).json({ error: "invalid question shape" });
       }
+      // TKP option_scores must satisfy the §10 invariant. strict=true applies
+      // V1-strict to bulk-import endpoint too: every TKP block MUST carry
+      // `option_scores`. The bulk-parser (`public/js/bulk-parser.js`
+      // `enrichTkpBobot`) rejects TKP-without-Bobot at parse-time with
+      // error "bobot TKP wajib diisi"; this server check is defense-in-depth
+      // for direct API calls that bypass the parser. See tkp-scoring-spec.md
+      // §9.1 + §10 (V1-strict unified across single + bulk endpoints).
+      const err = validateOptionScores(q.question_type, q.option_scores ?? null, {
+        strict: true,
+      });
+      if (err) {
+        return res.status(400).json({
+          error: err.error,
+          index: questions.indexOf(q),
+        });
+      }
     }
 
     const rows = questions.map(
-      ({ content, question_type, options, correct_answer, explanation }) => ({
+      ({
         content,
         question_type,
         options,
         correct_answer,
         explanation,
+        option_scores,
+      }) => ({
+        content,
+        question_type,
+        options,
+        correct_answer,
+        explanation,
+        option_scores: option_scores ?? null,
         image_url: null,
         explanation_image_url: null,
       })
@@ -520,9 +635,23 @@ app.post("/api/questions", async (req, res) => {
       explanation,
       image,
       explanation_image,
+      option_scores,
     } = req.body;
     let image_url = null;
     let explanation_image_url = null;
+
+    // TKP rows MUST have option_scores at single-modal submit time
+    // (strict V1) — mirroring the modal's client-side validation so a
+    // misbehaving client can't smuggle an un-bobot'd TKP soal past.
+    // Non-TKP rows accept option_scores null (V5 inert).
+    const validationError = validateOptionScores(
+      question_type,
+      option_scores ?? null,
+      { strict: true },
+    );
+    if (validationError) {
+      return res.status(400).json({ error: validationError.error });
+    }
 
     if (image) {
       const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
@@ -553,6 +682,7 @@ app.post("/api/questions", async (req, res) => {
         options,
         correct_answer,
         explanation,
+        option_scores: option_scores ?? null,
         image_url,
         explanation_image_url,
       })
@@ -594,15 +724,98 @@ app.get("/api/packs/:id", async (req, res) => {
   }
 });
 
+// Pack input normalizer (POST + PUT share this). Returns { row, error }.
+// - POST: allowPartial=false — semua field wajib ada.
+// - PUT : allowPartial=true — field undefined di-drop untuk partial update.
+// Validates subtests (1-3 of TWK/TIU/TKP) and subtest_thresholds shape per
+// Indonesian SKD default map. Tidak ada lagi konsep pack_type — cukup
+// panjang array subtests yang menentukan apakah paket itu 1-subtes
+// (khusus) atau 2-3-subtes (combo).
+const DEFAULT_SUBTEST_THRESHOLDS = { TWK: 65, TIU: 80, TKP: 166 };
+function normalizePackInput(body, { allowPartial = false } = {}) {
+  const {
+    name,
+    duration_minutes,
+    passing_grade,
+    subtests,
+    subtest_thresholds,
+  } = body || {};
+  if (!allowPartial && (typeof name !== "string" || !name.trim())) {
+    return { error: "name required" };
+  }
+  const dur = Number(duration_minutes);
+  if (
+    !allowPartial &&
+    (!Number.isFinite(dur) || dur < 1)
+  ) {
+    return { error: "duration_minutes must be a positive integer" };
+  }
+  const pg = Number(passing_grade);
+  if (!allowPartial && (!Number.isFinite(pg) || pg < 0)) {
+    return { error: "passing_grade must be >= 0" };
+  }
+  // subtests default to all 3 if omitted (backward compat for legacy POST).
+  // Batas: 1-3 (admin boleh pilih 1, 2, atau 3 subtes via checkbox di
+  // modal). Tidak ada lagi validasi Single=1 / Combo=2-3. Dedupe
+  // SELALU (preserve first-occurrence order) sehingga admin yang
+  // mengirim ['TWK','TWK','TIU'] tetap konsisten — kita simpan
+  // ['TWK','TIU'] tanpa 400.
+  let normalizedSubtests = ["TWK", "TIU", "TKP"];
+  if (Array.isArray(subtests)) {
+    const validTokens = new Set(["TWK", "TIU", "TKP"]);
+    const filtered = subtests.filter((s) => validTokens.has(s));
+    if (filtered.length === 0) {
+      return { error: "subtests must contain at least one of TWK/TIU/TKP" };
+    }
+    normalizedSubtests = Array.from(new Set(filtered));
+  } else if (subtests !== undefined && !allowPartial) {
+    return { error: "subtests must be an array" };
+  }
+  // subtest_thresholds shape: build map for selected subtests only.
+  let normalizedThresholds = {};
+  if (
+    subtest_thresholds &&
+    typeof subtest_thresholds === "object" &&
+    !Array.isArray(subtest_thresholds)
+  ) {
+    for (const k of normalizedSubtests) {
+      const v = Number(subtest_thresholds[k]);
+      normalizedThresholds[k] =
+        Number.isFinite(v) && v >= 0
+          ? v
+          : DEFAULT_SUBTEST_THRESHOLDS[k] || 0;
+    }
+  } else {
+    for (const k of normalizedSubtests) {
+      normalizedThresholds[k] = DEFAULT_SUBTEST_THRESHOLDS[k] || 0;
+    }
+  }
+  const row = {
+    name: typeof name === "string" ? name.trim() : undefined,
+    duration_minutes: Number.isFinite(dur) ? dur : undefined,
+    passing_grade: Number.isFinite(pg) ? pg : undefined,
+    subtests: normalizedSubtests,
+    subtest_thresholds: normalizedThresholds,
+  };
+  if (allowPartial) {
+    // PUT: only forward fields that were actually provided.
+    for (const k of Object.keys(row)) {
+      if (row[k] === undefined) delete row[k];
+    }
+  }
+  return { row };
+}
+
 // Create a new question pack
 app.post("/api/packs", async (req, res) => {
   try {
-    const { name, duration_minutes, passing_grade } = req.body;
-    const { data, error } = await supabase
+    const { row, error } = normalizePackInput(req.body);
+    if (error) return res.status(400).json({ error });
+    const { data, error: dbError } = await supabase
       .from("question_packs")
-      .insert({ name, duration_minutes, passing_grade: passing_grade || 85 })
+      .insert(row)
       .select();
-    if (error) throw error;
+    if (dbError) throw dbError;
     res.status(201).json(data);
   } catch (error) {
     console.error("Error creating pack:", error);
@@ -610,10 +823,57 @@ app.post("/api/packs", async (req, res) => {
   }
 });
 
+// validateQuestionMatchesPack — server-side defense-in-depth for the
+// subtes filter (paket-soal-pack-type-spec.md §3.4). The client-side
+// filter in paket-detail.js `renderBankList` covers the happy path;
+// this catches direct API calls (curl, future endpoints) that would
+// otherwise let an admin bypass the UI and add a TKP soal to a
+// Single-TWK pack.
+//
+// Returns { ok: true } on match; { ok: false, reason } on mismatch.
+// Throws on DB error so the caller can map to 500.
+async function validateQuestionMatchesPack(packId, questionId) {
+  const [pRes, qRes] = await Promise.all([
+    supabase
+      .from("question_packs")
+      .select("subtests")
+      .eq("id", packId)
+      .single(),
+    supabase
+      .from("questions")
+      .select("question_type")
+      .eq("id", questionId)
+      .single(),
+  ]);
+  if (pRes.error) throw pRes.error;
+  if (qRes.error) throw qRes.error;
+  const allowed =
+    Array.isArray(pRes.data?.subtests) && pRes.data.subtests.length
+      ? pRes.data.subtests
+      : ["TWK", "TIU", "TKP"]; // legacy packs fall back to all-3
+  const qt = String(qRes.data?.question_type || "").trim().toUpperCase();
+  const ok = allowed.some((s) => qt.startsWith(s));
+  return ok
+    ? { ok: true }
+    : {
+        ok: false,
+        reason: `question_type "${qt}" does not match pack.subtests=[${allowed.join(",")}]`,
+      };
+}
+
 // Add questions to a pack
 app.post("/api/packs/:id/questions", async (req, res) => {
   try {
     const { question_id, question_number } = req.body;
+    // Server-side subtest match (defense-in-depth vs client-side filter
+    // in paket-detail.js renderBankList). Catches curl + future endpoints.
+    const valid = await validateQuestionMatchesPack(
+      req.params.id,
+      question_id,
+    );
+    if (!valid.ok) {
+      return res.status(400).json({ error: valid.reason });
+    }
     const { data, error } = await supabase
       .from("pack_questions")
       .insert({ pack_id: req.params.id, question_id, question_number })
@@ -682,13 +942,16 @@ app.post("/api/exam/submit", async (req, res) => {
       .eq("pack_id", pack_id);
     if (questionsError) throw questionsError;
 
-    let correctAnswers = 0;
+    // Score per-question (binary for TWK/TIU; weighted for TKP via
+    // option_scores, per tkp-scoring-spec.md §6.1). scoreForQuestion
+    // is the single source of truth — see helper definition above the
+    // API endpoints.
     const questions = packQuestions.map((item) => item.questions);
-    questions.forEach((q) => {
-      if (answers[q.id] === q.correct_answer) correctAnswers++;
-    });
+    const score = questions.reduce(
+      (sum, q) => sum + scoreForQuestion(q, answers[q.id]),
+      0,
+    );
 
-    const score = correctAnswers * 5;
     const status =
       score >= packData.passing_grade ? "Lulus PG" : "Tidak Lulus PG";
 
@@ -750,6 +1013,7 @@ app.put("/api/questions/:id", async (req, res) => {
       image_url: existingUrl,
       explanation_image,
       explanation_image_url: existingExplanationUrl,
+      option_scores,
     } = req.body;
     let image_url = existingUrl || null;
     if (image && image.startsWith("data:")) {
@@ -772,6 +1036,17 @@ app.put("/api/questions/:id", async (req, res) => {
       });
       explanation_image_url = url;
     }
+
+    // TKP rows MUST have option_scores on edit too (strict V1).
+    const validationError = validateOptionScores(
+      question_type,
+      option_scores ?? null,
+      { strict: true },
+    );
+    if (validationError) {
+      return res.status(400).json({ error: validationError.error });
+    }
+
     const { data, error } = await supabase
       .from("questions")
       .update({
@@ -780,6 +1055,7 @@ app.put("/api/questions/:id", async (req, res) => {
         options,
         correct_answer,
         explanation,
+        option_scores: option_scores ?? null,
         image_url,
         explanation_image_url,
       })
@@ -853,13 +1129,16 @@ app.delete("/api/questions/:id", async (req, res) => {
 // Update a pack
 app.put("/api/packs/:id", async (req, res) => {
   try {
-    const { name, duration_minutes, passing_grade } = req.body;
-    const { data, error } = await supabase
+    const { row, error } = normalizePackInput(req.body, {
+      allowPartial: true,
+    });
+    if (error) return res.status(400).json({ error });
+    const { data, error: dbError } = await supabase
       .from("question_packs")
-      .update({ name, duration_minutes, passing_grade })
+      .update(row)
       .eq("id", req.params.id)
       .select();
-    if (error) throw error;
+    if (dbError) throw dbError;
     res.json(data[0]);
   } catch (error) {
     console.error("Error updating pack:", error);

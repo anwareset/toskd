@@ -47,38 +47,41 @@ toskd/
 ├── public/
 │   ├── index.html                # Halaman utama (Mulai Ujian, Bank Soal, Scoreboard)
 │   ├── select-pack.html          # Halaman pemilihan paket ujian
-│   ├── exam.html                 # Halaman ujian (real-time timer & grid lembar jawaban)
-│   ├── review.html               # Halaman hasil & pembahasan soal lengkap
-│   ├── bank-soal.html             # Menu CMS (Kelola Paket Soal, Kelola Soal) — protected
-│   ├── paket-soal.html            # Kelola paket soal (CRUD) - protected
-│   ├── kelola-soal.html           # Kelola bank soal (CRUD + Quill.js editor) — protected
-│   ├── paket-detail.html          # Kelola relasi & urutan soal (Drag & Drop) — protected
+│   ├── exam.html                 # Halaman ujian (real-time timer & grid lembar jawaban + TKP weighted scoring)
+│   ├── review.html               # Halaman hasil & pembahasan soal lengkap (TKP weighted rendering + per-subtest breakdown)
+│   ├── bank-soal.html             # Menu CMS (Kelola Paket Soal, Kelola Soal) - protected
+│   ├── paket-soal.html            # Kelola paket soal (CRUD + subtes chip picker 1-3 + per-subtest thresholds) - protected
+│   ├── kelola-soal.html           # Kelola bank soal (CRUD + Quill.js editor + TKP Bobot field + bulk-add modal) - protected
+│   ├── paket-detail.html          # Kelola relasi & urutan soal (Drag & Drop + subtest-filtered bank list) - protected
 │   ├── login.html                # Halaman login admin (CMS protection)
 │   ├── scoreboard.html           # Papan peringkat peserta (Paging & filter)
 │   ├── assets/
 │   │   └── toskd-emoticon.svg    # Logo SVG (browser tab favicon + global header brand mark)
 │   ├── css/
 │   │   ├── tokens.css            # Design tokens (CSS variables untuk color, spacing, dll)
-│   │   └── styles.css            # CSS Global & Responsive Variables
+│   │   └── styles.css            # CSS Global & Responsive Variables (termasuk .chip picker, .field-helper, bobot/TKP styles)
 │   └── js/
 │       ├── theme.js              # Theme manager + dynamic global header injector (auto-inject di semua page, kecuali exam/review)
 │       ├── main.js               # Halaman index (landing - navigasi utama: Mulai Ujian, Bank Soal, Scoreboard)
 │       ├── select-pack.js        # Halaman Pilih Paket - listing paket + validasi 1–35 soal + modal nama peserta
-│       ├── exam.js               # Halaman ujian - timer persist (wall-clock + sid + multi-tab sync) + answer grid (hijau/merah)
-│       ├── review.js             # Halaman pembahasan - skor + status Lulus/Tidak + per-soal pembahasan (benar/salah)
+│       ├── exam.js               # Halaman ujian - timer persist (wall-clock + sid + multi-tab sync) + answer grid (hijau/merah) + TKP weighted scoring (option_scores per soal)
+│       ├── review.js             # Halaman pembahasan - skor + status Lulus/Tidak + per-soal pembahasan (benar/salah/partial) + TKP weight gradient cards + per-subtest breakdown (filtered by pack.subtests) + <p> wrapper stripping
 │       ├── scoreboard.js         # Halaman scoreboard - pagination + sortable headers + search filter (sticky-left No column)
 │       ├── login.js              # Login admin form handler (POST /api/admin/login, redirect ke ?next=, auto-fill username dari cookie session)
-│       ├── kelola-soal.js        # Kelola bank soal: CRUD + Quill.js editor (full toolbar) + image upload ke Vercel Blob + bulk-add modal
-│       ├── paket-soal.js         # Kelola paket soal: CRUD + passing grade + duration + table render (sortable + pagination)
-│       ├── paket-detail.js       # Relasi soal ↔ paket: drag-and-drop reorder + tentative selection + partial-failure add-to-pack
-│       └── bulk-parser.js        # ESM parser untuk bulk-add soal format v2 (premise list + lead-in + options A–E + key) + previewHtmlForCell helper
+│       ├── kelola-soal.js        # Kelola bank soal: CRUD + Quill.js editor (full toolbar) + image upload ke Vercel Blob + TKP Bobot dropdown (1-5, dedupe otomatis) + bulk-add modal dengan TKP format help
+│       ├── paket-soal.js         # Kelola paket soal: CRUD + subtes chip picker 1-3 + per-subtest threshold inputs + live running total + sortable/pagination table + Subtes column (chip-styled)
+│       ├── paket-detail.js       # Relasi soal ↔ paket: drag-and-drop reorder + tentative selection + subtest-filtered bank list (only questions matching pack.subtests shown) + partial-failure add-to-pack
+│       └── bulk-parser.js        # ESM parser untuk bulk-add soal format v2 (premise list + lead-in + options A–E + key + TKP `Bobot:` line parsing) + previewHtmlForCell helper
 ├── src/
-│   ├── server.js                 # API Express.js (Vercel Serverless Function)
+│   ├── server.js                 # API Express.js (Vercel Serverless Function) - TKP weighted scoring (scoreForQuestion + validateOptionScores) + normalizePackInput + validateQuestionMatchesPack
 │   ├── blob.js                   # Vercel Blob storage helper (signed-token upload/delete)
 │   └── db.js                     # Supabase client connection
-├── tests/                        # Unit tests (Node built-in test runner)
-│   └── test-bulk-parser.mjs      # 42 unit tests untuk public/js/bulk-parser.js (jalankan: `pnpm test` atau `node --test tests/test-bulk-parser.mjs` untuk single file)
-├── schema.sql                    # Skema database Supabase (termasuk tabel admins)
+├── tests/                        # Unit tests (Node built-in test runner; run via `pnpm test`)
+│   ├── test-bulk-parser.mjs                       # Unit tests untuk public/js/bulk-parser.js (parser + previewHtmlForCell)
+│   ├── test-bulk-patterns-catalog.mjs             # Catalog regression suite untuk bulk-input patterns (parser integration)
+│   ├── test-tkp-bobot.mjs                         # Unit tests untuk TKP Bobot validation (option_scores invariants: himpunan {1..5})
+│   └── test-tkp-scoring.mjs                       # Integration tests untuk TKP weighted scoring (scoreForQuestion + computePackScore)
+├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)
 ├── vercel.json                   # Konfigurasi routing Vercel
 └── package.json
 ```
@@ -87,17 +90,30 @@ toskd/
 
 ## 🔧 Rule & Logika Ujian
 
-1. **Scoring Ujian**:
-   - Jawaban benar: **5 poin**
-   - Jawaban salah / tidak dijawab: **0 poin**
-   - Total skor absolut (bukan persentase)
+1. **Scoring per Soal**:
+   - **TWK / TIU (binary)**: 5 poin jika jawaban benar, 0 poin jika salah/tidak dijawab
+   - **TKP (weighted)**: `option_scores[answer]` poin (1–5). Bobot dibaca dari `option_scores` JSONB per soal - opsi yang dijawab partisipan menentukan poin (mis. jawaban dengan bobot 5 = 5 poin, bobot 1 = 1 poin, dst).
+   - **TKP tanpa bobot (legacy, `option_scores` NULL)**: fallback binary (5/0) supaya hasil ujian lama tetap valid sampai admin mengisi bobot per soal.
+   - **Total skor absolut** (bukan persentase)
 
-2. **Passing Grade**:
-   - Ditentukan per paket soal (contoh: 85 poin)
-   - Status: "Lulus PG" atau "Tidak Lulus PG"
+2. **Pack Subtest Picker** (1–3 subtes per paket):
+   - Admin pilih 1–3 dari {TWK, TIU, TKP} via chip picker di modal Tambah/Edit Paket.
+   - `pack.subtests` array (TEXT[]) menentukan tipe soal yang boleh ditambahkan - server-side filter via `validateQuestionMatchesPack` (defense-in-depth vs client-side filter di `paket-detail.js`).
+   - Tiap subtes yang dipilih punya `subtest_thresholds[sub]` (JSONB peta {TWK:N, TIU:N, TKP:N}, default Indonesia: TWK=65, TIU=80, TKP=166).
 
-3. **Limitasi Paket Soal**:
-   - Minimal 1 soal, maksimal 35 soal per paket
+3. **Passing Grade**:
+   - Per paket: `passing_grade = sum(subtest_thresholds[sub])` untuk semua subtes dalam `pack.subtests` (auto-computed di client, disimpan di server untuk backward compat).
+   - Status: "Lulus PG" jika `score >= passing_grade`, else "Tidak Lulus PG".
+   - Ditentukan per paket soal, bukan per subtes (subtes hanya jadi filter di bank list).
+
+4. **TKP `option_scores` Invariants** (lihat tkp-scoring-spec.md §6):
+   - `option_scores` JSONB nullable; NULL untuk TWK/TIU (atau TKP yang belum di-set bobotnya).
+   - Untuk TKP: values harus himpunan persis `{1, 2, 3, 4, 5}` (satu opsi per bobot, urutan huruf bebas - admin boleh menulis permutasi apa pun, mis. A=2,B=1,C=5,D=3,E=4).
+   - Validasi di client (single-question modal Bobot TKP) + server (`validateOptionScores` di `src/server.js`, V1-strict untuk TKP di single + bulk endpoints).
+   - Bobot tertinggi = opsi yang benar (`correct_answer` di-derive dari opsi dengan bobot 5 di bulk-parser `enrichTkpBobot`).
+
+5. **Limitasi Paket Soal**:
+   - Minimal 1 soal, maksimal 35 soal per paket.
 
 ---
 

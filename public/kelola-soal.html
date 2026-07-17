@@ -451,7 +451,7 @@
                                             benar
                                         </p>
 
-                                        <div class="form-group">
+                                        <div class="form-group" data-letter="a">
                                             <label>Opsi A</label>
                                             <div
                                                 id="opt-a-editor"
@@ -463,9 +463,39 @@
                                                 class="input-field"
                                                 style="display: none"
                                             ></textarea>
+                                            <div class="bobot-input-row" data-bobot-letter="a">
+                                                <label
+                                                    class="bobot-input-row-label"
+                                                    for="q-bobot-a"
+                                                >Bobot A</label>
+                                                <!-- Per Round-7 (user followup): convert bobot
+                                                     input from <input type="number"> to <select>
+                                                     so each dropdown naturally excludes values
+                                                     already picked by the OTHER 4 selects. The
+                                                     populated option list is recomputed on every
+                                                     `change` event by syncBobotDropdowns() in
+                                                     public/js/kelola-soal.js so the 5 selects
+                                                     together enforce a permutation {1,2,3,4,5}.
+                                                     Empty `<option value="">` is the initial
+                                                     placeholder ("—") so a TKP soal with
+                                                     no-bobot-yet still has a visible neutral
+                                                     state — see server-side rounded invariant
+                                                     tkp-scoring-spec.md §10. -->
+                                                <select
+                                                    id="q-bobot-a"
+                                                    class="bobot-input"
+                                                    name="bobot-a"
+                                                    data-bobot-letter="a"
+                                                >
+                                                    <option value="">—</option>
+                                                </select>
+                                                <span class="bobot-input-helper" id="q-bobot-a-helper">
+                                                    rentang 1–5
+                                                </span>
+                                            </div>
                                         </div>
 
-                                        <div class="form-group">
+                                        <div class="form-group" data-letter="b">
                                             <label>Opsi B</label>
                                             <div
                                                 id="opt-b-editor"
@@ -477,9 +507,25 @@
                                                 class="input-field"
                                                 style="display: none"
                                             ></textarea>
+                                            <div class="bobot-input-row" data-bobot-letter="b">
+                                                <label
+                                                    class="bobot-input-row-label"
+                                                    for="q-bobot-b"
+                                                >Bobot B</label>
+                                                <select
+                                                    id="q-bobot-b"
+                                                    class="bobot-input"
+                                                    name="bobot-b"
+                                                    data-bobot-letter="b"
+                                                >
+                                                    <option value="">—</option>
+                                                </select>
+                                                <span class="bobot-input-helper" id="q-bobot-b-helper">
+                                                    rentang 1–5
+                                                </span>
+                                            </div>
                                         </div>
-
-                                        <div class="form-group">
+                                        <div class="form-group" data-letter="c">
                                             <label>Opsi C</label>
                                             <div
                                                 id="opt-c-editor"
@@ -491,9 +537,25 @@
                                                 class="input-field"
                                                 style="display: none"
                                             ></textarea>
+                                            <div class="bobot-input-row" data-bobot-letter="c">
+                                                <label
+                                                    class="bobot-input-row-label"
+                                                    for="q-bobot-c"
+                                                >Bobot C</label>
+                                                <select
+                                                    id="q-bobot-c"
+                                                    class="bobot-input"
+                                                    name="bobot-c"
+                                                    data-bobot-letter="c"
+                                                >
+                                                    <option value="">—</option>
+                                                </select>
+                                                <span class="bobot-input-helper" id="q-bobot-c-helper">
+                                                    rentang 1–5
+                                                </span>
+                                            </div>
                                         </div>
-
-                                        <div class="form-group">
+                                        <div class="form-group" data-letter="d">
                                             <label>Opsi D</label>
                                             <div
                                                 id="opt-d-editor"
@@ -505,9 +567,25 @@
                                                 class="input-field"
                                                 style="display: none"
                                             ></textarea>
+                                            <div class="bobot-input-row" data-bobot-letter="d">
+                                                <label
+                                                    class="bobot-input-row-label"
+                                                    for="q-bobot-d"
+                                                >Bobot D</label>
+                                                <select
+                                                    id="q-bobot-d"
+                                                    class="bobot-input"
+                                                    name="bobot-d"
+                                                    data-bobot-letter="d"
+                                                >
+                                                    <option value="">—</option>
+                                                </select>
+                                                <span class="bobot-input-helper" id="q-bobot-d-helper">
+                                                    rentang 1–5
+                                                </span>
+                                            </div>
                                         </div>
-
-                                        <div class="form-group">
+                                        <div class="form-group" data-letter="e">
                                             <label>Opsi E</label>
                                             <div
                                                 id="opt-e-editor"
@@ -519,9 +597,49 @@
                                                 class="input-field"
                                                 style="display: none"
                                             ></textarea>
+                                            <div class="bobot-input-row" data-bobot-letter="e">
+                                                <label
+                                                    class="bobot-input-row-label"
+                                                    for="q-bobot-e"
+                                                >Bobot E</label>
+                                                <select
+                                                    id="q-bobot-e"
+                                                    class="bobot-input"
+                                                    name="bobot-e"
+                                                    data-bobot-letter="e"
+                                                >
+                                                    <option value="">—</option>
+                                                </select>
+                                                <span class="bobot-input-helper" id="q-bobot-e-helper">
+                                                    rentang 1–5
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div
+                                            id="bobot-tkp-status"
+                                            class="bobot-status-banner bobot-status-banner--ok"
+                                            role="status"
+                                            aria-live="polite"
+                                        >
+                                            <strong id="bobot-tkp-chip">✓ Bobot valid</strong>
+                                            <span class="bobot-status-banner-helper">
+                                                Bobot harus 5 nilai unik ∈ {1,2,3,4,5}.
+                                            </span>
                                         </div>
 
-                                        <div class="form-group">
+                                        <!-- Round-8 (user request): the Kunci Jawaban Benar
+                                             dropdown is HIDDEN when type=TKP — the correct
+                                             answer is auto-derived from the option with the
+                                             highest bobot weight (handled by
+                                             deriveCorrectAnswerFromBobot() in
+                                             public/js/kelola-soal.js :: form.onsubmit).
+                                             The #correct-ans-group wrapper is targeted by
+                                             CSS rule `.tkp-mode #correct-ans-group { display:
+                                             none; }` near the bobot-tkp-status banner
+                                             styles in public/css/styles.css. For binary soal
+                                             (TWK/TIU) the dropdown remains visible, used as
+                                             before. -->
+                                        <div class="form-group" id="correct-ans-group">
                                             <label>Kunci Jawaban Benar</label>
                                             <select
                                                 id="correct-ans"
@@ -667,7 +785,7 @@
                                         <!-- Spec: bulk-add-format-v2-spec.md §5.1.1.
                                              Lihat contoh: collapsible expander with a
                                              copy-pasteable sample of the new format. -->
-                                        <details class="bulk-format-help" style="margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--surface-header);">
+                                        <details class="bulk-format-help" data-help-mode="binary" style="margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--surface-header);">
                                             <summary style="cursor: pointer; font-weight: 600; color: var(--primary);">
                                                 💡 Lihat contoh format
                                             </summary>
@@ -691,8 +809,64 @@ D. 1, 2, dan 5
 E. 3, 5, dan 6
 D
 Penerapan nasionalisme dalam pemanfaatan teknologi tercermin dari perilaku memperkenalkan budaya bangsa secara positif melalui teknologi digital (1), memeriksa kebenaran informasi sebelum menyebarkannya sebagai wujud tanggung jawab digital (2), serta ajakan tokoh masyarakat untuk menggunakan teknologi secara bijak (5). Ketiganya menunjukkan penguatan identitas dan kesadaran nasional dalam ranah digital. Pernyataan 3, 4, dan 6 lebih menekankan aspek pelayanan publik, preferensi konten, atau keterbukaan global yang tidak secara langsung mencerminkan nasionalisme.
----
-(soal berikutnya)</pre>
+---                                                (soal berikutnya)</pre>
+                                            </div>
+                                        </details>
+
+                                                                                <details
+                                            id="bulk-tkp-format-help"
+                                            class="bulk-format-help"
+                                            data-help-mode="tkp"
+                                            open
+                                            style="margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--surface-header);"
+                                        >
+                                            <summary
+                                                style="cursor: pointer; font-weight: 600; color: var(--primary);"
+                                            >
+                                                ⚖ Format TKP (Bobot admin-defined per opsi)
+                                            </summary>
+                                            <div
+                                                style="margin-top: 12px; font-size: 0.85rem; line-height: 1.7;"
+                                            >
+                                                <p
+                                                    style="margin-bottom: 8px; color: var(--text-muted);"
+                                                >
+                                                    Sama seperti format biner di atas, tetapi untuk <strong>TKP</strong>:
+                                                    skor per soal adalah bobot opsi yang dipilih (1–5), bukan 5/0 flat.
+                                                    Admin dapat menulis bobot <strong>kustom</strong> lewat baris
+                                                    <code style="background: var(--bg); padding: 1px 6px; border-radius: 3px;">Bobot: A=#,B=#,C=#,D=#,E=#</code>,
+                                                    atau mengaturnya kemudian lewat kolom &quot;Bobot TKP&quot; di modal edit soal.
+                                                </p>
+                                                <p
+                                                    style="margin-bottom: 8px; color: var(--text-muted); font-size: 0.78rem;"
+                                                >
+                                                    Posisi baris Bobot bebas (boleh <em>sebelum</em> atau <em>sesudah</em> baris Kunci);
+                                                    huruf dengan bobot <strong>5</strong> otomatis dipakai sebagai kunci. Bobot tidak
+                                                    harus urut A=5→E=1 — admin bebas menulis sembarang permutasi {1,2,3,4,5}, mis.
+                                                    <code style="background: var(--bg); padding: 1px 6px; border-radius: 3px;">A=2, B=1, C=5, D=3, E=4</code>.
+                                                </p>
+                                                <pre
+                                                    style="background: var(--bg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word;"
+                                                >1) Sikap gotong royong harus ditumbuhkan sejak dini.
+2) Anak yang terbiasa berbagi dengan teman sebayanya akan tumbuh menjadi pribadi yang mudah bekerja sama.
+3) Berbeda dengan anak yang lebih suka menyendiri dan jarang berinteraksi dengan lingkungan sosial.
+Manakah pernyataan yang paling tepat menggambarkan pentingnya gotong royong?
+A. Anak yang terbiasa berbagi akan tumbuh menjadi pribadi yang mudah bekerja sama.
+B. Anak yang lebih suka menyendiri akan tumbuh menjadi individu yang mandiri.
+C. Gotong royong tidak diajarkan di sekolah formal melainkan di lingkungan keluarga.
+D. Gotong royong hanya relevan di lingkungan desa, bukan di perkotaan.
+E. Gotong royong harus ditanamkan sejak usia dewasa agar berjalan efektif.
+Bobot: A=2, B=1, C=5, D=3, E=4
+Jawaban C paling mencerminkan pentingnya gotong royong karena menjelaskan peran pendidikan gotong royong yang dimulai sejak dini.</pre>
+                                                <p
+                                                    style="margin-bottom: 8px; color: var(--text-muted); font-size: 0.75rem; font-style: italic;"
+                                                >
+                                                    → Pada contoh di atas, baris
+                                                    <code style="background: var(--bg); padding: 1px 6px; border-radius: 3px;">Bobot: A=2, B=1, C=5, D=3, E=4</code>
+                                                    menentukan kunci otomatis = <strong>C</strong> (huruf dengan bobot tertinggi).
+                                                    Admin juga dapat melewati baris Bobot dan mengatur bobot per-opsi lewat
+                                                    modal edit soal pada tab &quot;Tambah Soal&quot;.
+                                                </p>
                                             </div>
                                         </details>
 
@@ -704,6 +878,11 @@ Penerapan nasionalisme dalam pemanfaatan teknologi tercermin dari perilaku mempe
                                                 line-height: 1.6;
                                             "
                                         >
+                                            <!-- Dua blok bantuan di atas saling eksklusif:
+                                                 muncul salah satu tergantung Tipe Soal
+                                                 yang dipilih (binary = TWK/TIU, TKP = 
+                                                 TKP Pelayanan Publik dst). Toggle JS
+                                                 lihat data-help-mode di <details>. -->
                                             Format per soal (plain text, blok dipisah <code>---</code>):<br>
                                             <strong>Baris 1..N</strong> = premise bernomor 1, 2, 3, … (N ≤ 20) ·
                                             <strong>Baris N+1</strong> = pertanyaan ·

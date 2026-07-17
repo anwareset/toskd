@@ -834,9 +834,24 @@ form.onsubmit = async (e) => {
     D: document.getElementById("opt-d").value.trim(),
     E: document.getElementById("opt-e").value.trim(),
   };
-  const correct_answer = document.getElementById("correct-ans").value;
-  const explanation = document.getElementById("q-explanation").value.trim();
+  // Round-8 TDZ fix: declare question_type BEFORE correct_answer because
+  // the latter calls isTkpType(question_type). Originally the in-function
+  // order was: correct_answer (read from #correct-ans dropdown, didn't
+  // need question_type) THEN question_type (read for other validation).
+  // After Round-8 derives correct_answer from bobot for TKP, the
+  // dependency flipped — must declare question_type first to avoid
+  // ReferenceError: Cannot access 'question_type' before initialization
+  // (line 842 TDZ throw on submit). 
   const question_type = document.getElementById("q-question-type").value;
+  // Round-8 (user request): TKP no longer needs an explicit Kunci Jawaban
+  // Benar dropdown — auto-derive correct_answer from the option with the
+  // highest bobot weight, mirroring the bulk-parser's enrichTkpBobot.
+  // The dropdown is hidden for TKP (CSS `.tkp-mode #correct-ans-group`),
+  // but is still read in the binary path (TWK/TIU) below.
+  const correct_answer = isTkpType(question_type)
+    ? deriveCorrectAnswerFromBobot()
+    : document.getElementById("correct-ans").value;
+  const explanation = document.getElementById("q-explanation").value.trim();
 
   // Validation: scrollToError (with red border pulse) replaces old switchTab() calls
   // since modal is now a single editable tab — no need to switch.
@@ -896,6 +911,28 @@ form.onsubmit = async (e) => {
     image_url: null,
     explanation_image: null,
     explanation_image_url: null,
+    // TKP weighted-scoring (spec §5.1 / §8): include option_scores whenever
+    // question_type starts with "TKP". Null otherwise so the server clears any
+    // stale weight values for binary soal (V5 tolerated).
+    // Round-8 case fix: readBobotValues() iterates BOBOT_LETTERS = ["a",
+    // "b", "c", "d", "e"] (lowercase) and writes the keys verbatim, so
+    // it returns {a:2, b:1, c:5, d:3, e:4} for a fully filled TKP soal.
+    // Server-side validateOptionScores() (src/server.js line ~370) checks
+    // keys against the canonical uppercase set ["A","B","C","D","E"] and
+    // rejects anything else — PostgREST 400 Bad Request on the soal POST.
+    // Fix: uppercase the keys at the boundary before sending. We don't
+    // rewrite readBobotValues() itself because local callers (validateBobot,
+    // applyBobotUiState helpers) iterate BOBOT_LETTERS lowercase to look
+    // up `values[letter]` and changing the return shape would break them.
+    // Inline Object.fromEntries + map is fine — runs once per submit.
+    option_scores: isTkpType(question_type)
+      ? Object.fromEntries(
+          Object.entries(readBobotValues()).map(([k, v]) => [
+            k.toUpperCase(),
+            v,
+          ]),
+        )
+      : null,
   };
 
   const method = id ? "PUT" : "POST";
@@ -935,6 +972,11 @@ window.editQuestion = (id) => {
   document.getElementById("correct-ans").value = q.correct_answer;
   document.getElementById("q-question-type").value =
     q.question_type || "TWK Pilar Negara";
+
+  // TKP weighted-scoring (per spec §5.1 / §8): populate Bobot inputs from
+  // q.option_scores and switch the form into TKP visual mode. The helper
+  // also runs validation so submit is enabled for a valid TKP soal.
+  setBobotFromQuestion(q);
 
   modalTitle.textContent = "Edit Soal";
   resetTabs();
@@ -1324,12 +1366,32 @@ function renderBulkPreview(parsedBlocks, validCount, invalidCount) {
         const isNewFormat =
           Array.isArray(b.premises) && b.premises.length > 0;
         if (isNewFormat) {
-          // <ol><li>…</li></ol> + <p>question</p> — the storage format
-          // matches what exam/review/paket-detail will render.
-          const olHtml = `<ol class="bulk-preview-ol">${b.premises
+          // Round-4 verbatim display: inline `list-style-type: none`
+          // suppresses the browser's default `1./2./3.` prefix on
+          // top of the user's typed markers (`1)`, `2)`, etc.). The
+          // class `bulk-preview-ol` carries the same suppression
+          // — CSS in styles.css has it scoped to `.bulk-preview-ol`
+          // as a defense-in-depth fallback if the inline style is
+          // stripped by a future Quill round-trip.
+          const olHtml = `<ol class="bulk-preview-ol" style="list-style-type: none; margin: 0; padding-left: 0;">${b.premises
             .map((p) => `<li>${esc(p)}</li>`)
             .join("")}</ol>`;
-          questionHtml = `${olHtml}<p class="bulk-preview-question">${esc(b.question)}</p>`;
+          // Multi-line question support (catalog case #B): if the
+          // block's question contains `\n`-separated paragraphs,
+          // emit one <p> per paragraph so each renders as its own
+          // row in the modal preview.
+          if (b.question) {
+            const paragraphs = b.question
+              .split("\n")
+              .map((p) => p.trim())
+              .filter((p) => p.length > 0);
+            const pHtml = paragraphs
+              .map((p) => `<p class="bulk-preview-question">${esc(p)}</p>`)
+              .join("");
+            questionHtml = `${olHtml}${pHtml}`;
+          } else {
+            questionHtml = olHtml;
+          }
         } else {
           questionHtml = `<div class="bulk-preview-question-plain">${esc(b.question)}</div>`;
         }
@@ -1420,7 +1482,15 @@ function initBulkTabNavigation() {
 document.getElementById("bulk-add-btn").onclick = () => {
   // Reset modal state on each open.
   const typeSelect = document.getElementById("bulk-q-question-type");
-  if (typeSelect) typeSelect.value = "TWK Pilar Negara";
+  if (typeSelect) {
+    typeSelect.value = "TWK Pilar Negara";
+    // Re-evaluate the binary-vs-TKP help block after the JS-forced
+    // value reset. Programmatic `el.value = "…"` does NOT fire
+    // 'change', so the listener attached in initBulkHelpModeToggle()
+    // won't run on its own for a modal re-open — call setBulkHelpMode
+    // explicitly so the binary help is shown on first open. Idempotent.
+    setBulkHelpMode(typeSelect.value);
+  }
 
   window.lastBulkParse = [];
   document.getElementById("bulk-preview-summary").textContent =
@@ -1492,6 +1562,11 @@ document.getElementById("q-bulk-form").onsubmit = async (e) => {
       question_type:
         document.getElementById("bulk-q-question-type")?.value ||
         b.question_type,
+      // TKP weighted-scoring (spec §5.1 / §9.2): bulk-parser attaches
+      // option_scores to TKP blocks via tkpWeightsFromKey(key). Forward it
+      // to the server so bulk-inserted TKP soal persist with weights.
+      // Binary blocks leave it null so the server stores NULL.
+      option_scores: b.option_scores ?? null,
     })),
   };
 
@@ -1516,3 +1591,412 @@ document.getElementById("q-bulk-form").onsubmit = async (e) => {
     saveBtn.textContent = originalLabel;
   }
 };
+
+// ============================================================================
+// TKP weighted-scoring UI integration (per tkp-scoring-spec.md §8, §19.1)
+// ============================================================================
+//
+// We add five small helpers to manage the per-option Bobot inputs that the
+// modal now contains. The integration points:
+//   * applyBobotUiState(qtype)   — toggles `.tkp-mode` class on the form,
+//                                  runs validation, paints per-input/helper,
+//                                  banner, and disables submit on invalid.
+//   * readBobotValues()          — returns {a..e: int|null|NaN} from inputs.
+//   * validateBobot(values)      — invariant {1,2,3,4,5} distinct + range.
+//   * setBobotFromQuestion(q)    — editQuestion hook: populates from
+//                                  `q.option_scores` (TKP) or blanks (binary).
+//   * initTkpListeners()         — attaches change/input listeners once.
+//
+// Submit payload at line ~888 injects `option_scores` only when the type
+// starts with "TKP" (case-insensitive); bulk-post handler is unaffected —
+// the parser already attaches option_scores for TKP blocks (`bulk-parser.js`).
+// ============================================================================
+
+const BOBOT_LETTERS = ["a", "b", "c", "d", "e"];
+
+function isTkpType(qtype) {
+  return typeof qtype === "string" && qtype.trim().toUpperCase().startsWith("TKP");
+}
+
+// Round-8 (user request): TKP correct answer is auto-derived from the
+// option carrying the highest bobot weight. Validates that bobot values
+// are integers 1..5 (the validateBobot() gate in applyBobotUiState
+// already enforces full permutation {1..5}, so max is non-null when
+// this is called from form.onsubmit after a passing validation). Ties
+// go to the LOWEST letter (deterministic; should not occur in practice
+// per spec §10 but defensive). Returns NULL if bobot is partial.
+function deriveCorrectAnswerFromBobot() {
+  const bobots = readBobotValues();
+  let maxL = null;
+  let maxW = -Infinity;
+  for (const letter of BOBOT_LETTERS) {
+    const w = bobots[letter];
+    if (!Number.isInteger(w) || w < 1 || w > 5) continue;
+    if (w > maxW) {
+      maxW = w;
+      maxL = letter.toUpperCase();
+    }
+  }
+  return maxL;
+}
+
+function readBobotValues() {
+  const out = {};
+  for (const letter of BOBOT_LETTERS) {
+    const inp = document.getElementById(`q-bobot-${letter}`);
+    if (!inp) {
+      out[letter] = null;
+      continue;
+    }
+    const raw = inp.value.trim();
+    if (raw === "") {
+      out[letter] = null;
+      continue;
+    }
+    const n = Number(raw);
+    out[letter] = Number.isFinite(n) ? n : NaN;
+  }
+  return out;
+}
+
+function validateBobot(values) {
+  const errors = [];
+  const numeric = [];
+  for (const letter of BOBOT_LETTERS) {
+    const v = values[letter];
+    if (v == null) {
+      // empty input — ok if we are not in TKP mode (caller decides); in TKP
+      // mode we still count this as "missing", so the user sees a hint.
+      continue;
+    }
+    if (Number.isNaN(v)) {
+      errors.push(`Bobot ${letter.toUpperCase()} harus bilangan`);
+      continue;
+    }
+    if (!Number.isInteger(v) || v < 1 || v > 5) {
+      errors.push(`Bobot ${letter.toUpperCase()} harus bilangan bulat 1–5`);
+      continue;
+    }
+    numeric.push(v);
+  }
+  if (numeric.length === 5 && new Set(numeric).size !== 5) {
+    errors.push("Bobot harus 5 nilai unik (1,2,3,4,5)");
+  }
+  return {
+    ok: errors.length === 0 && numeric.length === 5,
+    errors,
+  };
+}
+
+// Best-effort submit-button selector — the modal has a primary Save button
+// which is either a `<button class="...q-submit-btn">` or the existing
+// `.btn-primary` inside the modal. We target multiple candidates and toggle
+// each so a future rename does not silently disable validation.
+function setSubmitDisabled(disabled) {
+  // Scoped to `#q-form` only so we don't accidentally disable the bulk-save
+  // button in another modal that may share the page. The actual manage-soal
+  // Save button is `<button type="submit" class="btn-primary">` inside
+  // `#q-form`; we keep a defensive selector so a future rename (e.g. adding
+  // a `q-submit-btn` class or `data-q-submit` hook) doesn't silently bypass
+  // gating.
+  const formEl = document.getElementById("q-form");
+  if (!formEl) return;
+  const candidates = formEl.querySelectorAll(
+    'button[type="submit"], .q-submit-btn, [data-q-submit]'
+  );
+  candidates.forEach((b) => {
+    if ("disabled" in b) b.disabled = disabled;
+  });
+}
+
+// syncBobotDropdowns — Round-7 mutual-exclusion wiring.
+//
+// Each of the 5 .bobot-input selects renders only the values 1..5 that
+// are NOT YET chosen by the other 4 selects (covered letter's own
+// current value is preserved so the user doesn't see their own pick
+// disappear under them while they re-pick).
+//
+// Algorithm per letter L:
+//   reads L's currently-selected value LVal ("" or "1"-"5").
+//   collects OTHER letters' values into a Set<MVal> (NOT L's own).
+//   available = [1..5] \ otherValues
+//   options = ["\u2014" (placeholder)] + available
+//   if LVal is non-empty AND LVal is NOT in available (a stale value
+//     from a previous edit that's now conflicting with another
+//     select's newer pick), reset L to "" placeholder.
+//   else preserve LVal.
+//
+// Called whenever a select's value changes, when the form opens
+// (setBobotFromQuestion / applyBobotUiState), and via the listeners
+// installed in initTkpListeners.
+function syncBobotDropdowns() {
+  // Round-7 followup fix: original aggregate-set approach accidentally
+  // excluded the letter's OWN current value from its own option list
+  // (the closure over `usedByOther` captured every select's value
+  // including the current one). Fix is a per-letter scan that skips
+  // the current letter when building the "used by others" set.
+  for (const letter of BOBOT_LETTERS) {
+    const inp = document.getElementById(`q-bobot-${letter}`);
+    if (!inp) continue;
+    const myValue = inp.value;
+    // Build "used by the other 4 siblings" by scanning BOBOT_LETTERS
+    // and skipping `letter` itself. Without this skip, the closed-over
+    // aggregate (used in the original implementation) included the
+    // current select's value in its exclusion set — silently erasing
+    // the user's own pick after every sync round (caught by
+    // code-reviewer-minimax-m3 Round-7 review).
+    const usedByOthers = new Set();
+    for (const otherLetter of BOBOT_LETTERS) {
+      if (otherLetter === letter) continue;
+      const other = document.getElementById(`q-bobot-${otherLetter}`);
+      if (other && other.value !== "") usedByOthers.add(other.value);
+    }
+    const available = [1, 2, 3, 4, 5].filter(
+      (n) => !usedByOthers.has(String(n)),
+    );
+    inp.innerHTML =
+      `<option value="">—</option>` +
+      available.map((n) => `<option value="${n}">${n}</option>`).join("");
+    inp.value = myValue; // restore own pick; falls back to "" if option gone
+  }
+}
+
+function applyBobotUiState(qtype) {
+  const tkp = isTkpType(qtype);
+  form.classList.toggle("tkp-mode", tkp);
+  // Round-8 (user bug-fix): trigger syncBobotDropdowns EVERY time the
+  // modal enters TKP mode so the user sees options [—, 1, 2, 3, 4, 5]
+  // on each `<select>` from the FIRST render. Previously, sync only
+  // fired from (a) the `change` event listener AND (b) setBobotFromQuestion
+  // for edit-mode. Add-mode (modal opened with type already TKP, OR
+  // user changes type from binary to TKP) had no trigger — dropdowns
+  // stuck at the HTML-initial `<option value="">—</option>` placeholder.
+  // applyBobotUiState is the single chokepoint for "TKP state entered"
+  // so calling sync here covers all paths:
+  //   • Page-load initial pass (when type defaults to TKP)
+  //   • `typeSelect.change` event when user picks a TKP subtype
+  //   • editQuestion → setBobotFromQuestion → applyBobotUiState (rerun)
+  //   • Any other future re-renders through this entry point
+  if (tkp) syncBobotDropdowns();
+
+  if (!tkp) {
+    // Binary flow: clear TKP visual marks. Submit stays enabled — the form
+    // still requires the existing single-radio `correct_answer`.
+    for (const letter of BOBOT_LETTERS) {
+      const inp = document.getElementById(`q-bobot-${letter}`);
+      const helper = document.getElementById(`q-bobot-${letter}-helper`);
+      if (inp) {
+        inp.classList.remove("bobot-input--valid", "bobot-input--invalid");
+        inp.value = "";
+      }
+      if (helper) helper.textContent = "rentang 1–5";
+    }
+    const banner = document.getElementById("bobot-tkp-status");
+    if (banner) {
+      banner.classList.remove("bobot-status-banner--fail");
+      banner.classList.add("bobot-status-banner--ok");
+    }
+    const chip = document.getElementById("bobot-tkp-chip");
+    if (chip) chip.textContent = "✓ Bobot valid";
+    setSubmitDisabled(false);
+    return { ok: true, errors: [] };
+  }
+
+  // TKP flow: validate, paint, gate submit.
+  const values = readBobotValues();
+  const result = validateBobot(values);
+  const banner = document.getElementById("bobot-tkp-status");
+  const chip = document.getElementById("bobot-tkp-chip");
+  if (banner) {
+    banner.classList.toggle("bobot-status-banner--ok", result.ok);
+    banner.classList.toggle("bobot-status-banner--fail", !result.ok);
+  }
+  if (chip) {
+    chip.textContent = result.ok ? "✓ Bobot valid" : "✗ Bobot tidak valid";
+  }
+  for (const letter of BOBOT_LETTERS) {
+    const inp = document.getElementById(`q-bobot-${letter}`);
+    const helper = document.getElementById(`q-bobot-${letter}-helper`);
+    if (!inp) continue;
+    const v = values[letter];
+    const valid = Number.isInteger(v) && v >= 1 && v <= 5;
+    inp.classList.toggle("bobot-input--valid", valid);
+    inp.classList.toggle("bobot-input--invalid", !valid && v != null);
+    if (helper) {
+      if (!valid && v != null) helper.textContent = "harus 1–5";
+      else helper.textContent = "rentang 1–5";
+    }
+  }
+  setSubmitDisabled(!result.ok);
+  return result;
+}
+
+function initTkpListeners() {
+  if (typeof form === "undefined" || !form) return;
+  const typeSelect = document.getElementById("q-question-type");
+  if (typeSelect) {
+    typeSelect.addEventListener("change", () => {
+      applyBobotUiState(typeSelect.value || "");
+    });
+  }
+  for (const letter of BOBOT_LETTERS) {
+    const inp = document.getElementById(`q-bobot-${letter}`);
+    if (!inp) continue;
+    // Round-7: switched event from "input" to "change". <select>
+    // dispatches `change` when the user picks an option, which is the
+    // HTML-spec canonical event for selects. (`input` also fires on
+    // selects but `change` is more semantically correct.) After picking,
+    // we (a) re-run syncBobotDropdowns so the other 4 selects drop the
+    // picked value from their option lists, then (b) refresh the
+    // banner/chip via applyBobotUiState to reflect the new state.
+    inp.addEventListener("change", () => {
+      syncBobotDropdowns();
+      applyBobotUiState(
+        (document.getElementById("q-question-type") || {}).value || "",
+      );
+    });
+  }
+  // Initial pass so the chip/banner reflects the current state (handles
+  // both freshly-opened modal and edit-populated soal).
+  applyBobotUiState(
+    (document.getElementById("q-question-type") || {}).value || "",
+  );
+}
+
+function setBobotFromQuestion(q) {
+  if (!q) return;
+  const tkp = isTkpType(q.question_type);
+  form.classList.toggle("tkp-mode", tkp);
+  // Round-7 5-step population order is REQUIRED so the <select>
+  // options exist BEFORE we assign values (.value assignment on a
+  // select whose options don't include the value silently falls back
+  // to the first option — i.e. "" placeholder by default):
+  //   1. Clear all values so subsequent sync has deterministic state.
+  //   2. Run syncBobotDropdowns to populate a full "all 5 values
+  //      available" option list on each select (since all are empty).
+  //   3. Now assign real values from q.option_scores — option elements
+  //      for those values now exist from step 2, so the assignment
+  //      sticks.
+  //   4. Re-run syncBobotDropdowns so the option lists reflect the
+  //      now-real mutual exclusion (each select drops the values
+  //      picked by its 4 siblings from its available list).
+  //   5. applyBobotUiState refreshes the banner/chip/submit gating
+  //      based on the freshly-populated dropdowns.
+  for (const letter of BOBOT_LETTERS) {
+    const inp = document.getElementById(`q-bobot-${letter}`);
+    if (inp) inp.value = "";
+  }
+  syncBobotDropdowns();
+  for (const letter of BOBOT_LETTERS) {
+    const inp = document.getElementById(`q-bobot-${letter}`);
+    if (!inp) continue;
+    const upperLetter = letter.toUpperCase();
+    const w = q.option_scores
+      ? Number(q.option_scores[upperLetter])
+      : null;
+    if (tkp && Number.isInteger(w) && w >= 1 && w <= 5) {
+      inp.value = String(w);
+    }
+    // ELSE: leave empty (placeholder). Old behavior of explicitly
+    // setting .value="" is now done by the step-1 clear loop above.
+  }
+  syncBobotDropdowns();
+  applyBobotUiState(q.question_type);
+}
+
+// ============== Bulk-Add help block — TKP vs binary toggle ==============
+// Spec: tkp-scoring-spec.md §9.1 + #q-bulk-modal layout (kelola-soal.html
+// lines ~779-866). The bulk-add modal renders TWO sibling
+// `.bulk-format-help` <details> blocks marked with `data-help-mode`
+// ("binary" | "tkp"). This helper shows the block whose mode matches
+// the currently-selected Tipe Soal and hides the other, so the user
+// sees the paste-syntax example that applies to their selection.
+//
+// Why two blocks instead of one dynamic one:
+// - Static markup is inspect-friendly in dev tools + doesn't require
+//   re-rendering on every change. JS only flips `style.display`.
+// - Keeps the optical diff obvious to the designer/CSS team — a new
+//   theme accent (`.bulk-format-help--tkp`) on the TKP block reads as
+//   "different rule set" without needing colour/logic coordination
+//   with content injection.
+//
+// Implementation notes:
+// - Uses a TKP prefix-match (`startsWith("TKP")` after upper-casing)
+//   so any of the 6 TKP sub-categories in the <select> optgroup
+//   ("TKP Pelayanan Publik", "TKP Jejaring Kerja", ...) trigger the
+//   TKP help block. Reuses the project-wide `isTkpType()` helper
+//   (defined later in this file, near `BOBOT_LETTERS`) as the single
+//   source of truth for the TKP prefix check. A future rename of
+//   `isTkpType` would fail loudly across every TKP branch in the
+//   project (single-question modal Bobot wiring, bulk-post handler,
+//   this toggle) — a connected refactor is far easier to spot than
+//   a silently-disconnected inline copy that drifts out of sync.
+// - Operates via `style.display` because the TKP <details> already
+//   has inline `style="display: none; …"` set in markup so the TKP
+//   block starts hidden (initial q-type is "TWK Pilar Negara"). Setting
+//   `display = ""` reverts to the cascade (block-level details).
+// - Scoped to `#q-bulk-modal` so future `.bulk-format-help` usages
+//   outside the bulk modal are unaffected by this toggle.
+function setBulkHelpMode(questionType) {
+  // Direct call to the project-wide `isTkpType()` (defined later in
+  // this file). Hoisting guarantee: `isTkpType` is a `function`
+  // declaration, so it is callable from any following code regardless
+  // of source order. The bulk-add-btn handler calls setBulkHelpMode
+  // only on user click (long after script parse), and
+  // initBulkHelpModeToggle() runs on DOMContentLoaded (also post-parse),
+  // so the function is fully initialized by the time either path runs.
+  const isTkp = isTkpType(questionType || "");
+  const blocks = document.querySelectorAll(
+    "#q-bulk-modal [data-help-mode]",
+  );
+  blocks.forEach((el) => {
+    const wantsTkp = el.dataset.helpMode === "tkp";
+    // Show block iff its declared mode matches the current
+    // question-type family. Setting display="" lets the cascade
+    // compute the natural `display` for the element (block-level
+    // for <details>), which preserves the user-closed state when
+    // they re-open the modal later.
+    el.style.display = wantsTkp === isTkp ? "" : "none";
+  });
+}
+
+// Attach the change listener on `bulk-q-question-type` once the DOM is
+// reachable. Idempotent — safe to call multiple times (skipped on
+// re-call via a sentinel dataset flag so dev-tools HMR or page refetch
+// don't accumulate handlers). The listener fires only on USER-DRIVEN
+// changes; the `bulk-add-btn` open handler explicitly calls
+// setBulkHelpMode() after resetting the select to "TWK Pilar Negara" —
+// JS-set values do NOT fire 'change' events, so the manual call is
+// required for the initial re-open.
+function initBulkHelpModeToggle() {
+  const typeSelect = document.getElementById("bulk-q-question-type");
+  if (!typeSelect) return;
+  if (typeSelect.dataset.helpModeToggleInit === "1") return;
+  typeSelect.dataset.helpModeToggleInit = "1";
+  typeSelect.addEventListener("change", () => {
+    setBulkHelpMode(typeSelect.value);
+  });
+  // Set initial state on first load — default q-type is TWK so the
+  // binary block is initially visible. Harmless if the select was
+  // already mutated by some other script tag.
+  setBulkHelpMode(typeSelect.value);
+}
+
+// Wire up listeners once the form is reachable. Existing init() also runs
+// at body-load, but the form itself is in DOM from page load (no lazy mount),
+// so a plain readyState check is sufficient and idempotent.
+//
+// `initBulkHelpModeToggle` is bundled into the same readyState gate so the
+// bulk-modal help toggle is initialized atomically with the rest of the
+// TKP/Bobot wiring — no second DOMContentLoaded subscription needed.
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      initTkpListeners();
+      initBulkHelpModeToggle();
+    });
+  } else {
+    initTkpListeners();
+    initBulkHelpModeToggle();
+  }
+}

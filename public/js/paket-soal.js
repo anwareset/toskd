@@ -259,6 +259,25 @@ function renderBody(pageData, startIdx) {
   bodyEl.innerHTML = pageData
     .map((p, i) => {
       const count = state.countsById[p.id];
+      // Subtes chips: render tiap subtes sebagai <span> dengan class
+      // .chip__label--display (non-interactive variant dari .chip
+      // picker di modal — lihat public/css/styles.css §chip-display).
+      // Konsisten secara visual (pill shape, primary-light bg) tapi
+      // tidak clickable. subtesChips = string berisi <span>...</span>
+      // joined, subtesLabel = wrapper <div class="subtes-chips">
+      // untuk flex layout. Fallback ke 3 subtes untuk legacy pack.
+      // Nilai di-uppercase + di-esc (defense-in-depth).
+      const subtesChips = (
+        Array.isArray(p.subtests) && p.subtests.length
+          ? p.subtests
+          : ["TWK", "TIU", "TKP"]
+      )
+        .map(
+          (s) =>
+            `<span class="chip__label chip__label--display">${esc(String(s).toUpperCase())}</span>`,
+        )
+        .join("");
+      const subtesLabel = `<div class="subtes-chips">${subtesChips}</div>`;
       return `
         <tr>
           <td class="sticky-col-left">${startIdx + i + 1}</td>
@@ -266,6 +285,7 @@ function renderBody(pageData, startIdx) {
           <td>${p.duration_minutes} Menit</td>
           <td>${p.passing_grade}</td>
           <td>${count ?? 0} Soal</td>
+          <td>${subtesLabel}</td>
           <td class="sticky-col-right">
             <button class="btn-secondary" onclick="editPack(${p.id})">Edit</button>
             <button class="btn-primary" onclick="location.href='/paket-detail.html?packId=${p.id}'">Lihat Soal</button>
@@ -496,6 +516,13 @@ document.getElementById("add-pack-btn").onclick = () => {
   form.reset();
   document.getElementById("pack-id").value = "";
   modalTitle.textContent = "Tambah Paket Soal";
+  // Default: semua 3 subtes dicentang (kasus Combo 3-subtes paling umum).
+  for (const cb of document.querySelectorAll('input[name="pack-sub"]')) {
+    cb.checked = true;
+  }
+  // renderThresholdInputs() (called below) will refresh the helper text
+  // via updateSubtestsHelper() with the correct count = 3.
+  renderThresholdInputs();
   modal.showModal();
 };
 
@@ -508,10 +535,48 @@ form.onsubmit = async (e) => {
   const duration_minutes = parseInt(
     document.getElementById("pack-duration").value,
   );
-  const passing_grade = parseInt(document.getElementById("pack-passing").value);
+  // Passing grade total = jumlah kelulusan per subtes. Field input total
+  // sudah dihapus dari modal (lihat paket-soal-pack-type-spec.md §2).
+  // Server tetap menerima passing_grade untuk backward compat dengan
+  // schema existing — nilainya cukup dihitung client-side dari subtest
+  // thresholds yang sudah dikumpulkan di bawah.
+
+  // Subtes picker: 1-3 checkbox. Admin boleh pilih 1, 2, atau 3 subtes
+  // (tidak ada lagi konsep "Single" / "Combo" terpisah — jumlah subtes
+  // yang dipilih otomatis menentukan berapa form input threshold yang
+  // muncul). Server memvalidasi min 1 subtes.
+  const selectedSubtests = Array.from(
+    document.querySelectorAll('input[name="pack-sub"]:checked'),
+  ).map((cb) => cb.value);
+  if (selectedSubtests.length < 1) {
+    alert("Pilih minimal 1 subtes!");
+    return;
+  }
+
+  // Per-subtest thresholds (default to SKD standard if input left blank).
+  const subtest_thresholds = {};
+  for (const sub of selectedSubtests) {
+    const inp = document.getElementById(`pack-threshold-${sub}`);
+    const val =
+      inp && inp.value !== ""
+        ? parseInt(inp.value, 10)
+        : defaultThresholdFor(sub);
+    subtest_thresholds[sub] =
+      Number.isFinite(val) && val >= 0 ? val : defaultThresholdFor(sub);
+  }
+
+  // Passing grade total = jumlah kelulusan per subtes yang dipilih.
+  const passing_grade = Object.values(subtest_thresholds).reduce(
+    (sum, v) => sum + v,
+    0,
+  );
 
   if (duration_minutes < 1) {
     alert("Durasi minimal 1 menit!");
+    return;
+  }
+  if (!Number.isFinite(passing_grade) || passing_grade < 0) {
+    alert("Passing grade total harus angka >= 0!");
     return;
   }
 
@@ -522,7 +587,13 @@ form.onsubmit = async (e) => {
     const res = await wrapFetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, duration_minutes, passing_grade }),
+      body: JSON.stringify({
+        name,
+        duration_minutes,
+        passing_grade,
+        subtests: selectedSubtests,
+        subtest_thresholds,
+      }),
     });
     if (!res.ok) throw new Error();
     modal.close();
@@ -543,7 +614,37 @@ window.editPack = (id) => {
   document.getElementById("pack-id").value = p.id;
   document.getElementById("pack-name").value = p.name;
   document.getElementById("pack-duration").value = p.duration_minutes;
-  document.getElementById("pack-passing").value = p.passing_grade;
+  const subtests = Array.isArray(p.subtests) && p.subtests.length
+    ? p.subtests
+    : ["TWK", "TIU", "TKP"];
+  for (const cb of document.querySelectorAll('input[name="pack-sub"]')) {
+    cb.checked = subtests.includes(cb.value);
+  }
+  // renderThresholdInputs() (called below) will refresh the helper text
+  // via updateSubtestsHelper() with the correct count based on the
+  // checked subtests. We do NOT pre-set the helper text here — the
+  // post-populate updateRunningTotal() + updateSubtestsHelper() in
+  // renderThresholdInputs will produce the right text after the
+  // checkboxes are populated.
+  renderThresholdInputs();
+  // After renderThresholdInputs creates the threshold inputs, populate
+  // their values from the stored pack.subtest_thresholds.
+  for (const sub of subtests) {
+    const inp = document.getElementById(`pack-threshold-${sub}`);
+    if (!inp) continue;
+    const val =
+      p.subtest_thresholds && typeof p.subtest_thresholds[sub] === "number"
+        ? p.subtest_thresholds[sub]
+        : defaultThresholdFor(sub);
+    inp.value = val;
+  }
+  // Recompute the live "Total: <sum>" after populating the per-subtest
+  // inputs. renderThresholdInputs above already called updateRunningTotal
+  // once with the render-time defaults (65/80/166), but those defaults
+  // may differ from this pack's actual subtest_thresholds. Without this
+  // call the live total would show the stale default-sum instead of the
+  // pack's stored sum.
+  updateRunningTotal();
   modalTitle.textContent = "Edit Paket Soal";
   modal.showModal();
 };
@@ -568,6 +669,121 @@ window.deletePack = async (id) => {
     alert("Gagal menghapus paket soal.");
   }
 };
+
+// ==========================================================
+// Per-subtes picker helpers (paket-soal-pack-type-spec.md §2)
+// ==========================================================
+//
+// Tidak ada lagi konsep Tipe Paket (Single/Combo) — admin cukup pilih
+// 1-3 subtes via checkbox, dan jumlah subtes yang dipilih menentukan
+// berapa form input threshold per subtes yang muncul. Default awal
+// adalah semua 3 subtes dicentang (kasus Combo 3-subtes paling umum).
+// ==========================================================
+
+const DEFAULT_SUBTEST_THRESHOLDS = { TWK: 65, TIU: 80, TKP: 166 };
+function defaultThresholdFor(sub) {
+  return DEFAULT_SUBTEST_THRESHOLDS[sub] || 0;
+}
+
+// Re-render the threshold input list based on currently-checked subtests.
+// On each render we keep any user-typed values; new subtests get their default.
+function renderThresholdInputs() {
+  const list = document.getElementById("pack-thresholds-list");
+  if (!list) return;
+  const selected = Array.from(
+    document.querySelectorAll('input[name="pack-sub"]:checked'),
+  ).map((cb) => cb.value);
+  list.innerHTML = selected
+    .map((sub) => {
+      const existing = document.getElementById(`pack-threshold-${sub}`);
+      const rawVal =
+        existing && existing.value !== ""
+          ? existing.value
+          : defaultThresholdFor(sub);
+      // Defensive HTML-escape for `value=""` attribute injection. Number
+      // inputs sanitize at browser level but we still guard against
+      // programmatically-set values that may carry `"`.
+      const safeVal = String(rawVal).replace(/"/g, "&quot;");
+      return (
+        '<div style="display:flex;gap:8px;align-items:center">' +
+        `<span style="min-width:48px;font-weight:600">${sub}</span>` +
+        `<input type="number" id="pack-threshold-${sub}" ` +
+        `class="input-field" min="0" value="${safeVal}" ` +
+        `placeholder="${defaultThresholdFor(sub)}" style="flex:1">` +
+        "</div>"
+      );
+    })
+    .join("");
+  const helper = document.getElementById("pack-thresholds-helper");
+  if (helper) {
+    helper.textContent =
+      selected.length === 0
+        ? "Pilih subtes di atas terlebih dahulu."
+        : `${selected.length} nilai kelulusan per subtes akan disimpan.`;
+  }
+  updateSubtestsHelper();
+  updateRunningTotal();
+}
+
+// updateSubtestsHelper — refreshes the small text under the subtes
+// chip picker so the admin sees how many chips they have selected
+// (and which ones). Called from renderThresholdInputs() on every
+// checkbox change. Text format:
+//   - 0 selected : "Pilih 1-3 subtes untuk paket ini." (invitation)
+//   - 1 selected : "1 subtes dipilih: TWK"
+//   - 2 selected : "2 subtes dipilih: TWK + TIU"
+//   - 3 selected : "Semua 3 subtes dipilih: TWK + TIU + TKP"
+function updateSubtestsHelper() {
+  const helper = document.getElementById("pack-subtests-helper");
+  if (!helper) return;
+  const selected = Array.from(
+    document.querySelectorAll('input[name="pack-sub"]:checked'),
+  ).map((cb) => cb.value);
+  if (selected.length === 0) {
+    helper.textContent = "Pilih 1-3 subtes untuk paket ini.";
+  } else if (selected.length === 1) {
+    helper.textContent = `1 subtes dipilih: ${selected[0]}`;
+  } else if (selected.length === 2) {
+    helper.textContent = `2 subtes dipilih: ${selected.join(" + ")}`;
+  } else {
+    helper.textContent = `Semua 3 subtes dipilih: ${selected.join(" + ")}`;
+  }
+}
+
+// Live running total for "Passing Grade per Subtes" — auto-computed sum of
+// per-subtest threshold inputs. Updates on every 'input' keystroke via
+// parent delegation so re-renders of inner threshold inputs don't drop
+// the listener (see attached 'input' handler on #pack-thresholds-list
+// further down in this file).
+function updateRunningTotal() {
+  const totalEl = document.getElementById("pack-thresholds-running-total");
+  if (!totalEl) return;
+  const inputs = document.querySelectorAll(
+    '#pack-thresholds-list input[type="number"]',
+  );
+  let sum = 0;
+  for (const inp of inputs) {
+    const v = parseInt(inp.value, 10);
+    if (Number.isFinite(v) && v > 0) sum += v;
+  }
+  totalEl.textContent = `Total: ${sum}`;
+}
+
+// Parent-delegated 'input' event listener on #pack-thresholds-list. Catches
+// every keystroke in any threshold input and updates the running total.
+// Attached once at script load — innerHTML re-renders of the threshold
+// list replace children but NOT this listener on the parent element.
+document
+  .getElementById("pack-thresholds-list")
+  .addEventListener("input", updateRunningTotal);
+
+// Subtest picker change triggers threshold re-render. Attached ONCE at
+// script load — survives subsequent innerHTML re-renders inside
+// #pack-thresholds-list because these listeners are on the picker
+// checkboxes themselves, not on the threshold inputs.
+for (const cb of document.querySelectorAll('input[name="pack-sub"]')) {
+  cb.addEventListener("change", renderThresholdInputs);
+}
 
 // Kick off the initial load.
 init();

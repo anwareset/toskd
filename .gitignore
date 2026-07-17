@@ -167,5 +167,11 @@ Thumbs.db
 specs/**
 *-spec.md
 
+# Tests related
+tests/*.txt
+tests/*.json
+tests/trace-*.mjs
+tests/migration-*.mjs
+
 # Supabase
 supabase/**

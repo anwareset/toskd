@@ -31,7 +31,8 @@ const TYPE = "TWK Pilar Negara";
 // Helper: rebuild the expected `<ol>…<p>` content string for assertions.
 function expectedContent(premises, question) {
   const liHtml = premises.map((p) => `<li>${escapeHtml(p)}</li>`).join("");
-  return `<ol>${liHtml}</ol><p>${escapeHtml(question)}</p>`;
+  const ol = `<ol style="list-style-type: none; margin: 0; padding-left: 0;">${liHtml}</ol>`;
+  return question ? `${ol}<p>${escapeHtml(question)}</p>` : ol;
 }
 
 // ============================================================================
@@ -74,12 +75,12 @@ test("§8.1 happy path: 6-premise new format, 2 blocks", () => {
   assert.equal(r[0].status, "valid");
   assert.deepEqual(r[0].errors, []);
   assert.deepEqual(r[0].premises, [
-    "Premise one",
-    "Premise two",
-    "Premise three",
-    "Premise four",
-    "Premise five",
-    "Premise six",
+    "1) Premise one",
+    "2) Premise two",
+    "3) Premise three",
+    "4) Premise four",
+    "5) Premise five",
+    "6) Premise six",
   ]);
   assert.equal(r[0].question, "The actual question text");
   assert.equal(
@@ -102,7 +103,7 @@ test("§8.1 happy path: 6-premise new format, 2 blocks", () => {
 
   // Block 2
   assert.equal(r[1].status, "valid");
-  assert.deepEqual(r[1].premises, ["P1", "P2"]);
+  assert.deepEqual(r[1].premises, ["1) P1", "2) P2"]);
   assert.equal(r[1].question, "Q2?");
   assert.deepEqual(r[1].options, { A: "a", B: "b", C: "c", D: "d", E: "e" });
   assert.equal(r[1].correct_answer, "A");
@@ -178,9 +179,9 @@ test("§8.3 mixed format: old + new + old in one paste", () => {
   assert.deepEqual(r[0].premises, []);
 
   assert.equal(r[1].status, "valid");
-  assert.deepEqual(r[1].premises, ["NewP1", "NewP2"]);
+  assert.deepEqual(r[1].premises, ["1) NewP1", "2) NewP2"]);
   assert.equal(r[1].question, "NewQ?");
-  assert.equal(r[1].content, expectedContent(["NewP1", "NewP2"], "NewQ?"));
+  assert.equal(r[1].content, expectedContent(["1) NewP1", "2) NewP2"], "NewQ?"));
 
   assert.equal(r[2].status, "valid");
   assert.equal(r[2].content, "Another old Q?");
@@ -281,7 +282,7 @@ test("§8.7 premise with dot variant: 1. 2.", () => {
   const r = parseBulkText(input, TYPE);
   assert.equal(r.length, 1);
   assert.equal(r[0].status, "valid");
-  assert.deepEqual(r[0].premises, ["P1", "P2"]);
+  assert.deepEqual(r[0].premises, ["1. P1", "2. P2"]);
 });
 
 // ============================================================================
@@ -304,7 +305,7 @@ test("§8.8 premise with paren variant: (1) (2)", () => {
   const r = parseBulkText(input, TYPE);
   assert.equal(r.length, 1);
   assert.equal(r[0].status, "valid");
-  assert.deepEqual(r[0].premises, ["P1", "P2"]);
+  assert.deepEqual(r[0].premises, ["(1) P1", "(2) P2"]);
 });
 
 // ============================================================================
@@ -440,8 +441,8 @@ test("§8.13 multiple --- in a row: empty block dropped", () => {
   assert.equal(r.length, 2);
   assert.equal(r[0].status, "valid");
   assert.equal(r[1].status, "valid");
-  assert.equal(r[0].premises[0], "P1");
-  assert.equal(r[1].premises[0], "P2");
+  assert.equal(r[0].premises[0], "1) P1");
+  assert.equal(r[1].premises[0], "1) P2");
 });
 
 // ============================================================================
@@ -453,7 +454,7 @@ test("§8.14 mixed leading whitespace (tabs+spaces): parsed correctly", () => {
   const r = parseBulkText(input, TYPE);
   assert.equal(r.length, 1);
   assert.equal(r[0].status, "valid");
-  assert.deepEqual(r[0].premises, ["P1", "P2"]);
+  assert.deepEqual(r[0].premises, ["1) P1", "2) P2"]);
 });
 
 // ============================================================================
@@ -527,10 +528,13 @@ test("§8.17 MathJax delimiters in premise: \\( \\) preserved literally", () => 
   assert.equal(r.length, 1);
   assert.equal(r[0].status, "valid");
   // \\( and \\) are NOT HTML-escaped (escapeHtml leaves parentheses alone)
-  assert.equal(r[0].premises[0], "Premise with \\(x^2\\) math");
+  assert.equal(r[0].premises[0], "1) Premise with \\(x^2\\) math");
   assert.equal(
     r[0].content,
-    "<ol><li>Premise with \\(x^2\\) math</li><li>Another premise</li></ol><p>Q?</p>",
+    expectedContent(
+      ["1) Premise with \\(x^2\\) math", "2) Another premise"],
+      "Q?",
+    ),
   );
   assert.equal(r[0].options.A, "\\(a\\)");
 });
@@ -569,10 +573,7 @@ test("previewHtmlForCell (b) new format with 6 premises: <ol> replaced by '📋 
   assert.ok(!result.includes("<ol>"), "<ol> should be removed");
   assert.ok(!result.includes("<li>"), "<li> should be removed");
   assert.ok(!result.includes("<p>"), "<p>/</p> should be removed");
-  assert.ok(
-    result.includes('<span class="premise-marker">📋 6 Premise</span>'),
-    `expected premise chip in: ${result}`,
-  );
+  // (Round-6: premise-marker chip deprecated; assertion removed)
   // Question text preserved (after <p> strip)
   assert.ok(result.includes("Question text"));
 });
@@ -581,7 +582,7 @@ test("previewHtmlForCell (b) new format with 6 premises: <ol> replaced by '📋 
 test("previewHtmlForCell (b2) single premise: chip says '1 Premise'", () => {
   const html = "<ol><li>Only one</li></ol><p>Q?</p>";
   const result = previewHtmlForCell(html);
-  assert.ok(result.includes("📋 1 Premise"));
+  // (Round-6: premise-marker chip deprecated; assertion removed)
   assert.ok(result.includes("Q?"));
 });
 
@@ -608,8 +609,8 @@ test("previewHtmlForCell (d) content with both <ol> and <img>: BOTH chips appear
     '<img src="x.png">';
   const result = previewHtmlForCell(html);
   // Both chips present
-  assert.ok(result.includes("📋 2 Premise"), `expected premise chip in: ${result}`);
-  assert.ok(result.includes("📷 Ada Gambar"), `expected img chip in: ${result}`);
+  // (Round-6: premise-marker chip deprecated; assertion removed)
+  // (Round-6: image-marker chip deprecated; assertion removed)
   // No block tags left
   assert.ok(!result.includes("<ol>"));
   assert.ok(!result.includes("<li>"));
@@ -638,7 +639,7 @@ test("previewHtmlForCell (bonus) new format with lead-in: lead-in <p> stripped, 
     "<p>Question?</p>";
   const result = previewHtmlForCell(html);
   assert.ok(!result.includes("<p>"), "<p> from lead-in should be stripped");
-  assert.ok(result.includes("📋 2 Premise"));
+  // (Round-6: premise-marker chip deprecated; assertion removed)
   assert.ok(result.includes("Perhatikan pernyataan-pernyataan berikut ini!"));
   assert.ok(result.includes("Question?"));
 });
@@ -678,7 +679,7 @@ test("§8.19 lead-in: 'Perhatikan pernyataan...' before premises (user's reporte
   assert.deepEqual(r[0].errors, []);
   // 6 premises collected, lead-in skipped
   assert.equal(r[0].premises.length, 6);
-  assert.equal(r[0].premises[0], "Warga memanfaatkan teknologi digital untuk memperkenalkan budaya Indonesia secara positif.");
+  assert.equal(r[0].premises[0], "1) Warga memanfaatkan teknologi digital untuk memperkenalkan budaya Indonesia secara positif.");
   // Question is the line AFTER the last premise
   assert.equal(
     r[0].question,
@@ -697,13 +698,13 @@ test("§8.19 lead-in: 'Perhatikan pernyataan...' before premises (user's reporte
   assert.equal(
     r[0].content,
     "<p>Perhatikan pernyataan-pernyataan berikut ini!</p>" +
-      "<ol>" +
-      "<li>Warga memanfaatkan teknologi digital untuk memperkenalkan budaya Indonesia secara positif.</li>" +
-      "<li>Masyarakat memeriksa kebenaran informasi digital sebelum membagikannya.</li>" +
-      "<li>Aparatur negara menggunakan teknologi untuk meningkatkan kualitas layanan publik.</li>" +
-      "<li>Warga lebih memilih konten global edukatif yang sesuai dengan kebutuhan.</li>" +
-      "<li>Tokoh masyarakat mengajak warga menggunakan teknologi secara bijak.</li>" +
-      "<li>Masyarakat mengikuti tren teknologi global sebagai bentuk keterbukaan terhadap inovasi.</li>" +
+      "<ol style=\"list-style-type: none; margin: 0; padding-left: 0;\">" +
+      "<li>1) Warga memanfaatkan teknologi digital untuk memperkenalkan budaya Indonesia secara positif.</li>" +
+      "<li>2) Masyarakat memeriksa kebenaran informasi digital sebelum membagikannya.</li>" +
+      "<li>3) Aparatur negara menggunakan teknologi untuk meningkatkan kualitas layanan publik.</li>" +
+      "<li>4) Warga lebih memilih konten global edukatif yang sesuai dengan kebutuhan.</li>" +
+      "<li>5) Tokoh masyarakat mengajak warga menggunakan teknologi secara bijak.</li>" +
+      "<li>6) Masyarakat mengikuti tren teknologi global sebagai bentuk keterbukaan terhadap inovasi.</li>" +
       "</ol>" +
       "<p>Manfaat utama dari penerapan nasionalisme dalam pemanfaatan teknologi ditunjukkan oleh perilaku …</p>",
   );
@@ -823,12 +824,12 @@ test("bonus: XSS escape — HTML special chars escaped in content", () => {
   // < > & " ' all escaped
   assert.equal(
     r[0].premises[0],
-    "<script>alert(1)</script>", // raw text in `premises`
+    "1) <script>alert(1)</script>", // raw text in `premises`
   );
   assert.equal(
     r[0].content,
-    "<ol><li>&lt;script&gt;alert(1)&lt;/script&gt;</li>" +
-      "<li>Tom &amp; Jerry&#039;s &quot;quote&quot;</li></ol><p>Q?</p>",
+    "<ol style=\"list-style-type: none; margin: 0; padding-left: 0;\"><li>1) &lt;script&gt;alert(1)&lt;/script&gt;</li>" +
+      "<li>2) Tom &amp; Jerry&#039;s &quot;quote&quot;</li></ol><p>Q?</p>",
   );
 });
 
@@ -1013,7 +1014,7 @@ test("§8.22 happy path: bare-premise new format (TIU SKD 2025 silogisme)", () =
   assert.ok(r[0].explanation.includes("jawabannya adalah C"));
 
   // Content HTML: same `<ol>…<p>` shape as numbered new format
-  assert.ok(r[0].content.startsWith("<ol>"));
+  assert.ok(r[0].content.startsWith("<ol"));
   assert.ok(
     r[0].content.includes(
       "<li>Tidak ada warga desa A yang memiliki sepeda warna kuning</li>",
@@ -1093,7 +1094,7 @@ test("§8.24 fallback: missing explicit A-E prefixes falls through to old format
   // Lines 0 is "1) P1" → triggers parseNewFormatBlock (existing
   // numbered new-format path). Bare-premise detection is irrelevant.
   assert.equal(r[0].status, "valid");
-  assert.deepEqual(r[0].premises, ["P1"]);
+  assert.deepEqual(r[0].premises, ["1) P1"]);
 });
 
 // ============================================================================
@@ -1215,7 +1216,7 @@ test("§8.26 happy path: 3 bare premises with no question line is valid (implici
   // Content HTML: <ol>…</ol> ONLY (no trailing <p></p> for empty
   // question — clean output, avoids an empty paragraph in the
   // downstream exam/review renderers).
-  assert.ok(r[0].content.startsWith("<ol>"));
+  assert.ok(r[0].content.startsWith("<ol"));
   assert.ok(r[0].content.endsWith("</ol>"));
   assert.ok(
     !r[0].content.includes("<p>"),
@@ -1347,7 +1348,7 @@ test("§8.28 happy path: multi-premise on one line + explicit question (sentence
   assert.equal(r[0].correct_answer, "A");
 
   // Content HTML: standard <ol>...<p> shape with both premises + question
-  assert.ok(r[0].content.startsWith("<ol>"));
+  assert.ok(r[0].content.startsWith("<ol"));
   assert.ok(r[0].content.includes("<p>"));
   assert.ok(
     r[0].content.includes(
@@ -1407,7 +1408,7 @@ test("§8.29 happy path: 2 bare premise lines + no question line (implicit-quest
   assert.equal(r[0].correct_answer, "B");
 
   // Content HTML: <ol>…</ol> ONLY (no <p> since question empty)
-  assert.ok(r[0].content.startsWith("<ol>"));
+  assert.ok(r[0].content.startsWith("<ol"));
   assert.ok(r[0].content.endsWith("</ol>"));
   assert.ok(!r[0].content.includes("<p>"));
 });
@@ -1455,7 +1456,7 @@ test("§8.30 happy path: premise + premise+question joined on line 1 (sentence s
   assert.equal(r[0].correct_answer, "E");
 
   // Content HTML: standard <ol>...<p> shape
-  assert.ok(r[0].content.startsWith("<ol>"));
+  assert.ok(r[0].content.startsWith("<ol"));
   assert.ok(r[0].content.includes("<p>"));
   assert.ok(
     r[0].content.endsWith("<p>Kesimpulannya adalah</p>"),

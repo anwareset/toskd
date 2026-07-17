@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS questions (
     question_type TEXT NOT NULL DEFAULT 'text', -- Tipe soal (selalu 'text' karena gambar inline di rich text editor)
     options JSONB NOT NULL,             -- {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}
     correct_answer VARCHAR(1) NOT NULL, -- 'A', 'B', 'C', 'D', 'E'
+    option_scores JSONB,                -- TKP-only: {"A":1..5,"B":1..5,"C":1..5,"D":1..5,"E":1..5} sebagai permutasi {1,2,3,4,5}. NULL untuk TWK/TIU atau TKP yang belum di-set bobotnya (lihat tkp-scoring-spec.md §5/§9/§6).
     explanation TEXT NOT NULL,          -- Pembahasan (HTML, termasuk gambar inline)
     image_url TEXT,                     -- Deprecated: gambar sekarang inline di content
     explanation_image_url TEXT,         -- Deprecated: gambar sekarang inline di explanation
@@ -73,6 +74,44 @@ CREATE INDEX IF NOT EXISTS idx_admins_username ON admins(username);
 --   kolom content dan explanation.
 -- - Kolom question_type sekarang selalu bernilai 'text' karena tidak ada lagi
 --   pemisahan tipe soal (semua menggunakan rich text editor).
--- - Untuk migrasi data lama yang sudah memiliki gambar di image_url/explanation_image_url,
---   gambar akan tetap ditampilkan karena tag <img> akan dibaca dari kolom content
---   atau dari image_url/explanation_image_url.
+--- Untuk migrasi data lama yang sudah memiliki gambar di image_url/explanation_image_url,
+-- gambar akan tetap ditampilkan karena tag <img> akan dibaca dari kolom content
+-- atau dari image_url/explanation_image_url.
+--
+-- ============================================
+-- TKP weighted scoring (lihat tkp-scoring-spec.md §5/§6/§9)
+-- ============================================
+-- Kolom option_scores (JSONB, nullable) menyimpan bobot 1..5 per opsi A-E
+-- untuk soal TKP (TWK/TIU tetap NULL). Invariant §6: himpunan nilainya
+-- harus persis {1,2,3,4,5} (satu opsi per bobot), urutan huruf bebas —
+-- admin boleh menulis permutasi apa pun (mis. A=2,B=1,C=5,D=3,E=4) lewat
+-- (a) single-question modal Bobot TKP, atau
+-- (b) baris `Bobot: A=#,B=#,C=#,D=#,E=#` dalam bulk-import.
+-- Skor per soal = option_scores[answer] (TKP) atau jawaban_benar ? 5 : 0 (biner).
+--
+-- Untuk tabel yang sudah ada sebelum kolom ini ditambahkan, jalankan
+-- migrasi terpisan (idempoten):
+--   ALTER TABLE questions ADD COLUMN IF NOT EXISTS option_scores JSONB;
+
+-- ============================================
+-- PACK SUBTEST PICKER + PER-SUBTEST THRESHOLDS
+-- ============================================
+-- Mendukung checkbox picker 1-3 subtes di public/paket-soal.html:
+--   - 1 subtes  : 1 passing grade input (paket khusus subtes itu saja)
+--   - 2 subtes  : 2 passing grade inputs (combo 2-subtes)
+--   - 3 subtes  : 3 passing grade inputs (combo 3-subtes / paket lengkap)
+-- ketika user klik "Lihat soal" → paket-detail.html hanya menampilkan soal
+-- dengan question_type yang termasuk dalam pack.subtests.
+--
+-- Kolom:
+--   subtests            TEXT[]  daftar token subtes ['TWK','TIU'] dst.
+--                                panjang 1-3 sesuai pilihan admin
+--   subtest_thresholds  JSONB   peta {TWK:N, TIU:N, TKP:N} per-subtes
+--                                default Indonesia: TWK=65, TIU=80, TKP=166
+--
+-- Backward compat: pack lama auto-default ke 3 subtes + threshold standar,
+-- sehingga review.js + paket-detail.js tetap bekerja tanpa perubahan.
+ALTER TABLE question_packs
+  ADD COLUMN IF NOT EXISTS subtests TEXT[] NOT NULL DEFAULT ARRAY['TWK','TIU','TKP'],
+  ADD COLUMN IF NOT EXISTS subtest_thresholds JSONB NOT NULL DEFAULT
+    '{"TWK":65,"TIU":80,"TKP":166}'::jsonb;

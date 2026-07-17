@@ -169,6 +169,7 @@
                                 >
                                     Jumlah Soal<span class="sort-indicator"></span>
                                 </th>
+                                <th>Subtes</th>
                                 <th class="sticky-col-right">Aksi</th>
                             </tr>
                         </thead>
@@ -263,18 +264,110 @@
                                     placeholder="Contoh: 60"
                                 />
                             </div>
-                            <div class="form-group">
-                                <label for="pack-passing"
-                                    >Passing Grade (Skor)</label
+                            <!-- ============================================
+                                 Subtes chip picker (1-3 toggle) + per-subtes
+                                 thresholds. Tidak ada lagi dropdown
+                                 Tipe Paket terpisah — jumlah subtes yang
+                                 dipilih menentukan berapa form input
+                                 passing grade per subtes yang muncul di
+                                 bawah. Chip pattern: visually-hidden
+                                 <input type="checkbox"> + styled <span>
+                                 for chip appearance (lihat .chip rules
+                                 di styles.css). Form submission masih
+                                 membaca <input name="pack-sub"> checkboxes
+                                 persis seperti sebelumnya — tidak ada
+                                 perubahan pada kontrak data. Lihat
+                                 paket-soal-pack-type-spec.md §2.
+                                 ============================================ -->
+                            <div class="form-group" id="pack-subtests-group">
+                                <label>Subtes yang termasuk dalam paket</label>
+                                <div
+                                    id="pack-subtests-picker"
+                                    class="chip-group"
                                 >
-                                <input
-                                    type="number"
-                                    id="pack-passing"
-                                    class="input-field"
-                                    required
-                                    min="0"
-                                    value="85"
-                                />
+                                    <label class="chip">
+                                        <input
+                                            type="checkbox"
+                                            name="pack-sub"
+                                            value="TWK"
+                                            class="chip__input"
+                                        />
+                                        <span class="chip__label">TWK</span>
+                                    </label>
+                                    <label class="chip">
+                                        <input
+                                            type="checkbox"
+                                            name="pack-sub"
+                                            value="TIU"
+                                            class="chip__input"
+                                        />
+                                        <span class="chip__label">TIU</span>
+                                    </label>
+                                    <label class="chip">
+                                        <input
+                                            type="checkbox"
+                                            name="pack-sub"
+                                            value="TKP"
+                                            class="chip__input"
+                                        />
+                                        <span class="chip__label">TKP</span>
+                                    </label>
+                                </div>
+                                <small
+                                    id="pack-subtests-helper"
+                                    class="field-helper"
+                                >
+                                    Pilih 1-3 subtes untuk paket ini.
+                                </small>
+                            </div>
+
+                            <!-- Passing grade total dihitung otomatis
+                                 sebagai jumlah (sum) dari nilai kelulusan
+                                 per subtes di bawah ini, jadi tidak perlu
+                                 input terpisah di modal. Server tetap
+                                 menerima field passing_grade (untuk
+                                 backward compat dengan legacy pack). -->
+
+                            <div class="form-group" id="pack-thresholds-group">
+                                <div
+                                    style="
+                                        display: flex;
+                                        justify-content: space-between;
+                                        align-items: baseline;
+                                        gap: 8px;
+                                    "
+                                >
+                                    <label>Passing Grade per Subtes</label>
+                                    <span
+                                        id="pack-thresholds-running-total"
+                                        style="
+                                            font-weight: 600;
+                                            color: var(--text);
+                                            font-size: 0.95rem;
+                                        "
+                                    >
+                                        Total: 0
+                                    </span>
+                                </div>
+                                <div
+                                    id="pack-thresholds-list"
+                                    style="
+                                        display: flex;
+                                        gap: 8px;
+                                        flex-direction: column;
+                                    "
+                                ></div>
+                                <small
+                                    id="pack-thresholds-helper"
+                                    style="
+                                        color: var(--text-muted);
+                                        font-size: 0.825rem;
+                                        margin-top: 4px;
+                                    "
+                                >
+                                    Pilih subtes di atas untuk mengatur nilai
+                                    kelulusan per subtes.
+                                </small>
                             </div>
                             <div class="modal-buttons">
                                 <button

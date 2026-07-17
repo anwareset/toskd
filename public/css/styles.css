@@ -2348,3 +2348,504 @@ body.is-drawer-open > *:not(.global-header):not(.global-nav-drawer) {
 :root[data-theme="dark"] #loading-add {
     background: rgba(0, 0, 0, 0.55);
 }
+
+/* ============================================
+ * TKP weighted-scoring UI
+ * Spec: tkp-scoring-spec.md §19 (binding tables).
+ * Token-based; no hex literals.
+ * ============================================ */
+
+/* Round-8 (user request): hide the explicit Kunci Jawaban Benar dropdown
+   for TKP soal. The dropdown is still in the DOM (so legacy read paths
+   that grab `.value` from `#correct-ans` still work for binary soal +
+   read-only check), but it's visually hidden + non-interactive when the
+   form is in TKP mode. The correct answer is then auto-derived from the
+   option with the highest bobot weight at submit time
+   (deriveCorrectAnswerFromBobot() in public/js/kelola-soal.js).
+   Why this rule is .tkp-mode-scoped: for TWK/TIU soal, the dropdown is
+   the ONLY way to set the correct answer (admin still picks A/B/C/D/E).
+   Why it targets #correct-ans-group (the WRAPPER form-group, not the
+   select directly): hiding only the select would leave the label
+   "Kunci Jawaban Benar" visible without a corresponding input, which
+   reads as broken. select-and-label both disappear together.
+   Scoped under the q-modal dialog (Round-4 article selector) so it
+   cannot accidentally hide any #correct-ans in non-CMS surfaces. */
+/* Round-8 selector fix: this rule's ancestor class is on <form id="q-form">,
+   NOT on the dialog <dialog id="q-modal"> (applyBobotUiState toggles
+   `tkp-mode` on the form element). Original selector `#q-modal.tkp-mode`
+   silently never matched because the class lives on a child. New selector
+   targets form.tkp-mode as the ancestor of #correct-ans-group. Form
+   scoping (#q-modal form...) keeps the rule from accidentally hiding
+   any future #correct-ans-group outside the kelola-soal modal. */
+#q-modal form.tkp-mode #correct-ans-group {
+    display: none;
+}
+
+/* --- §19.1 Kelola-soal Bobot TKP block --- */
+.bobot-status-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    margin: 6px 0 14px;
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+}
+.tkp-mode .bobot-status-banner {
+    display: flex;
+}
+.bobot-status-banner--ok {
+    background: var(--success-light);
+    color: var(--success);
+    box-shadow: inset 0 0 0 1px var(--success);
+}
+.bobot-status-banner--fail {
+    background: var(--danger-light);
+    color: var(--danger);
+    box-shadow: inset 0 0 0 1px var(--danger);
+}
+.bobot-status-banner-helper {
+    color: var(--text-muted);
+    font-size: 0.825rem;
+    margin-left: auto;
+}
+
+.bobot-input-row {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+.tkp-mode .bobot-input-row { display: flex; }
+.bobot-input-row-label {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    min-width: 70px;
+}
+.bobot-input {
+    width: 64px;
+    padding: 6px 8px;
+    text-align: right;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+.bobot-input::-webkit-outer-spin-button,
+.bobot-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+/* Round-7: bobot widgets are now <select> dropdowns instead of
+   <input type="number"> elements. The select needs a different base
+   style: native chevron visible + left-aligned option text (vs the
+   previous right-aligned numeric input). Browsers apply `appearance:
+   auto` by default on selects, which paints the chevron — explicitly
+   state it so any .bobot-input[type="number"] fallback still works.
+   `.bobot-input:not([type="number"])` mirrors the input styling
+   elsewhere but skips the right-align + spinner-suppression rules. */
+.bobot-input:not([type="number"]) {
+    appearance: auto;
+    -webkit-appearance: auto;
+    text-align: center;
+    padding-right: 24px;
+    cursor: pointer;
+    background-position: right 6px center;
+}
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+.bobot-input--valid { border-color: var(--success); }
+.bobot-input--invalid {
+    border-color: var(--danger);
+    background: var(--danger-light);
+}
+.bobot-input-helper {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+.bobot-input-helper--invalid { color: var(--danger); }
+
+button.q-submit-btn:disabled,
+.q-submit-btn[disabled] {
+    background: var(--surface-header);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* --- §19.2 Review gradient cards --- */
+.option-item.weight-1 { background: var(--danger-light); }
+.option-item.weight-2 {
+    background: linear-gradient(to right,
+        var(--danger-light) 0%,
+        var(--surface) 100%);
+}
+.option-item.weight-3 { background: var(--surface); }
+.option-item.weight-4 {
+    background: linear-gradient(to right,
+        var(--success-light) 0%,
+        var(--surface) 100%);
+}
+.option-item.weight-5 { background: var(--success-light); }
+.option-item.weight-pick {
+    border: 2px solid var(--primary);
+    border-radius: var(--radius);
+    padding: 6px 10px;
+    margin: -2px 0;
+}
+
+.weight-badge {
+    display: inline-block;
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    background: var(--surface-header);
+    flex-shrink: 0;
+}
+.weight-badge--pick {
+    background: var(--primary-light);
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.tkp-unanswered-caption {
+    margin: 6px 0 10px;
+    font-size: 0.875rem;
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+/* Review answer-grid partial state (TKP picks worth 1–4 pts). */
+.answer-grid button.partial {
+    background: var(--primary-light);
+    color: var(--primary);
+    box-shadow: inset 0 0 0 1px var(--primary);
+}
+.answer-grid button.partial::after {
+    content: attr(data-pts);
+    font-size: 0.65rem;
+    vertical-align: super;
+}
+
+.review-stats-subtest {
+    padding: 8px 16px;
+    text-align: center;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+}
+.review-stats-subtest strong { color: var(--text); margin: 0 4px; }
+
+/* ==== Bulk Add modal: TKP-specific help block (spec tkp-scoring-spec.md §9.1) ====
+   The Bulk Add modal (#q-bulk-modal) has TWO sibling `.bulk-format-help`
+   <details> blocks inside the paste-area data-section. One carries
+   `data-help-mode="binary"` (TWK/TIU help — premise + 5 opsi + kunci +
+   pembahasan), the other `data-help-mode="tkp"` (TKP help — same paste
+   syntax but explains the cyclic 5/4/3/2/1 weighting). public/js/kelola-soal.js
+   reads the `bulk-q-question-type` select and shows/hides the matching
+   block at open time + on every change event.
+
+   Why a left-edge inset stripe + tinted background:
+   - The binary helper uses a flat `var(--surface-header)` panel and a
+     generic `--border` outline — visually identical to the inline
+     `<p>` explanatory text below it. Without differentiation, users
+     wouldn't realize there's a SECOND, type-specific help at all.
+   - `inset 4px 0 0 var(--primary)` paints a 4px-wide left-edge accent
+     inside the box. Same `--primary` hue as the <summary> emoji-prefix
+     "⚖ Format TKP" text and the already-existing "Bobot valid" chip
+     banner in the single-question modal — palette consistency for the
+     user. Reads at a glance as "different rule set, see premium accent".
+   - Lightly tinted background so the TKP block visually pops above the
+     surrounding binary helper. Token-only via `color-mix(in srgb, …, …)`
+     — no hex literal — so palette tweaks in tokens.css automatically
+     propagate to this accent. Falls back acceptably on browsers without
+     `color-mix` (the rule simply parses as invalid for that property and
+     the browser uses block's existing --surface-header background).
+
+   Scoped under `#q-bulk-modal` so this rule cannot accidentally leak
+   into the single-question modal (#q-modal) which uses the same class
+   name `.bulk-format-help` nowhere — defensive against future stylesheet
+   edits that might mirror the help class to the single-question modal
+   for some reason. No `!important` needed here because the inline
+   `style="display: none;"` on the TKP <details> markup + JS
+   `el.style.display` toggle ARE the `display` controllers — this rule
+   only paints background + box-shadow, never competes on display. */
+#q-bulk-modal .bulk-format-help--tkp {
+    background: color-mix(in srgb, var(--primary-light) 40%, var(--surface-header));
+    box-shadow: inset 4px 0 0 var(--primary);
+}
+/* Dark-mode override: --surface-header in dark theme is already near-
+   coal, so a flat color-mix tint at 40% would be barely visible. Bump
+   the primary share to 18% so the TKP block still pops visually against
+   the binary helper beside it. Same color-mix recipe, darker hue mix. */
+[data-theme="dark"] #q-bulk-modal .bulk-format-help--tkp {
+    background: color-mix(in srgb, var(--primary) 18%, var(--surface-header));
+}
+#q-bulk-modal .bulk-format-help--tkp summary {
+    color: var(--primary);
+}
+
+/* ============================================
+ * Subtes chip picker (paket-soal-pack-type-spec.md §2)
+ * Replaces the old checkbox-list picker with a compact chip/badge
+ * toggle UI. Pattern: visually-hidden <input type="checkbox"> +
+ * styled <span> for chip appearance. Form submission still reads
+ * <input name="pack-sub"> checkboxes, so no JS contract change.
+ *
+ * Why this pattern (vs. <button>+JS state mirror):
+ *   - Native checkbox + <label> association handles focus,
+ *     keyboard activation (Space), and form submission for free.
+ *   - :checked + adjacent-sibling CSS selector is widely supported
+ *     (every browser used by TOSKD admins) and stays in CSS-land,
+ *     no JS state mirroring needed.
+ *   - The hidden <input> remains tabbable + screen-reader
+ *     accessible (the visually-hidden recipe below preserves both).
+ *
+ * Token-only: no hex literals. Works in light + dark themes via
+ * existing --primary/--primary-light/--border/--text-muted tokens.
+ * ============================================ */
+
+.chip-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.chip {
+    display: inline-flex;
+    cursor: pointer;
+    user-select: none;
+    /* label is inline by default; this avoids baseline-alignment
+       jitter when the inner indicator dot changes size on toggle */
+    position: relative;
+}
+
+.chip__input {
+    /* visually-hidden recipe — keeps the checkbox focusable + in
+       the a11y tree + form-submittable, while removing it from
+       visual layout. Same recipe used in many component libraries
+       (Reach UI, Headless UI, Radix). Uses clip-path: inset(50%)
+       per current spec; the legacy `clip: rect(0 0 0 0)` is kept
+       as a fallback for older browsers (e.g. pre-2020 Safari) that
+       don't support clip-path on replaced elements. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.chip__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    /* Padding tuned for 36-40px chip height — clears the WCAG 2.5.5
+       recommended 44px target on touch devices when combined with
+       tap-friendly gap (8px) to neighbors. Increase further on
+       mobile via the @media block below. */
+    padding: 9px 18px;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1.5px solid var(--border);
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: background 0.15s ease, color 0.15s ease,
+        border-color 0.15s ease, transform 0.1s ease;
+}
+
+/* The little circle indicator inside each chip. Fills with primary
+   color when selected — gives a "radio-button" affordance without
+   being a radio. ::before keeps the markup minimal (no extra span). */
+.chip__label::before {
+    content: "";
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    background: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease,
+        box-shadow 0.15s ease;
+    flex-shrink: 0;
+}
+
+/* Hover (unselected) — slight border + text color shift for affordance. */
+.chip:hover .chip__label {
+    border-color: var(--text-muted);
+    color: var(--text);
+}
+
+/* Active press — tiny scale to feel responsive. */
+.chip:active .chip__label {
+    transform: scale(0.97);
+}
+
+/* Selected state — primary color fills chip + indicator. The
+   inset box-shadow on the ::before creates a "filled circle with
+   white center" ring effect that matches the surface tone. */
+.chip__input:checked + .chip__label {
+    background: var(--primary-light);
+    color: var(--primary);
+    border-color: var(--primary);
+    font-weight: 600;
+}
+.chip__input:checked + .chip__label::before {
+    background: var(--primary);
+    border-color: var(--primary);
+    box-shadow: inset 0 0 0 2px var(--primary-light);
+}
+
+/* Focus ring (keyboard navigation) — show on the LABEL, not the
+   hidden input, so it's actually visible. Matches the form-input
+   focus-visible ring elsewhere in the app for visual consistency. */
+.chip__input:focus-visible + .chip__label {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* Field helper text — shared style for the small text under a
+   form-group (used here for the subtes helper, but available
+   for any future form that wants the muted-secondary look). */
+.field-helper {
+    color: var(--text-muted);
+    font-size: 0.825rem;
+    margin-top: 4px;
+    display: block;
+}
+
+/* Dark-mode tweak for the chip indicator's inset "ring" — in
+   dark mode --primary-light is a deep indigo, so we want the
+   ring color to match the dark-mode surface tone, not the
+   light-mode surface (which would be jarring white inside a
+   dark chip). */
+[data-theme="dark"] .chip__input:checked + .chip__label::before {
+    box-shadow: inset 0 0 0 2px var(--surface);
+}
+
+/* Accessibility: respect users' motion preferences. Chip transitions
+   (color/background/border + the 0.97 press scale) can trigger
+   vestibular discomfort in sensitive users. Snapping state changes
+   is the safe default. Matches the same pattern elsewhere in the
+   app for any future transitions. */
+@media (prefers-reduced-motion: reduce) {
+    .chip__label,
+    .chip__label::before {
+        transition: none;
+    }
+    .chip:active .chip__label {
+        transform: none;
+    }
+}
+
+/* Mobile: bump tap target above the 44pt HIG / 48dp Material
+   threshold so admin on touch devices doesn't fat-finger adjacent
+   chips. 14/24 padding → chip height ≈ 45px (clears Apple HIG 44pt
+   + accounts for 1.5px border on each side). */
+@media (max-width: 640px) {
+    .chip__label {
+        padding: 14px 24px;
+    }
+}
+
+/* ============================================
+ * .chip__label--display — non-interactive chip variant
+ * ============================================
+ * Reuses the .chip__label visual (pill shape, primary-light bg,
+ * primary text, border) but is smaller + non-interactive (no
+ * ::before radio-indicator, no hover/active/focus states, cursor
+ * default). Dipakai di tabel/list cell (mis. paket-soal.html kolom
+ * "Subtes") untuk nampilkan presence tanpa membuat clickable —
+ * konsisten secara visual dengan chip picker di modal tapi bukan
+ * form control.
+ *
+ * Token-only, no hex literals. Inherits dari .chip__label
+ * (background, color, border, border-radius, font-weight, etc.)
+ * sehingga kalau ada perubahan palette di .chip__label,
+ * --display ikut ter-update. */
+.chip__label--display {
+    padding: 3px 10px;
+    font-size: 0.825rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: default;
+}
+
+/* Hide the radio-style ::before indicator (14px circle) yang
+   ditambahkan oleh .chip__label::before. Untuk --display kita
+   tidak perlu affordance toggle — cukup pill-shaped label. */
+.chip__label--display::before {
+    display: none;
+}
+
+/* Container untuk multiple display chips dalam satu table cell.
+ * inline-flex + small gap + flex-wrap: graceful horizontal flow
+ * dengan fallback wrap ke baris baru pada viewport sempit. */
+.subtes-chips {
+    display: inline-flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+/* ============================================================================
+ * Round-4 verbatim-display CSS (user directive: "hilangkan penomoran premis")
+ * ============================================================================
+ * Applies to <ol> elements rendered FROM question content. Examined by:
+ * exam.html, review.html, paket-detail.html, kelola-soal.html, Bulk Add
+ * modal preview.
+ *
+ * Why a scoped CSS rule + ALSO the inline style on bulk-parser's <ol>:
+ *   1. Defense-in-depth: any consumer reading `q.content` from DB gets
+ *      the no-numbering render even if the inline style is stripped by
+ *      a future code path (e.g., a sanitiser or a Quill round-trip).
+ *   2. Back-compat with EXISTING rows stored as `<ol>` without inline
+ *      style (pre-Round-4 data). Without this rule, old questions would
+ *      still render with browser `1./2./3.` prefixes, contradicting the
+ *      user's "no numbering on ANY rendering" directive.
+ *   3. Scope-safe: targets specific wrapper classes only (`.q-content
+ *      ol` for the exam/review question container, `.bulk-preview-ol`
+ *      for the Bulk Add modal). Admin-UI OLs (settings menus, nav) are
+ *      NOT matched — they keep their default `1./2./3.` decoration.
+ *
+ * `padding-left: 0` collapses the 40px default <ol> indent so multi-line
+ * premise paragraphs read flush with the question block left edge —
+ * matches the user's "tampilkan apa adanya" expectation. */
+.q-content ol,
+.bulk-preview-ol {
+    list-style-type: none;
+    margin: 0;
+    padding-left: 0;
+}
+
+/* Round-4 continuation-paragraph flush rendering. bulk-parser emits
+ * one `<p class="bulk-preview-question">` per multi-line question
+ * chunk (catalog case #B style — user pastes 1) 2) 3) premises + 2
+ * continuation prose lines + A-E). Without this rule the browser's
+ * default `p { margin: 1em 0 }` paints a visible blank-line gap
+ * between each `<p>` — contradicting the user's "tampilkan apa adanya"
+ * expectation that the prose renders as a flush paragraph block.
+ *
+ * Also applies to `.q-content p` so the SAME flush rendering lands in
+ * exam.html / review.html / paket-detail.html when the stored content
+ * has multiple `<p>` elements (multi-line question). Scoped so
+ * unrelated `<p>` (settings dialog prose, navigation copy, admin UI
+ * chrome) keep their default `1em 0` margins for readability.
+ *
+ * Note: this rule ONLY affects question content rendering. The
+ * `q-explanation` and explanation blocks elsewhere in the UI keep
+ * default `<p>` margins so multi-paragraph explanations still have
+ * visual separation between paragraphs. */
+.q-content p,
+.bulk-preview-question {
+    margin: 0;
+}

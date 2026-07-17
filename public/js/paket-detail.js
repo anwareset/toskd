@@ -180,7 +180,17 @@ async function init() {
     allQuestions = await aqRes.json();
 
     packTitle.textContent = pack.name;
-    packSubtitle.textContent = `⏱️ Durasi: ${pack.duration_minutes} Menit | Passing Grade: ${pack.passing_grade}`;
+    const subLabels = (
+      Array.isArray(pack.subtests) && pack.subtests.length
+        ? pack.subtests
+        : ["TWK", "TIU", "TKP"]
+    )
+      .map((s) => s.toUpperCase())
+      .join(" + ");
+    // Subtitle: tidak ada lagi Single/Combo wording — cukup tampilkan
+    // daftar subtes yang dipilih admin (1-3 token, dipisah ' + ').
+    // Legacy packs tanpa subtests default ke 3 subtes.
+    packSubtitle.textContent = `⏱️ Durasi: ${pack.duration_minutes} Menit | Passing Grade: ${pack.passing_grade} | Subtes: ${subLabels}`;
 
     document.getElementById("loading-bank").style.display = "none";
     document.getElementById("loading-pack").style.display = "none";
@@ -195,6 +205,17 @@ async function init() {
 function renderBankList() {
   const packIds = new Set(packQuestions.map((q) => q.id));
   let available = allQuestions.filter((q) => !packIds.has(q.id));
+
+  // Pack-subtests filter (Single/Combo dropdown in paket-soal.html).
+  // Default to all 3 if pack.subtests is missing (legacy packs).
+  const packSubtests =
+    Array.isArray(pack?.subtests) && pack.subtests.length
+      ? pack.subtests
+      : ["TWK", "TIU", "TKP"];
+  available = available.filter((q) => {
+    const qt = String(q.question_type || "").trim().toUpperCase();
+    return packSubtests.some((p) => qt.startsWith(p));
+  });
 
   // Apply search filter
   if (bankSearchTerm) {
