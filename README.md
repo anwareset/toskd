@@ -95,8 +95,8 @@ toskd/
    - **TKP (bobot)**: per-soal memiliki poin (1–5), 0 poin jika tidak dijawab.
    - **Total skor absolut**: bukan persentase
 
-2. **Pack Subtest**:
-   - Paket soal terdiri dari 1–3 dari (TWK, TIU, TKP).
+2. **Paket Soal**:
+   - Paket soal terdiri dari 1–3 subtes (TWK, TIU, TKP).
    - Setiap subtes dalam paket memiliki nilai passing grade masing-masing (Contoh: TWK=65, TIU=80, TKP=166).
 
 3. **Passing Grade**:
