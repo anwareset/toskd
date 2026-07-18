@@ -735,6 +735,11 @@ tbody tr:hover {
     transition: all 0.15s;
     background: var(--surface);
     color: var(--text);
+    /* Per user feedback 2026-07-18 round 7: position:relative enables
+       the .q-bobot-chip span (rendered by review.js buildGrid inside
+       the button for TKP cells) to absolutely-position in the corner.
+       See .q-bobot-chip below for the floating badge style. */
+    position: relative;
 }
 .answer-grid button.answered {
     background: var(--success);
@@ -875,6 +880,18 @@ tbody tr:hover {
     border-left: 4px solid var(--primary);
     border-radius: 0 8px 8px 0;
     line-height: 1.7;
+    /* Per user request 2026-07-18: horizontal scrollbar so admin/user
+       can read wide content (long URLs, wide MathJax, <pre> blocks,
+       or long unbroken strings) without scrolling the whole page.
+       Mirrors the .table-scroll-wrapper pattern in kelola-soal.html:
+       the box stays within the page column while its content scrolls
+       internally. overflow-x: auto (not scroll) so the bar only
+       appears when content actually exceeds the box width — no
+       reserved space for empty bar on short content.
+       max-width: 100% is belt-and-suspenders: ensures the box
+       itself cannot grow beyond its parent flex column. */
+    overflow-x: auto;
+    max-width: 100%;
 }
 /* Image inside the explanation block: render as block-level with the
    standard `max-width:100%;height:auto` cap so it can never overflow
@@ -988,6 +1005,37 @@ tbody tr:hover {
     font-size: 0.85rem;
     color: var(--text-muted);
 }
+/* ==== paket-detail.html: bank-questions-list timestamp chip ====
+   Per user request 2026-07-18: small visible timestamp indicator at each
+   bank row showing relative add-time ('2 hari lalu') with full Indonesian
+   tooltip on hover. Lets admin verify the newest-first sort order at a
+   glance.
+   - flex-shrink: 0 keeps the chip full-width even when option-label gets
+     less whitespace + truncates with ellipsis (long content).
+   - font-size 0.78rem + --text-muted reads as metadata, not content, so
+     it does not visually compete with question text.
+   - chip styling (--surface-header bg + --border outline + 4px radius)
+     matches .img-marker and .premise-marker elsewhere in this stylesheet
+     -- visual consistency with other preview-only chips in the same UI
+     grammar.
+   - cursor: help + native title attribute (= full Indonesian timestamp)
+     is the lightweight tooltip -- no JS overlay needed. */
+.bank-timestamp {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    background: var(--surface-header);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    margin-left: 8px;
+    white-space: nowrap;
+    cursor: help;
+    font-weight: 500;
+}
+.bank-timestamp:hover {
+    color: var(--text);
+}
 /* Drag handle affordance (visual only). The whole .pack-question-item
    remains draggable; the ::before just signals to the user where to
    grab. Pure-CSS so we don't have to touch paket-detail.js markup. */
@@ -996,7 +1044,7 @@ tbody tr:hover {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 18px;
+    min-width: 14px;
     color: var(--text-muted);
     font-weight: 700;
     line-height: 1;
@@ -1163,6 +1211,21 @@ tbody tr:hover {
     .review-answer-panel {
         position: static;
         max-height: none;
+        /* Mobile/tablet: width parity with question-container.
+           Base rule (line ~719) sets `align-self: flex-start` so the
+           panel shrink-wraps to its content's intrinsic width on
+           desktop side-by-side (`flex: 3` provides the width column).
+           But once the layout switches to flex-direction: column
+           here, the cross-axis IS the panel's width and `flex-start`
+           leaves the panel narrower than its sibling
+           .question-container even though both fill the same parent.
+           Force `align-self: stretch` + `width: 100%` so the answer
+           panel always matches the question-container's outer width,
+           per user request 2026-07-18 (review.html + exam.html).
+           Belt-and-suspenders: explicit width: 100% keeps parity even
+           if a future rule introduces min-width or intrinsic sizing. */
+        align-self: stretch;
+        width: 100%;
     }
     .answer-grid {
         grid-template-columns: repeat(8, 1fr);
@@ -1191,6 +1254,25 @@ tbody tr:hover {
 
     .answer-grid {
         grid-template-columns: repeat(5, 1fr);
+    }
+    .answer-grid button {
+        /* Mobile UX (per user request 2026-07-18): enlarge the 5-per-row
+           answer grid buttons so each is comfortably tappable. Base rule
+           uses `aspect-ratio: 1; font-size: 0.85rem` which renders each
+           button ~36-44px tall on a typical phone — below the Apple HIG
+           44pt minimum touch target and tight on thumb reach. Override
+           to guarantee ~56dp square regardless of viewport quirks. The
+           `aspect-ratio: 1` from base still applies so buttons stay
+           square (not stretched to fit panel), but min-height/width
+           cap ensures they never go below the touch target even if a
+           narrower-than-expected phone renders the column < 56px. Also
+           bump padding + font to feel less cramped. Applies to BOTH
+           exam.html (.answer-panel) and review.html (.review-answer-panel)
+           because both panels use the same .answer-grid markup. */
+        min-height: 56px;
+        min-width: 56px;
+        padding: 4px;
+        font-size: 1rem;
     }
     .exam-header {
         padding: 12px 16px;
@@ -2479,24 +2561,69 @@ button.q-submit-btn:disabled,
 }
 
 /* --- §19.2 Review gradient cards --- */
-.option-item.weight-1 { background: var(--danger-light); }
-.option-item.weight-2 {
-    background: linear-gradient(to right,
-        var(--danger-light) 0%,
-        var(--surface) 100%);
+/* ==== TKP weighted-scoring: per-bobot solid color map ==== */
+/* REVISED 2026-07-18: original solid-color saturation made option content
+   unreadable ("terlalu pekat, konten opsi tidak dapat dilihat"). User
+   asked for style "seperti soal dengan tipe lain" -- mirror the
+   binary soal feedback pattern (.option-item.correct-answer uses
+   var(--success-light) bg + var(--success) border, BUKAN full-saturation
+   success bg). New mapping:
+       bobot 5  → bg --success-light, border --success       (best)
+       bobot 4  → bg --success-light, border 50% mix        (good)
+       bobot 3  → bg #fef3c7 (amber-100), border #f59e0b     (neutral)
+       bobot 2  → bg #fed7aa (orange-200), border #ea580c    (bad)
+       bobot 1  → bg --danger-light,  border --danger        (worst)
+   text always = var(--text) (dark) so option content stays readable.
+   border-color = visual accent for "this option has bobot N".
+   Color logic per weight:
+   - 5 & 1 = saturated accent borders (echo binary correct/wrong)
+   - 4 = mix between saturated and surface (subtle differentiation)
+   - 3 = yellow tint (amber) -- neutral / balanced choice
+   - 2 = orange tint -- "red slightly yellow" per user spec
+   Hex literals (#fef3c7, #f59e0b, #fed7aa, #ea580c) used where
+   tokens.css lacks --warning + --orange. Acceptable per project
+   convention since the alternative is adding new tokens. */
+.option-item.weight-5,
+.answer-grid button.weight-5 {
+    background: var(--success-light);
+    border-color: var(--success);
+    color: var(--text);
 }
-.option-item.weight-3 { background: var(--surface); }
-.option-item.weight-4 {
-    background: linear-gradient(to right,
-        var(--success-light) 0%,
-        var(--surface) 100%);
+.option-item.weight-4,
+.answer-grid button.weight-4 {
+    background: var(--success-light);
+    border-color: color-mix(in srgb, var(--success) 55%, var(--surface) 45%);
+    color: var(--text);
 }
-.option-item.weight-5 { background: var(--success-light); }
+.option-item.weight-3,
+.answer-grid button.weight-3 {
+    background: var(--amber-100);
+    border-color: var(--amber-500);
+    color: var(--text);
+}
+.option-item.weight-2,
+.answer-grid button.weight-2 {
+    background: var(--orange-200);
+    border-color: var(--orange-600);
+    color: var(--text);
+}
+.option-item.weight-1,
+.answer-grid button.weight-1 {
+    background: var(--danger-light);
+    border-color: var(--danger);
+    color: var(--text);
+}
 .option-item.weight-pick {
     border: 2px solid var(--primary);
     border-radius: var(--radius);
-    padding: 6px 10px;
-    margin: -2px 0;
+    /* Per user feedback 2026-07-18: previous padding: 6px 10px; + margin:
+       -2px 0; caused the picked option-item row to be SHORTER vertically
+       AND to TOUCH the option-item below (negative bottom margin creates
+       2px overlap with the next sibling's top margin). Picking highlight
+       now relies on PRIMARY border accent only -- row dimension stays
+       identical to siblings so layout is consistent regardless of which
+       option is in the picked state. The base .option-item padding
+       (12px 16px) and margin-bottom (8px) keep applying. */
 }
 
 .weight-badge {
@@ -2515,24 +2642,104 @@ button.q-submit-btn:disabled,
     font-weight: 600;
 }
 
-.tkp-unanswered-caption {
-    margin: 6px 0 10px;
-    font-size: 0.875rem;
-    font-style: italic;
-    color: var(--text-muted);
-}
+/* Per user feedback 2026-07-18: .tkp-unanswered-caption rule removed --
+   the "Tidak dijawab · 0 poin" / "Bobot Anda: X poin" caption was
+   injected by review.js for TKP questions but rendered redundant by
+   (1) the weight badge already inline on each option card and (2) the
+   bobot superscript now displayed by everyone via [data-pts]::after on
+   the answer-grid button (correct/incorrect/partial/unanswered all
+   show the score). Keeping a dead CSS rule around causes "ghost"
+   overrides if a future contributor accidentally re-injects the
+   div. Removed cleanly with this comment as breadcrumb. */
 
 /* Review answer-grid partial state (TKP picks worth 1–4 pts). */
-.answer-grid button.partial {
-    background: var(--primary-light);
-    color: var(--primary);
-    box-shadow: inset 0 0 0 1px var(--primary);
+/* ==== TKP bobot chip on answer-grid cell ==== */
+/* Per user feedback 2026-07-18 round 7: replaced the 0.65rem ::after
+   superscript (too small for thumb-readable mobile tap-target
+   feedback) with an explicit floating chip at the cell's top-right
+   corner. BuildGrid review.js renders <span class="q-bobot-chip
+   weight-N">N</span> inside the button for every answered TKP cell --
+   the chip badge color mirrors the .option-item.weight-N palette so
+   bobot signal is consistent across both the option-row level
+   (large left panel) and question-list level (small right grid).
+   Unanswered TKP cells do NOT render the chip (a is undefined in
+   buildGrid). Binary TWK/TIU cells do NOT render the chip (no
+   weight concept -- just green/red correct/incorrect).
+
+   Why position: absolute + top-right -6px instead of inline?
+   - Inline chips would shrink the question number's tap-target area
+     on mobile (already cramped 5-per-row grid layout per Round 6).
+   - Floating badge overlays the cell without consuming its layout.
+   - White border + box-shadow over surface = visually separates
+     badge from cell even when both are colored. */
+.q-bobot-chip {
+    position: absolute;
+    /* Per user feedback 2026-07-18 round 8: chip moved from
+       top:-3/right:-3 (overlapping the cell corner edge) to
+       top:3/right:3 (inset inside the cell with 3px breathing
+       space from the inner border). The chip now sits clearly
+       INSIDE the cell boundary rather than centered on the
+       button edge, giving the visual 'jarak' (distance) the
+       user requested. Box-shadow remains intact as the
+       separation halo between chip and the cell content
+       underneath. */
+    top: 5px;
+    right: 5px;
+    min-width: 18px;
+    height: 14px;
+    padding: 0 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;  /* explicit pill on 14x14 square = clamp to 7px (50% of side); replaces ambiguous 9px which CSS auto-clamps to 7px anyway */
+    border: 1px solid var(--surface);  /* Per user feedback 2026-07-18 round 12: thinned from 2px to 1px ring on small circle to address "too thick" complaint */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    /* pointer-events: none ensures the chip doesn't intercept clicks
+       meant for the button (which has its own click handler that
+       opens the corresponding question). */
 }
-.answer-grid button.partial::after {
-    content: attr(data-pts);
-    font-size: 0.65rem;
-    vertical-align: super;
+.q-bobot-chip.weight-1 {
+    background: var(--danger);
+    color: var(--on-primary);
 }
+.q-bobot-chip.weight-2 {
+    /* Per reviewer feedback 2026-07-18: shifted from #fed7aa (orange-200,
+       nearly identical to amber-100 on #fef3c7) to #fdba74 (orange-300)
+       to widen the perceptual distance between weight-2 and weight-3
+       for color-blind users. The two were indistinguishable yellow-
+       hued pales; orange-300 has more red-warmth that contrasts with
+       yellow-300's yellow-warmth. The numeric text "2" vs "3" inside
+       the chip is the primary signal; color is reinforcing only. */
+    background: var(--orange-300);
+    color: var(--text);
+}
+.q-bobot-chip.weight-3 {
+    /* Same rationale as weight-2: shifted from #fef3c7 (amber-100, pale
+       yellow) to #fde047 (yellow-300, more saturated yellow) so it
+       reads as distinctly "yellow" rather than "off-white" on the
+       surface bg. */
+    background: var(--yellow-300);
+    color: var(--text);
+}
+.q-bobot-chip.weight-4 {
+    background: var(--success-light);
+    color: var(--text);
+}
+.q-bobot-chip.weight-5 {
+    background: var(--success);
+    color: var(--on-primary);
+}
+
+/* Superscript fallback REMOVED 2026-07-18 per reviewer feedback --
+   the explicit .q-bobot-chip carries the bobot signal at a readable
+   size; the [data-pts]::after rule + (display: none) was dead code
+   (effectively no-op). Future contributors needing the superscript
+   for some narrow use case can re-introduce it; we don't keep
+   unused rules with `display: none` since lints flag it. */
 
 .review-stats-subtest {
     padding: 8px 16px;

@@ -49,6 +49,24 @@
     /* Status — warning (visual accent only) */
     --warning: #b86b0c;           /* amber.10 */
 
+    /* TKP bobot mid-tones (high contrast for small chips). The chip
+       relies on bg color to convey weight at low pixel counts; we use
+       the saturated mid stop (300) so the badge reads at a glance
+       against any cell bg. Light-mode hex matches orange.3 / yellow.3
+       from Radix Colors. */
+    --orange-300: #fdba74;        /* orange.3 — chip weight-2 */
+    --yellow-300: #fde047;        /* yellow.3 — chip weight-3 */
+
+    /* TKP bobot light tints + dark borders for big option rows. Two
+       stops per hue: bg = light tint (calmer visual on big surfaces),
+       border = dark stop (high contrast against --surface). Tokens
+       named by hex family step (200/600) following Radix convention
+       so palette tweaks can be done in this single file. */
+    --orange-200: #fed7aa;        /* orange.2 — option-item weight-2 bg */
+    --orange-600: #ea580c;        /* orange.6 — option-item weight-2 border */
+    --amber-100: #fef3c7;         /* amber.1 — option-item weight-3 bg */
+    --amber-500: #f59e0b;         /* amber.5 — option-item weight-3 border */
+
     /* Surfaces & text */
     --bg: #fcfcfd;                 /* slate.1 — page background */
     --surface: #ffffff;            /* cards, panels, modals */
@@ -81,6 +99,23 @@
     --danger-hover: #ec5d63;       /* lighter hover */
 
     --warning: #ffb224;            /* amber.10 — pops on dark */
+
+    /* TKP bobot mid-tones — dark mode chips stay vivid yellow/orange
+       so the badge still pops against dark gray answer-grid cells.
+       Slightly less harsh than the light-mode neon: #facc15 (yellow.4)
+       reads as bright but not blinding on dark surfaces. */
+    --orange-300: #fb923c;        /* orange.4 — saturated for dark */
+    --yellow-300: #facc15;        /* yellow.4 — saturated for dark */
+
+    /* TKP bobot tints + borders — dark mode inverts the surface/border
+       pairing. Light-mode = light-tint bg + dark border. Dark-mode =
+       dark-tint bg + LIGHT-tint border (using the light-mode 200 hue
+       as the border so the weight signal reads from the OUTLINE rather
+       than the FILL — better contrast on already-dark cells). */
+    --orange-200: #3d2210;        /* dimmed orange surface tone */
+    --orange-600: #fed7aa;        /* light-mode bg hue as dark-mode border */
+    --amber-100: #3d2a0a;         /* dimmed amber surface tone */
+    --amber-500: #fef3c7;         /* light-mode bg hue as dark-mode border */
 
     --bg: #111113;                 /* slate.1 dark — page background */
     --surface: #161618;            /* slate.2 dark — card/panel */

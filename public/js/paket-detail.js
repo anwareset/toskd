@@ -166,6 +166,44 @@ function typesetMath(rootEl) {
 // We re-bind to a local const for readability at call sites:
 //   const cell = previewHtmlForCell(q.content);
 
+// Bank-row timestamp chip helpers (per user request 2026-07-18).
+// formatIndonesianRelative -- Indonesian relative-time phrases:
+// 'baru saja' -> 'X menit lalu' -> 'X jam lalu' -> 'X hari lalu' ->
+// 'X minggu lalu' -> 'X bulan lalu' -> 'X tahun lalu'. Granularity
+// tiers by diff between now() and the ISO timestamp. Defensive
+// against missing/invalid date (returns fallback string instead
+// of 'NaN hari lalu' breaking the row).
+function formatIndonesianRelative(isoString) {
+  if (!isoString) return "baru saja";
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return "tanggal tidak valid";
+  const diffMs = Date.now() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return "baru saja";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return diffMin + " menit lalu";
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return diffHour + " jam lalu";
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay < 7) return diffDay + " hari lalu";
+  if (diffDay < 30) return Math.floor(diffDay / 7) + " minggu lalu";
+  if (diffDay < 365) return Math.floor(diffDay / 30) + " bulan lalu";
+  return Math.floor(diffDay / 365) + " tahun lalu";
+}
+
+// formatIndonesianFull -- Indonesian-locale full timestamp for hover
+// tooltip on the chip. Browser-native toLocaleString handles timezone
+// conversion to admin's local zone (typically WIB GMT+7).
+// dateStyle:medium + timeStyle:short gives a concise but unambiguous
+// format. Returns empty string for missing/invalid dates so the
+// tooltip simply does not show instead of showing 'Invalid Date'.
+function formatIndonesianFull(isoString) {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+}
+
 async function init() {
   document.getElementById("loading-bank").style.display = "flex";
   document.getElementById("loading-pack").style.display = "flex";
@@ -178,6 +216,21 @@ async function init() {
     pack = await pRes.json();
     packQuestions = await pqRes.json();
     allQuestions = await aqRes.json();
+    // Bank list order: newest-added soal first (per user request
+    // 2026-07-18). Server GET /api/questions has no ORDER BY clause so
+    // client-side sort is the only place to enforce a deterministic
+    // chronological-feeling list. Defensive `|| 0` epoch fallback for
+    // rows missing `created_at` (legacy or future migration edge
+    // cases). Same pattern as kelola-soal.js line 685 + paket-soal.js
+    // `sortColumn: "created_at"` default — consistent across pages.
+    // In-place `.sort()` mutates the array reference that renderBankList
+    // iterates from, so all downstream filter/search/pagination sees
+    // the ordered list with no extra variable to maintain.
+    allQuestions.sort(
+      (a, b) =>
+        new Date(b.created_at || 0).getTime() -
+        new Date(a.created_at || 0).getTime(),
+    );
 
     packTitle.textContent = pack.name;
     const subLabels = (
@@ -265,6 +318,7 @@ function renderBankList() {
         <span class="option-label">
           <strong>[${esc(q.question_type.toUpperCase())}]</strong> ${window.bulkParser.previewHtmlForCell(q.content)}
         </span>
+        <time class="bank-timestamp" datetime="${esc(q.created_at || "")}" title="${esc(formatIndonesianFull(q.created_at))}" aria-label="Ditambahkan ${esc(formatIndonesianRelative(q.created_at))}">🕐 ${esc(formatIndonesianRelative(q.created_at))}</time>
       </label>
     `,
       )

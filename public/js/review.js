@@ -153,20 +153,37 @@ function buildGrid() {
       const a = result.answers[q.id];
       let c = "not-answered";
       let ptsAttr = "";
+      let pts = 0;
       if (!a) {
         c = "not-answered";
       } else if (isTkp(q)) {
-        const pts = Number(((q.option_scores || {})[a]) || 0);
+        pts = Number(((q.option_scores || {})[a]) || 0);
+        // Per user feedback 2026-07-18: always emit data-pts on TKP
+        // buttons (correct/incorrect/partial/unanswered), so the CSS
+        // [data-pts]::after rule can render the bobot superscript on
+        // every TKP answer-grid cell, not just partial cases. Spec §7.1
+        // only required partial; this generalizes to "every TKP cell
+        // shows the points the participant scored".
+        ptsAttr = ` data-pts="${pts}"`;
         if (pts === 5) c = "correct";
         else if (pts === 0) c = "incorrect";
-        else {
-          c = "partial";
-          ptsAttr = ` data-pts="${pts}"`;
-        }
+        else c = "partial";
       } else {
         c = a === q.correct_answer ? "correct" : "incorrect";
       }
-      return `<button class="${c}"${ptsAttr} data-i="${i}">${i + 1}</button>`;
+      // Floating bobot chip on TKP cell corners (per user feedback
+      // 2026-07-18 round 7). Mirrors the .weight-N palette already
+      // established on .option-item so chip color reinforces the same
+      // weight signal at answer-grid zoom level. Chip is more
+      // thumb-readable than the 0.65rem ::after superscript on mobile.
+      // Hidden for unanswered TKP (if (!a) branch -- we never reach
+      // here) and for binary cells (TWK/TIU emit no chip because
+      // tkpCell is false -- weight concept does not apply).
+      const tkpCell = isTkp(q) && a;
+      const chipHtml = tkpCell
+        ? `<span class="q-bobot-chip weight-${pts}">${pts}</span>`
+        : "";
+      return `<button class="${c}"${ptsAttr} data-i="${i}">${chipHtml}${i + 1}</button>`;
     })
     .join("");
   gridEl.onclick = (e) => {
@@ -187,12 +204,15 @@ function renderQuestion(idx) {
 
   if (isTkp(q)) {
     // TKP rendering per spec §13.1 / §13.2.
-    const myPts = questionPoints(q);
-    const unanswered = !a;
-    const captionInner = unanswered
-      ? "Tidak dijawab · 0 poin"
-      : `Bobot Anda: ${myPts} poin${myPts > 0 ? " ✓" : ""}`;
-    let html2 = `<div class="tkp-unanswered-caption">${captionInner}</div>`;
+    // Per user feedback 2026-07-18: tkp-unanswered-caption div removed --
+    // the per-question "Bobot Anda: X poin" caption was redundant with the
+    // bobot badge already shown inline on each option and the bobot
+    // indicator now displayed on the answer-grid button (see buildGrid +
+    // data-pts attribute + CSS [data-pts]::after rule). Cleanup without
+    // information loss: bobot is visible at both the option-row level
+    // (per-option weight badge) AND the question-list level (answer-grid
+    // superscript).
+    let html2 = "";
     for (const [k, v] of Object.entries(q.options || {})) {
       const w = Number(((q.option_scores || {})[k]) || 0);
       const cls = ["option-item", `weight-${w}`];
