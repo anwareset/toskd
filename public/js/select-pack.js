@@ -49,9 +49,9 @@ async function loadPacks() {
 
 function selectPack(id) {
   const p = packsList.find((x) => x.id === id);
-  if (p && (p.count < 1 || p.count > 35)) {
+  if (p && (p.count < 1 || p.count > 110)) {
     alert(
-      `Paket ini memiliki ${p.count} soal. Untuk memulai ujian, paket harus memiliki antara 1 sampai 35 soal.`,
+      `Paket ini memiliki ${p.count} soal. Untuk memulai ujian, paket harus memiliki antara 1 sampai 110 soal.`,
     );
     return;
   }

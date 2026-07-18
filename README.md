@@ -63,7 +63,7 @@ toskd/
 │   └── js/
 │       ├── theme.js              # Theme manager + dynamic global header injector (auto-inject di semua page, kecuali exam/review)
 │       ├── main.js               # Halaman index (landing - navigasi utama: Mulai Ujian, Bank Soal, Scoreboard)
-│       ├── select-pack.js        # Halaman Pilih Paket - listing paket + validasi 1–35 soal + modal nama peserta
+│       ├── select-pack.js        # Halaman Pilih Paket - listing paket + validasi 1–110 soal + modal nama peserta
 │       ├── exam.js               # Halaman ujian - timer persist (wall-clock + sid + multi-tab sync) + answer grid (hijau/merah) + TKP weighted scoring (option_scores per soal)
 │       ├── review.js             # Halaman pembahasan - skor + status Lulus/Tidak + per-soal pembahasan (benar/salah/partial) + TKP weight gradient cards + per-subtest breakdown (filtered by pack.subtests) + <p> wrapper stripping
 │       ├── scoreboard.js         # Halaman scoreboard - pagination + sortable headers + search filter (sticky-left No column)
@@ -91,29 +91,20 @@ toskd/
 ## 🔧 Rule & Logika Ujian
 
 1. **Scoring per Soal**:
-   - **TWK / TIU (binary)**: 5 poin jika jawaban benar, 0 poin jika salah/tidak dijawab
-   - **TKP (weighted)**: `option_scores[answer]` poin (1–5). Bobot dibaca dari `option_scores` JSONB per soal - opsi yang dijawab partisipan menentukan poin (mis. jawaban dengan bobot 5 = 5 poin, bobot 1 = 1 poin, dst).
-   - **TKP tanpa bobot (legacy, `option_scores` NULL)**: fallback binary (5/0) supaya hasil ujian lama tetap valid sampai admin mengisi bobot per soal.
-   - **Total skor absolut** (bukan persentase)
+   - **TWK / TIU (biner)**: 5 poin jika jawaban benar, 0 poin jika salah/tidak dijawab
+   - **TKP (bobot)**: per-soal memiliki poin (1–5), 0 poin jika tidak dijawab.
+   - **Total skor absolut**: bukan persentase
 
-2. **Pack Subtest Picker** (1–3 subtes per paket):
-   - Admin pilih 1–3 dari {TWK, TIU, TKP} via chip picker di modal Tambah/Edit Paket.
-   - `pack.subtests` array (TEXT[]) menentukan tipe soal yang boleh ditambahkan - server-side filter via `validateQuestionMatchesPack` (defense-in-depth vs client-side filter di `paket-detail.js`).
-   - Tiap subtes yang dipilih punya `subtest_thresholds[sub]` (JSONB peta {TWK:N, TIU:N, TKP:N}, default Indonesia: TWK=65, TIU=80, TKP=166).
+2. **Pack Subtest**:
+   - Paket soal terdiri dari 1–3 dari (TWK, TIU, TKP).
+   - Setiap subtes dalam paket memiliki nilai passing grade masing-masing (Contoh: TWK=65, TIU=80, TKP=166).
 
 3. **Passing Grade**:
-   - Per paket: `passing_grade = sum(subtest_thresholds[sub])` untuk semua subtes dalam `pack.subtests` (auto-computed di client, disimpan di server untuk backward compat).
-   - Status: "Lulus PG" jika `score >= passing_grade`, else "Tidak Lulus PG".
-   - Ditentukan per paket soal, bukan per subtes (subtes hanya jadi filter di bank list).
+   - Peserta "Lulus PG" jika hasil semua subtes mencapai passing grade subtes.
+   - Jika hasil salah satu subtes tidak mencapai passing grade subtes, maka peserta "Tidak Lulus PG". 
 
-4. **TKP `option_scores` Invariants** (lihat tkp-scoring-spec.md §6):
-   - `option_scores` JSONB nullable; NULL untuk TWK/TIU (atau TKP yang belum di-set bobotnya).
-   - Untuk TKP: values harus himpunan persis `{1, 2, 3, 4, 5}` (satu opsi per bobot, urutan huruf bebas - admin boleh menulis permutasi apa pun, mis. A=2,B=1,C=5,D=3,E=4).
-   - Validasi di client (single-question modal Bobot TKP) + server (`validateOptionScores` di `src/server.js`, V1-strict untuk TKP di single + bulk endpoints).
-   - Bobot tertinggi = opsi yang benar (`correct_answer` di-derive dari opsi dengan bobot 5 di bulk-parser `enrichTkpBobot`).
-
-5. **Limitasi Paket Soal**:
-   - Minimal 1 soal, maksimal 35 soal per paket.
+4. **Limitasi Paket Soal**:
+   - Minimal 1 soal, maksimal 110 soal per paket.
 
 ---
 

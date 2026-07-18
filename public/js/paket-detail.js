@@ -539,8 +539,8 @@ addBtn.onclick = async () => {
     return;
   }
 
-  if (packQuestions.length + checked.length > 35) {
-    alert("Maksimal 35 soal per paket!");
+  if (packQuestions.length + checked.length > 110) {
+    alert("Maksimal 110 soal per paket!");
     return;
   }
 
@@ -681,8 +681,8 @@ function handleDragEnd() {
 }
 
 saveBtn.onclick = async () => {
-  if (packQuestions.length < 1 || packQuestions.length > 35) {
-    alert("Setiap paket harus memiliki antara 1 sampai 35 soal!");
+  if (packQuestions.length < 1 || packQuestions.length > 110) {
+    alert("Setiap paket harus memiliki antara 1 sampai 110 soal!");
     return;
   }
   saveBtn.disabled = true;

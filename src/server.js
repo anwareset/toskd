@@ -931,7 +931,7 @@ app.post("/api/exam/submit", async (req, res) => {
 
     const { data: packData, error: packError } = await supabase
       .from("question_packs")
-      .select("passing_grade")
+      .select("passing_grade, subtests, subtest_thresholds")
       .eq("id", pack_id)
       .single();
     if (packError) throw packError;
@@ -952,8 +952,53 @@ app.post("/api/exam/submit", async (req, res) => {
       0,
     );
 
-    const status =
-      score >= packData.passing_grade ? "Lulus PG" : "Tidak Lulus PG";
+    // Per-subtest passing grade (per user request 2026-07-18 round 2):
+    //   status = "Lulus PG" iff every active subtest.earned >= subtest.thresholds[sub].
+    //   For 1-subtest packs (Single) this collapses to one comparison;
+    //   for 2-3 subtests (Combo) every subtest must pass independently.
+    //   Indonesian SKD per-subtest standard thresholds: TWK=65, TIU=80, TKP=166.
+    //   Legacy fallback: if pack.subtest_thresholds is missing/empty (pre-
+    //   migration-003 packs that predate subtests[]), fall back to the
+    //   global passing_grade integer check for backward compatibility.
+    const DEFAULT_SUBTEST_THRESHOLDS = { TWK: 65, TIU: 80, TKP: 166 };
+    const activeSubtests =
+      Array.isArray(packData.subtests) && packData.subtests.length
+        ? packData.subtests
+        : ["TWK", "TIU", "TKP"];
+    const subtestEarned = { TWK: 0, TIU: 0, TKP: 0 };
+    for (const q of questions) {
+      const t = String(q.question_type || "").trim().toUpperCase();
+      let bucket = null;
+      if (t.startsWith("TWK")) bucket = "TWK";
+      else if (t.startsWith("TKP")) bucket = "TKP";
+      else if (t.startsWith("TIU")) bucket = "TIU";
+      if (!bucket) continue;
+      subtestEarned[bucket] += scoreForQuestion(q, answers[q.id]);
+    }
+    const thresholdsObj =
+      packData.subtest_thresholds &&
+      typeof packData.subtest_thresholds === "object" &&
+      !Array.isArray(packData.subtest_thresholds)
+        ? packData.subtest_thresholds
+        : null;
+    let status;
+    if (thresholdsObj && Object.keys(thresholdsObj).length > 0) {
+      const lulus = activeSubtests.every((sub) => {
+        const earned = subtestEarned[sub] || 0;
+        const threshold = Number(
+          thresholdsObj[sub] ?? DEFAULT_SUBTEST_THRESHOLDS[sub],
+        );
+        return (
+          Number.isFinite(threshold) && Number.isFinite(earned) && earned >= threshold
+        );
+      });
+      status = lulus ? "Lulus PG" : "Tidak Lulus PG";
+    } else {
+      // Legacy single-threshold fallback (packs created before migration-003).
+      const pg = Number(packData.passing_grade);
+      status =
+        Number.isFinite(pg) && score >= pg ? "Lulus PG" : "Tidak Lulus PG";
+    }
 
     const { data, error } = await supabase
       .from("exam_results")
