@@ -75,21 +75,35 @@ function questionPoints(q) {
 // Per-subtest breakdown (spec §6.2 / §7.2): counts denotes the per-subtest
 // MAX (which is 5 × N_subtest); earned is the participant's per-subtest sum.
 function computeBreakdowns() {
+  // Per-subtest breakdown (spec §6.2 / §7.2).
+  //
+  // Bucket derivation SYNCED with src/server.js submit endpoint order
+  // (per 2026-07-18 round 2): TWK → TKP → TIU → DROP unknown. The
+  // first-three-letter prefix test is mutually exclusive across the 3
+  // known subtes; TKP is checked explicitly so a typo like "TKP2"
+  // still falls into "TKP" (admin intent) rather than being silently
+  // re-classified as TIU on the client only (which used to inflate TIU
+  // totals vs the server-authoritative submit endpoint verdict).
+  //
+  // Score accounting per bucket (differs from server.js because the UI
+  // does not recompute scores — only shows earned/cap):
+  //   * Binary (TWK / TIU): correct=5, incorrect=0 per 1 soal.
+  //   * TKP (weighted): bobot from option_scores (1..5); partial scoring
+  //                       possible, mirrors server.js scoreForQuestion.
   const counts = { TWK: 0, TIU: 0, TKP: 0 };
   const earned = { TWK: 0, TIU: 0, TKP: 0 };
   for (const q of questions) {
-    const a = (result.answers || {})[q.id];
-    const t = (q.question_type || "").trim().toUpperCase();
-    if (isTkp(q)) {
-      counts.TKP += 5;
-      earned.TKP += questionPoints(q);
-      continue;
-    }
+    const t = String(q.question_type || "").trim().toUpperCase();
     let bucket = null;
     if (t.startsWith("TWK")) bucket = "TWK";
-    else bucket = "TIU"; // catch-all for binary (TIU + future free-text)
-    if (bucket) {
-      counts[bucket] += 5;
+    else if (t.startsWith("TKP")) bucket = "TKP";
+    else if (t.startsWith("TIU")) bucket = "TIU";
+    if (!bucket) continue; // drop unknowns — matches server.js
+    counts[bucket] += 5;
+    if (bucket === "TKP") {
+      earned[bucket] += questionPoints(q);
+    } else {
+      const a = (result.answers || {})[q.id];
       earned[bucket] += a === q.correct_answer ? 5 : 0;
     }
   }

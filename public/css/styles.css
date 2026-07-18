@@ -2672,6 +2672,7 @@ button.q-submit-btn:disabled,
    - Floating badge overlays the cell without consuming its layout.
    - White border + box-shadow over surface = visually separates
      badge from cell even when both are colored. */
+/* ==== .q-bobot-chip (TKP answer-grid bobot badge) ==== */
 .q-bobot-chip {
     position: absolute;
     /* Per user feedback 2026-07-18 round 8: chip moved from
@@ -2692,10 +2693,13 @@ button.q-submit-btn:disabled,
     align-items: center;
     justify-content: center;
     border-radius: 50%;  /* explicit pill on 14x14 square = clamp to 7px (50% of side); replaces ambiguous 9px which CSS auto-clamps to 7px anyway */
-    border: 1px solid var(--surface);  /* Per user feedback 2026-07-18 round 12: thinned from 2px to 1px ring on small circle to address "too thick" complaint */
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    /* Per user feedback 2026-07-18 round 12: thinned from 2px to 1px ring
+       on small circle to address "too thick" complaint. Moved from inline
+       comment to own line above the property (round-13 cleanup). */
+    border: 1px solid var(--surface);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
     font-size: 0.6rem;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1;
     pointer-events: none;
     /* pointer-events: none ensures the chip doesn't intercept clicks
