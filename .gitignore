@@ -167,11 +167,12 @@ Thumbs.db
 specs/**
 *-spec.md
 
-# Tests related
+# Tests-debug related
 tests/*.txt
 tests/*.json
 tests/trace-*.mjs
 tests/migration-*.mjs
+apply*.mjs
 
 # Supabase
 supabase/**
