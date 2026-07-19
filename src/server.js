@@ -699,7 +699,15 @@ app.post("/api/questions", async (req, res) => {
 // Get all question packs
 app.get("/api/packs", async (req, res) => {
   try {
-    const { data, error } = await supabase.from("question_packs").select("*");
+    // Newest packets first. id-desc breaks ties so two packets with the
+    // same created_at get a stable order instead of an undefined
+    // PostgREST tiebreaker. (UUID lex order is arbitrary for fresh rows;
+    // the tiebreaker is for stability, not chronological meaning.)
+    const { data, error } = await supabase
+      .from("question_packs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
     if (error) throw error;
     res.json(data);
   } catch (error) {
