@@ -10,6 +10,19 @@
 //   * isTkp(q) = false → unchanged binary flow (green/red highlights).
 // ============================================================================
 
+// Round-10 (2026-07-19): inline markdown ![]() → <img> tag helper.
+// Mirror of Round-9f's IMAGE_INLINE_REGEX + renderInlinePreview di
+// public/js/kelola-soal.js, adapted for HTML contexts (regex-replace
+// after each esc() call so injected <img> tags aren't escaped).
+const IMAGE_INLINE_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\?[^)]*)?)\)/g;
+function renderInlineMd(html) {
+  if (typeof html !== "string") return html;
+  return html.replace(
+    IMAGE_INLINE_REGEX,
+    '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin-top:8px">',
+  );
+}
+
 const resultId = new URLSearchParams(location.search).get("id");
 if (!resultId) location.href = "/";
 
@@ -211,7 +224,7 @@ function renderQuestion(idx) {
   const q = questions[idx];
   const a = result.answers[q.id];
   qNoEl.textContent = `Soal ${idx + 1}`;
-  let html = q.content;
+  let html = renderInlineMd(q.content);
   if (q.image_url)
     html += `<img src="${q.image_url}" style="max-width:100%;margin-top:12px;border-radius:8px">`;
   contentEl.innerHTML = html;
@@ -238,7 +251,7 @@ function renderQuestion(idx) {
         : "weight-badge";
       html2 += `<div class="${cls.join(" ")}"><input type="radio" disabled${
         isPick ? " checked" : ""
-      }><span class="option-label"><strong>${esc(k)}.</strong> ${esc(unwrapParagraph(v))}</span><span class="${badgeCls}">${badgeText}</span></div>`;
+      }><span class="option-label"><strong>${esc(k)}.</strong> ${renderInlineMd(esc(unwrapParagraph(v)))}</span><span class="${badgeCls}">${badgeText}</span></div>`;
     }
     optionsEl.innerHTML = html2;
   } else {
@@ -250,13 +263,13 @@ function renderQuestion(idx) {
         else if (k === a && a !== q.correct_answer) cls += " wrong-answer";
         return `<div class="${cls}"><input type="radio" disabled${
           k === a ? " checked" : ""
-        }><span class="option-label"><strong>${esc(k)}.</strong> ${esc(unwrapParagraph(v))}</span></div>`;
+        }><span class="option-label"><strong>${esc(k)}.</strong> ${renderInlineMd(esc(unwrapParagraph(v)))}</span></div>`;
       })
       .join("");
   }
 
   explanationEl.style.display = "block";
-  let expHtml = `<strong>Pembahasan:</strong><br>${q.explanation || ""}`;
+  let expHtml = `<strong>Pembahasan:</strong><br>${renderInlineMd(q.explanation || "").replace(/(\r?\n)/g, "<br>")}`;
   if (q.explanation_image_url) {
     expHtml += `<br><img src="${q.explanation_image_url}" style="max-width:100%;margin-top:12px;border-radius:8px">`;
   }

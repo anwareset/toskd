@@ -62,6 +62,24 @@ const VALID_KEYS = ["A", "B", "C", "D", "E"];
 // whitespace. Case-insensitive untuk label "Bobot" dan huruf A-E.
 // Tracker: tkp-scoring-spec.md §9.2.
 const BOBOT_LINE_RE = /^[Bb]obot\s*:\s*[Aa]\s*=\s*([1-5])\s*[,;\s]+\s*[Bb]\s*=\s*([1-5])\s*[,;\s]+\s*[Cc]\s*=\s*([1-5])\s*[,;\s]+\s*[Dd]\s*=\s*([1-5])\s*[,;\s]+\s*[Ee]\s*=\s*([1-5])\s*$/;
+
+// Round-13 (2026-07-19): Inline markdown image lines (`![alt](url)`)
+// used inside question stems or option text outside of the TKP logo-ed
+// Blob-uploaded images. Detect these lines so parseBarePremiseNewFormatBlock
+// can STRIP them from the premises array during explicit-question mode
+// (Quill would otherwise render them as numbered list items like
+// "1. math" + "2. ![Gambar](url)" in Edit Modal — surfaced by user bug
+// report on 2026-07-19). Image lines are NEITHER logical premises NOR
+// question prompts — they're inline visual aids that belong in the
+// question stem as surrounding context. After Round-12's renderInlineMd
+// converts `![alt](url)` to `<img>` at Preview-render time, the image
+// displays inline alongside the question text. Co-located with
+// BOBOT_LINE_RE for symmetry (both are admin line-shape detectors used
+// during premise classification). Defence-in-depth against any future
+// premise-line shape (e.g., inline-image-only options) is provided by
+// the explicit-question filter below — even if a future pattern slips
+// past IMAGE_LINE_RE, the entire premise-list rebuild is idempotent.
+const IMAGE_LINE_RE = /^\s*!\[[^\]]*\]\([^)\s]+\)/;
 const MAX_PREMISES = 20;
 const MAX_LINES_PER_BLOCK = 200;
 
@@ -163,10 +181,20 @@ function stripOptionPrefix(line) {
 //     question, OR bare-premise mode with NO explicit question line
 //     like catalog case #A / #C).
 function buildNewFormatContent(premises, question) {
+  // Round-13 (2026-07-19): Skip emitting an empty `<ol>` when
+  // explicit-question mode stripped every premise as an image line.
+  // Without this guard, downstream renderers (kelola-soal Edit Modal
+  // Quill, exam.html / review.html / paket-detail.js sites that
+  // innerHTML q.content) would receive `<ol></ol>` which Quill parses
+  // as "phantom" list with zero bullets — visual noise above the
+  // first paragraph + spurious indentation. Premise list stays open
+  // (`<ol>`) only when there's at least one logical premise to wrap.
   const liHtml = premises.map((p) => `<li>${escapeHtml(p)}</li>`).join("");
   const olStyle =
     'list-style-type: none; margin: 0; padding-left: 0;';
-  const olHtml = `<ol style="${olStyle}">${liHtml}</ol>`;
+  const olHtml = premises.length > 0
+    ? `<ol style="${olStyle}">${liHtml}</ol>`
+    : "";
   if (!question) return olHtml;
   // Multi-line question: each non-blank line becomes its own <p> so
   // they're visually distinct paragraph rows rather than collapsed into
@@ -438,12 +466,62 @@ function parseBarePremiseNewFormatBlock(lines, idx, questionType, optIdx) {
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
 
+  // Round-13 (2026-07-19): Image-line strip. Applied in
+  // explicit-question mode only — implicit-question mode (TIU
+  // silogisme) keeps image lines as numbered premises since the
+  // image IS one of the logical statements under test, not visual
+  // context. Why strip at all here: admin's TIU-kuantitatif input
+  // like
+  //
+  //   <math condition line>
+  //   ![Gambar](url)
+  //   Manakah hubungan yang benar ...
+  //
+  // has 2 lines before the explicit question. Without this strip,
+  // the parser treats both as premises and stores
+  // `<ol><li>math</li><li>![Gambar]</li></ol>`. Edit Modal Quill then
+  // renders "1. math" + "2. ![Gambar](url)" — visually wrong (image
+  // should be inline, not numbered). Strip image lines from
+  // `premises[]` and prepend them to `question` so the stored HTML
+  // is `<ol><li>math</li></ol><p>![Gambar]</p><p>question</p>` —
+  // Round-12's renderInlineMd converts the inner `![alt](url)` to
+  // `<img>` at Preview-render time, so the image appears inline
+  // above the question prompt.
+  let hadImageLineStrip = false;
+  if (hasExplicitQuestion) {
+    const imageLinesStripped = [];
+    const keptPremises = premises.filter((p) => {
+      if (IMAGE_LINE_RE.test(p)) {
+        imageLinesStripped.push(p);
+        return false;
+      }
+      return true;
+    });
+    if (imageLinesStripped.length > 0) {
+      hadImageLineStrip = true;
+      // Mutate `premises` in place (rather than reassigning the const)
+      // so downstream consumers keep the same reference.
+      premises.length = 0;
+      premises.push(...keptPremises);
+      // Prepend image lines to question so buildNewFormatContent emits
+      // one `<p>` per non-blank line (image first, then the question
+      // prompt). The image line will be rendered as `<img>` by
+      // renderInlineMd at Preview time.
+      question =
+        imageLinesStripped.join("\n") +
+        (question ? "\n" + question : "");
+    }
+  }
+
   // Per tkp-scoring-spec.md §9.1: implicit-question mode (TIU
   // silogisme) requires ≥2 premises; explicit-question mode (TWK
   // reading-passage or TIU with prompt) accepts ≥1 premise line
-  // because the explicit question is self-contained.
+  // because the explicit question is self-contained. Round-13:
+  // explicit-question mode ALSO accepts 0 premises if at least one
+  // image line was stripped (admin pasted image-only context with
+  // no logical premises — image becomes part of the question stem).
   if (hasExplicitQuestion) {
-    if (premises.length < 1) {
+    if (premises.length < 1 && !hadImageLineStrip) {
       errors.push("format bare-premise baru tapi tidak ada premise");
       return { idx, status: "invalid", errors, question_type: questionType };
     }

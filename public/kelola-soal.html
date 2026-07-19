@@ -908,6 +908,7 @@ Jawaban C paling mencerminkan pentingnya gotong royong karena menjelaskan peran 
                                             "
                                         >
                                             <span id="bulk-preview-summary"
+                                                class="bulk-preview-summary"
                                                 >Belum ada soal terdeteksi</span
                                             >
                                         </div>
@@ -919,6 +920,26 @@ Jawaban C paling mencerminkan pentingnya gotong royong karena menjelaskan peran 
                             <div id="bulk-tab-preview" class="tab-content">
                                 <div class="form-group">
                                     <label>Hasil Parse (read-only)</label>
+                                    <!-- Round-15 (2026-07-19): mirror the Data-tab
+                                         summary banner in the Preview tab. Same
+                                         status text ("Belum ada soal" or "N valid
+                                         · M invalid") updates in lockstep via the
+                                         shared .bulk-preview-summary class +
+                                         setBulkPreviewSummary() helper in
+                                         kelola-soal.js. Distinct id from the
+                                         Data-tab counterpart to avoid duplicate-id
+                                         HTML anti-pattern. Inline styles mirror the
+                                         Data-tab parent div (margin-top: 8px;
+                                         color: var(--text-muted); font-size:
+                                         0.85rem;) so the two banners read as
+                                         visually consistent. -->
+                                    <div
+                                        id="bulk-preview-summary-preview"
+                                        class="bulk-preview-summary"
+                                        style="margin-top: 8px; color: var(--text-muted); font-size: 0.85rem;"
+                                    >
+                                        Belum ada soal terdeteksi
+                                    </div>
                                     <div
                                         id="bulk-preview-render-area"
                                         style="

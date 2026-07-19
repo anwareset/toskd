@@ -255,6 +255,20 @@ function bindPasteImageHandler(quill) {
       return delta; // plain text passthrough — no markdown, no embed
   });
 }
+
+// Round-12 (2026-07-19): renderInlineMd — mirror of Round-10 inline
+// markdown ![]() → <img> helper di exam.js + review.js, brought into
+// kelola-soal.js for Edit Soal Preview tab. HTML-input variant (no esc)
+// because renderPreview builds HTML strings (q.content is Quill innerHTML,
+// already pre-escaped). Applies at 7 sites in renderPreview(): q.content,
+// options A-E, q.explanation.
+function renderInlineMd(html) {
+  if (typeof html !== "string") return html;
+  return html.replace(
+    IMAGE_MD_REGEX,
+    '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin-top:8px">',
+  );
+}
 function initQuillEditors() {
   if (quillInitialized || !window.Quill) return;
 
@@ -776,32 +790,32 @@ function renderPreview() {
   const previewArea = document.getElementById("preview-render-area");
   previewArea.innerHTML = `
     <div style="font-weight:bold;margin-bottom:8px">Pertanyaan:</div>
-    <div style="margin-bottom:16px">${content || "(kosong)"}</div>
+    <div style="margin-bottom:16px">${renderInlineMd(content || "(kosong)")}</div>
     <div style="margin-top:16px;line-height:1.8">
       <div style="display: flex; align-items: center; margin-bottom: 8px;">
         <span style="font-weight:bold;color:${correct === "A" ? "var(--success)" : "inherit"}; min-width: 24px;">A.</span>
-        <span>${optA || "(belum diisi)"}</span>
+        <span>${renderInlineMd(optA || "(belum diisi)")}</span>
       </div>
       <div style="display: flex; align-items: center; margin-bottom: 8px;">
         <span style="font-weight:bold;color:${correct === "B" ? "var(--success)" : "inherit"}; min-width: 24px;">B.</span>
-        <span>${optB || "(belum diisi)"}</span>
+        <span>${renderInlineMd(optB || "(belum diisi)")}</span>
       </div>
       <div style="display: flex; align-items: center; margin-bottom: 8px;">
         <span style="font-weight:bold;color:${correct === "C" ? "var(--success)" : "inherit"}; min-width: 24px;">C.</span>
-        <span>${optC || "(belum diisi)"}</span>
+        <span>${renderInlineMd(optC || "(belum diisi)")}</span>
       </div>
       <div style="display: flex; align-items: center; margin-bottom: 8px;">
         <span style="font-weight:bold;color:${correct === "D" ? "var(--success)" : "inherit"}; min-width: 24px;">D.</span>
-        <span>${optD || "(belum diisi)"}</span>
+        <span>${renderInlineMd(optD || "(belum diisi)")}</span>
       </div>
       <div style="display: flex; align-items: center; margin-bottom: 8px;">
         <span style="font-weight:bold;color:${correct === "E" ? "var(--success)" : "inherit"}; min-width: 24px;">E.</span>
-        <span>${optE || "(belum diisi)"}</span>
+        <span>${renderInlineMd(optE || "(belum diisi)")}</span>
       </div>
     </div>
     <hr style="margin:20px 0;border:0;border-top:1px solid var(--border)">
     <div style="font-weight:bold;margin-bottom:8px">Pembahasan (Kunci: ${correct}):</div>
-    <div>${explanation || "(belum diisi)"}</div>
+    <div>${renderInlineMd((explanation || "(belum diisi)").replace(/(\r?\n)/g, "<br>"))}</div>
   `;
 
   // Typeset with MathJax if available
@@ -1379,24 +1393,47 @@ function parseBulkInput() {
   renderBulkPreview(parsed, validCount, invalidCount);
 }
 
+// Round-15 helper (2026-07-19): bulk-preview-summary now lives in TWO
+// places — inside the Data tab <details> info-bar AND inline above
+// the read-only render area in Preview tab (see kelola-soal.html
+// `class="bulk-preview-summary"` markup). Routing all textContent
+// updates through this class-based querySelectorAll iteration keeps
+// the two banners in lockstep with one call site, and avoids the
+// duplicate-id HTML anti-pattern that would result from copy-pasting
+// `<span id="bulk-preview-summary">` into a second location. Both
+// elements keep their distinct ids (bulk-preview-summary in Data tab,
+// bulk-preview-summary-preview in Preview tab) for any explicit-id
+// lookups that may exist elsewhere. No-op when the modal is closed
+// because both elements are inside #q-bulk-modal (DOM-removed if
+// <dialog> is force-closed by the OS, but in the project's lifecycle
+// the modal stays in DOM as a hidden <dialog>).
+function setBulkPreviewSummary(text) {
+  document.querySelectorAll(".bulk-preview-summary").forEach((el) => {
+    el.textContent = text;
+  });
+}
+
 function updateBulkSummary(parsed, valid, invalid, newFormatCount) {
-  const summary = document.getElementById("bulk-preview-summary");
-  if (!summary) return;
+  // Round-15: route ALL status updates through setBulkPreviewSummary
+  // so the Data tab info-bar + Preview tab inline banner stay in
+  // sync with one source of truth. Was: direct assignment to a single
+  // getElementById'd element (the prior Data-tab-only banner). Caller
+  // contract unchanged — same status string, same params.
   if (parsed.length === 0) {
-    summary.textContent = "Belum ada soal terdeteksi";
+    setBulkPreviewSummary("Belum ada soal terdeteksi");
     return;
   }
   if (invalid === 0) {
     const oldFormatCount = parsed.length - newFormatCount;
     if (newFormatCount === parsed.length) {
-      summary.textContent = `${parsed.length} soal valid (semua dengan premise) terdeteksi ✓`;
+      setBulkPreviewSummary(`${parsed.length} soal valid (semua dengan premise) terdeteksi ✓`);
     } else if (newFormatCount === 0) {
-      summary.textContent = `${parsed.length} soal valid (tanpa premise) terdeteksi ✓`;
+      setBulkPreviewSummary(`${parsed.length} soal valid (tanpa premise) terdeteksi ✓`);
     } else {
-      summary.textContent = `${parsed.length} soal valid (${newFormatCount} dengan premise, ${oldFormatCount} tanpa) terdeteksi ✓`;
+      setBulkPreviewSummary(`${parsed.length} soal valid (${newFormatCount} dengan premise, ${oldFormatCount} tanpa) terdeteksi ✓`);
     }
   } else {
-    summary.textContent = `${valid} valid · ${invalid} invalid dari ${parsed.length} blok`;
+    setBulkPreviewSummary(`${valid} valid · ${invalid} invalid dari ${parsed.length} blok`);
   }
 }
 
@@ -1597,8 +1634,9 @@ document.getElementById("bulk-add-btn").onclick = () => {
   }
 
   window.lastBulkParse = [];
-  document.getElementById("bulk-preview-summary").textContent =
-    "Belum ada soal terdeteksi";
+  // Round-15: reset BOTH Data-tab + Preview-tab summary banners via
+  // the shared class helper. Replaces the prior single-id lookup.
+  setBulkPreviewSummary("Belum ada soal terdeteksi");
   document.getElementById("bulk-preview-render-area").innerHTML =
     '<p style="color: var(--text-muted); text-align: center; padding: 32px">Belum ada soal. Paste soal di tab Data Soal.</p>';
   document.getElementById("bulk-save-btn").disabled = true;

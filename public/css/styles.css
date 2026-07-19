@@ -704,7 +704,15 @@ tbody tr:hover {
 }
 .answer-panel,
 .review-answer-panel {
-    flex: 3;
+    /* Round-14 (2026-07-19): Per user feedback — answer-panel terlalu
+       lebar di desktop, sedikit mengompresi ruang question-container.
+       Reduce flex ratio dari 3 (30%) ke 2.5 (26.3%) supaya question-
+       container mendapat tambahan horizontal space. Acuan viewport
+       1200px: question-container +43px, answer-panel -43px. Mobile
+       rules (max-width: 1023px + 767px) tidak berubah — sudah stack
+       column + width:100% per-breakpoint, jadi reduction ini purely
+       desktop-only. */
+    flex: 2.5;
     position: sticky;
     top: 100px;
     align-self: flex-start;

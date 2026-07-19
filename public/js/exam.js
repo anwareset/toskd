@@ -7,6 +7,20 @@
    AC6: wall-clock (timeLeft = duration − elapsed), bukan tick-count
    AC7/AC8: tidak ada perubahan server; tanpa sid di URL tetap tidak crash
 */
+// Round-10 (2026-07-19): inline markdown ![]() → <img> tag helper.
+// Mirror of Round-9f's IMAGE_INLINE_REGEX + renderInlinePreview di
+// public/js/kelola-soal.js, adapted for HTML contexts (regex-replace on
+// post-esc strings + raw content/explanation). Used in renderQuestion()
+// below at 2 sites: q.content + per-option label.
+const IMAGE_INLINE_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\?[^)]*)?)\)/g;
+function renderInlineMd(html) {
+  if (typeof html !== "string") return html;
+  return html.replace(
+    IMAGE_INLINE_REGEX,
+    '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin-top:8px">',
+  );
+}
+
 const params = new URLSearchParams(location.search);
 const packId = params.get("packId");
 const participantName = decodeURIComponent(params.get("name") || "");
@@ -154,7 +168,7 @@ function renderQuestion(idx) {
   currentIndex = idx;
   const q = questions[idx];
   qNoEl.textContent = `Soal ${idx + 1}`;
-  let html = q.content;
+  let html = renderInlineMd(q.content);
   if (q.image_url)
     html += `<img src="${q.image_url}" style="max-width:100%;margin-top:12px;border-radius:8px">`;
   qContentEl.innerHTML = html;
@@ -164,7 +178,7 @@ function renderQuestion(idx) {
       ([k, v]) => `
     <label class="option-item${sel === k ? " selected" : ""}">
       <input type="radio" name="ans" value="${k}" ${sel === k ? "checked" : ""}>
-      <span class="option-label"><strong>${k}.</strong> ${v}</span>
+      <span class="option-label"><strong>${k}.</strong> ${renderInlineMd(v)}</span>
     </label>`,
     )
     .join("");
