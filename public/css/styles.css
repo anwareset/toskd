@@ -3088,3 +3088,38 @@ button.q-submit-btn:disabled,
 .bulk-preview-question {
     margin: 0;
 }
+
+/* ==== Exam/review option labels on mobile: prevent ellipsis truncation ==== 
+   Per user request 2026-07-19: option kontent pada
+   `#options-container` di exam.html + review.html terpotong di
+   Mobile dengan ellipsis ("A. Menjalankan letak perbedaan data
+   d...") sehingga exam taker tidak bisa membaca/mengerjakan soal
+   dengan benar.
+
+   Resolution: scoped override via `#options-container` ID (UNIQUE
+   to exam/review soal rendering path, NOT present in bank-list
+   preview at kelola-soal.html / pack-question-item di paket-detail
+   .html — both of those keep the base `.option-item .option-label`
+   1-line ellipsis truncation intentionally for snippet-style
+   preview). Reset white-space + overflow + text-overflow on mobile
+   so option labels wrap naturally. `.option-item` already has
+   `align-items: flex-start` (line ~807) so radio button auto-aligns
+   to top of wrapped text — no need to override `.option-item` itself.
+
+   - `word-break: break-word` + `overflow-wrap: anywhere`:
+     belt-and-suspenders against long unbroken strings (URLs in
+     option text, math `\(` sequences) that would otherwise force
+     horizontal page scroll on narrow mobile screens.
+   - Bank-list / pack-question-item: keep intentional 1-line
+     truncation (base `.option-item .option-label` rule remains
+     source of truth — they don't carry `#options-container`).
+*/
+@media (max-width: 767px) {
+    #options-container .option-item .option-label {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+}
