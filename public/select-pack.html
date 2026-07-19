@@ -21,6 +21,29 @@
                 <div id="loading" class="loading-overlay">
                     <div class="spinner"></div>
                 </div>
+                <div class="search-bar">
+                    <div class="search-bar-input-wrap">
+                        <input
+                            type="text"
+                            id="pack-search"
+                            class="input-field search-bar-input"
+                            placeholder="🔍 Cari paket..."
+                            aria-label="Cari paket ujian"
+                            autocomplete="off"
+                        />
+                        <button
+                            type="button"
+                            id="pack-search-clear"
+                            class="search-clear-btn"
+                            hidden
+                            aria-label="Reset pencarian"
+                            title="Reset pencarian"
+                        >
+                            ×
+                        </button>
+                    </div>
+                </div>
+                <div id="loading-status" class="loading-status" hidden></div>
                 <div id="pack-grid" class="card-grid"></div>
                 <dialog id="name-modal" class="modal">
                     <div class="modal-content">

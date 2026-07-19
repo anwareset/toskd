@@ -3123,3 +3123,124 @@ button.q-submit-btn:disabled,
         overflow-wrap: anywhere;
     }
 }
+
+/* ==== select-pack.html: search bar + loading-status ==== */
+/* Per user request: add search input + visible loading-status above
+   the pack grid. Token-only, no hex literals. */
+
+/* Search bar: input + count chip on one row. */
+.search-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 12px 0 12px;
+}
+.search-bar-input-wrap {
+    /* `position: relative` anchors the absolutely-positioned
+       `.search-clear-btn` so it overlays the input's right edge.
+       `flex: 1` lets the wrapper fill the row's free space; `min-width: 0`
+       allows it to shrink when the toolbar's total content doesn't fit
+       the viewport (prevents horizontal page scroll on narrow phones). */
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+.search-bar-input {
+    /* Inherits width:100% from `.input-field` base rule; the wrapper's
+       flex:1 propagates here. `padding-right: 36px` reserves room for
+       the inline × clear button so user-typed text can't slip behind
+       the button on long queries. `margin-top: 0` opts out of the
+       `.input-field` default 6px top margin so the search bar sits
+       flush with `.search-bar`'s flex alignment. */
+    width: 100%;
+    padding-right: 36px;
+    margin-top: 0;
+}
+.search-clear-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: background 0.15s, color 0.15s;
+}
+.search-clear-btn:hover {
+    background: var(--surface-header);
+    color: var(--text);
+}
+.search-clear-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* Inline loading status line that appears below the search bar while
+   per-pack question counts are being fetched. Slides in via
+   `loadingStatusIn` keyframe + hides via the `hidden` attribute.
+
+   Per user Round-21 bug report (2026-07-19): the bar was staying
+   visible after Promise.all resolved even though JS was setting
+   `hidden = true`. Root cause: the previous single `.loading-status`
+   rule set `display: flex` directly, which overrode the browser's
+   default `[hidden] { display: none }` user-agent rule. The `hidden`
+   HTML attribute is a CLASS-SPECIFICITY gotcha — `.foo` (10) wins
+   over `[hidden]` (10) only by source order, but the U-A rule is
+   ALSO specificity 10 from `:not(...)` math, so a later author rule
+   on `.foo { display: flex }` reliably wins and silently breaks the
+   attribute-driven hide.
+
+   Fix: scope the visible-state props (`display`, `align-items`,
+   `gap`, `animation`) to `:not([hidden])` so the `hidden` HTML attr
+   can actually hide the element. Non-display props (margin, padding,
+   colors, border, radius) stay on `.loading-status` so they apply
+   even when hidden (cheap, doesn't paint). */
+.loading-status {
+    margin: 0 0 14px;
+    padding: 8px 12px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    background: var(--surface-header);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--primary);
+    border-radius: 4px;
+}
+.loading-status:not([hidden]) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: loadingStatusIn 0.2s ease-out;
+}
+@keyframes loadingStatusIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Empty-state message inside #pack-grid (search no-match + server empty).
+   `grid-column: 1 / -1` ensures the message spans the full grid width
+   when displayed inside `#pack-grid`'s flex layout (which doesn't apply
+   grid-column but having the declaration is harmless + forward-compatible). */
+.grid-empty-state {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 32px 16px;
+    background: var(--surface-header);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    width: 100%;
+}
