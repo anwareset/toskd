@@ -198,7 +198,63 @@ const toolbarOptions = {
   },
 };
 
-// Initialize Quill editors
+// ========================================================================
+// ============================================================================
+// ============================================================================
+// ============================================================================
+// Markdown ![alt](url) → image embed (Round-9d, 2026-07-19)
+// ============================================================================
+// Per user request 2026-07-19: USE markdown syntax only, REMOVE raw URL
+// whole-text auto-embed. Admin must type `![alt](url)` explicitly to
+// insert an image; bare pasted URLs pass through as plain text. This
+// makes the intent unambiguous — embed vs text is controlled by
+// formatting, not by guessing.
+//
+// Single method: only the markdown syntax is intercepted at Quill's
+// clipboard parser via addMatcher(Node.TEXT_NODE). Plain URL paste
+// falls through as text verbatim.
+//
+// Idempotency: __imagePasteBound flag on the quill instance prevents
+// duplicate matchers if initQuillEditors() is repeatedly invoked.
+// ============================================================================
+// Same regex shape as tests/test-image-url-paste.mjs IMAGE_MD_REGEX
+// (mirrored). Captures: 1 = alt text, 2 = url ending in image-ext.
+const IMAGE_MD_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\?[^)]*)?)\)/g;
+
+function bindPasteImageHandler(quill) {
+  if (quill.__imagePasteBound) return;
+  quill.__imagePasteBound = true; // idempotency: skip if already attached
+
+  const Delta = Quill.import("delta");
+
+  quill.clipboard.addMatcher(Node.TEXT_NODE, (node, delta) => {
+    const text = node.data;
+      if (!text) return delta;
+
+      // Walk markdown regex; preserve inter-match text as text-ops,
+      // substitute matches with image embeds. Multiple matches per
+      // paste all handled.
+      let lastIndex = 0;
+      let match;
+      let hasMd = false;
+      const newDelta = new Delta();
+      while ((match = IMAGE_MD_REGEX.exec(text)) !== null) {
+        hasMd = true;
+        if (match.index > lastIndex) {
+          newDelta.insert(text.substring(lastIndex, match.index));
+        }
+        newDelta.insert({ image: match[2] });
+        lastIndex = match.index + match[0].length;
+      }
+      if (hasMd) {
+        if (lastIndex < text.length) {
+          newDelta.insert(text.substring(lastIndex));
+        }
+        return newDelta;
+      }
+      return delta; // plain text passthrough — no markdown, no embed
+  });
+}
 function initQuillEditors() {
   if (quillInitialized || !window.Quill) return;
 
@@ -218,6 +274,9 @@ function initQuillEditors() {
         "Tuliskan pertanyaan disini... Gunakan toolbar untuk memformat teks dan menyisipkan gambar.",
     });
 
+    // Round-9: auto-embed image URLs pasted as a single token
+    bindPasteImageHandler(contentEditor);
+
     // Sync content to hidden textarea on change
     contentEditor.on("text-change", () => {
       document.getElementById("q-content-text").value =
@@ -232,6 +291,9 @@ function initQuillEditors() {
       },
       placeholder: "Tuliskan langkah penyelesaian...",
     });
+
+    // Round-9: auto-embed image URLs pasted in explanation too
+    bindPasteImageHandler(explanationEditor);
 
     // Sync explanation to hidden textarea on change
     explanationEditor.on("text-change", () => {
@@ -1247,7 +1309,14 @@ function initBulkQuillEditor() {
         "Paste banyak soal di sini (plain text). Setiap soal 8 baris (pertanyaan, 5 opsi, kunci, pembahasan). Pisahkan dengan baris '---'.",
     });
 
+
     // Re-parse on every text-change (cheap for typical <500-row pastes).
+    // Round-9f (2026-07-19): bulk editor stays plain-text only —
+    // ![]() syntax paste renders as TEXT (no Quill image embed) so
+    // parseBulkInput() can still extract the URL string via getText().
+    // The Preview tab converts the same ![]() syntax to <img> via
+    // renderInlinePreview() (defined near renderBulkPreview).
+
     window.bulkPasteEditor.on("text-change", () => {
       parseBulkInput();
     });
@@ -1331,6 +1400,41 @@ function updateBulkSummary(parsed, valid, invalid, newFormatCount) {
   }
 }
 
+// IMAGE_INLINE_REGEX — markdown ![]() image syntax, mirrors the
+// pattern in bindPasteImageHandler (tests/test-image-url-paste.mjs
+// IMAGE_MD_REGEX). Used by renderInlinePreview for bulk-preview rendering
+// (NOT for paste interception — Round-9f keeps bulk paste plain-text).
+const IMAGE_INLINE_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\?[^)]*)?)\)/g;
+
+// renderInlinePreview(rawText) — for bulk Preview tab. Converts markdown
+// ![]() syntax to inline <img> tags while HTML-escaping non-match text.
+// Idempotent — empty input returns empty string; no match returns just
+// esc(rawText). Used at 3 sites in renderBulkPreview (premise li,
+// question p, plain question div).
+function renderInlinePreview(rawText) {
+  if (!rawText) return "";
+  // Defensive lastIndex reset — IMAGE_INLINE_REGEX is /g-flagged,
+  // lastIndex persists across calls. Without reset, the second call's
+  // match would resume from where the first left off.
+  IMAGE_INLINE_REGEX.lastIndex = 0;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = IMAGE_INLINE_REGEX.exec(rawText)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(esc(rawText.substring(lastIndex, match.index)));
+    }
+    parts.push(
+      `<img src="${esc(match[2])}" alt="${esc(match[1])}" class="bulk-md-image">`,
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < rawText.length) {
+    parts.push(esc(rawText.substring(lastIndex)));
+  }
+  return parts.join("");
+}
+
 // Render Preview tab. Read-only list. Each row: #num + status badge +
 // optional error list + stacked fields (pertanyaan, A-E, kunci, bahas).
 function renderBulkPreview(parsedBlocks, validCount, invalidCount) {
@@ -1374,7 +1478,7 @@ function renderBulkPreview(parsedBlocks, validCount, invalidCount) {
           // as a defense-in-depth fallback if the inline style is
           // stripped by a future Quill round-trip.
           const olHtml = `<ol class="bulk-preview-ol" style="list-style-type: none; margin: 0; padding-left: 0;">${b.premises
-            .map((p) => `<li>${esc(p)}</li>`)
+            .map((p) => `<li>${renderInlinePreview(p)}</li>`)
             .join("")}</ol>`;
           // Multi-line question support (catalog case #B): if the
           // block's question contains `\n`-separated paragraphs,
@@ -1386,14 +1490,14 @@ function renderBulkPreview(parsedBlocks, validCount, invalidCount) {
               .map((p) => p.trim())
               .filter((p) => p.length > 0);
             const pHtml = paragraphs
-              .map((p) => `<p class="bulk-preview-question">${esc(p)}</p>`)
+              .map((p) => `<p class="bulk-preview-question">${renderInlinePreview(p)}</p>`)
               .join("");
             questionHtml = `${olHtml}${pHtml}`;
           } else {
             questionHtml = olHtml;
           }
         } else {
-          questionHtml = `<div class="bulk-preview-question-plain">${esc(b.question)}</div>`;
+          questionHtml = `<div class="bulk-preview-question-plain">${renderInlinePreview(b.question)}</div>`;
         }
       }
 
@@ -1421,7 +1525,7 @@ function renderBulkPreview(parsedBlocks, validCount, invalidCount) {
           ? `<div class="bulk-q-line"><em>Tipe: ${esc(b.question_type)}</em></div>`
           : "";
         const keyLine = `<div class="bulk-q-line"><em>[Kunci: ${esc(b.correct_answer)}]</em></div>`;
-        const pembahasanLine = `<div class="bulk-preview-pembahasan"><em>Pembahasan:</em><br>${esc(b.explanation).replace(/\n/g, "<br>")}</div>`;
+        const pembahasanLine = `<div class="bulk-preview-pembahasan"><em>Pembahasan:</em><br>${renderInlinePreview(b.explanation).replace(/\n/g, "<br>")}</div>`;
         footerHtml = typeLine + keyLine + pembahasanLine;
       }
 
@@ -2000,3 +2104,4 @@ if (typeof document !== "undefined") {
     initBulkHelpModeToggle();
   }
 }
+

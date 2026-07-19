@@ -1782,6 +1782,26 @@ tbody tr:hover {
     margin-bottom: 4px;
     line-height: 1.5;
 }
+
+/* Round-9f (extended 2026-07-19): inline <img> rendered from markdown
+   ![]() in bulk Preview tab. Nested under .bulk-preview-* parent
+   selectors (ol, question, question-plain, pembahasan) so styling
+   cannot leak into exam / review pages — those don't carry any of
+   these parent classes. max-width: 100% keeps oversized source
+   images constrained to the preview column; height: auto preserves
+   aspect ratio. */
+.bulk-preview-ol .bulk-md-image,
+.bulk-preview-question .bulk-md-image,
+.bulk-preview-question-plain .bulk-md-image,
+.bulk-preview-pembahasan .bulk-md-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    display: block;
+    margin: 8px 0;
+    background: var(--surface-header);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
 .bulk-preview-question {
     margin: 0 0 12px 0;
     font-weight: 600;
