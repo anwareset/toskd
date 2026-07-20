@@ -1042,6 +1042,60 @@ Jawaban C paling mencerminkan pentingnya gotong royong karena menjelaskan peran 
                         </div>
                     </div>
                 </dialog>
+
+                <!-- ==================== SINGLE DELETE CONFIRM MODAL ====================
+                     Mirror of bulk-delete-confirm-modal but for the per-row
+                     "Hapus" button (window.deleteQuestion in kelola-soal.js).
+                     Replaces the old native confirm() dialog so the admin can
+                     SEE which paket soal the question is tied to before
+                     confirming — same UX affordance as the bulk flow.
+                     MARKUP ONLY — JS in public/js/kelola-soal.js. -->
+                <dialog
+                    id="single-delete-confirm-modal"
+                    class="modal"
+                    style="max-width: 600px"
+                >
+                    <div class="modal-content">
+                        <h3>🗑 Konfirmasi Hapus Soal</h3>
+
+                        <div class="bulk-delete-summary">
+                            <p style="font-weight: 600; margin-bottom: 8px">
+                                Anda akan menghapus soal
+                                <span id="single-confirm-id">0</span>
+                                dari Bank Soal.
+                            </p>
+                            <div
+                                id="single-confirm-soal-impact"
+                                class="bulk-delete-pack-list"
+                            >
+                                <strong>📊 Detail soal yang akan dihapus:</strong>
+                                <ul id="single-confirm-soal-list"></ul>
+                            </div>
+                            <p style="color: var(--text-muted); font-size: 0.9rem">
+                                Tindakan ini menghapus soal secara permanen dan
+                                melepas dari semua paket (cascade). Tidak dapat
+                                dibatalkan.
+                            </p>
+                        </div>
+
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-secondary"
+                                id="single-delete-cancel-btn"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                class="btn-danger"
+                                id="single-delete-confirm-btn"
+                            >
+                                Ya, Hapus Soal
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
             </div>
             <footer class="footer">
                 Untuk latihan SKD · Made with ♥️ in

@@ -649,26 +649,107 @@ window.editPack = (id) => {
   modal.showModal();
 };
 
+// ==== Delete Pack: confirm modal element refs + in-flight guard ====
+// Replaces the old native confirm() dialog so the admin can SEE the
+// pack name + question count before confirming deletion. Mirror of
+// the single-delete-confirm-modal pattern in kelola-soal.html.
+// pendingDeletePackId bridges deletePack (opens modal) and the confirm
+// handler (runs the DELETE call). isDeletePackInFlight prevents
+// double-click race on the per-row Hapus button — set synchronously
+// before the first await so a fast double-click sees the flag as true
+// and returns immediately (the `.open` property can't guard this
+// because the modal isn't open yet during the await window).
+const deletePackConfirmModal = document.getElementById("delete-pack-confirm-modal");
+const deletePackConfirmBtn = document.getElementById("delete-pack-confirm-btn");
+const deletePackCancelBtn = document.getElementById("delete-pack-cancel-btn");
+const deletePackNameEl = document.getElementById("delete-pack-name");
+const deletePackDetailListEl = document.getElementById("delete-pack-detail-list");
+let pendingDeletePackId = null;
+let isDeletePackInFlight = false;
+
+// Delete pack — opens the confirm modal (replaces native confirm())
+// populated with the pack name + question count from the cached
+// state.packs / state.countsById. The actual DELETE call happens in
+// the deletePackConfirmBtn click handler below, after the user confirms.
 window.deletePack = async (id) => {
-  if (
-    !confirm(
-      "Apakah Anda yakin ingin menghapus paket soal ini? Semua relasi soal akan terhapus.",
-    )
-  )
-    return;
+  // Guard against double-click race (in-flight flag pattern per
+  // code-reviewer-glm feedback from the kelola-soal single-delete
+  // feature — the `.open` guard was ineffective for the typical
+  // double-click-before-fetch-resolves race).
+  if (isDeletePackInFlight) return;
+  isDeletePackInFlight = true;
   try {
-    const res = await wrapFetch(`/api/packs/${id}`, { method: "DELETE" });
-    if (!res.ok) throw new Error();
-    init();
+    // Look up the pack from cached state (no fetch needed — state.packs
+    // is refreshed by init() before the table renders, and the Hapus
+    // button is only visible after the table renders).
+    const pack = state.packs.find((p) => p.id === id);
+    const packName = pack?.name || `#${id}`;
+    const questionCount = state.countsById[id] ?? "—";
+
+    pendingDeletePackId = id;
+    // textContent is already XSS-safe (browser escapes on assignment),
+    // so no esc() needed here — using esc() would double-escape and
+    // display literal entities (e.g. "A &amp; B" instead of "A & B").
+    // Per code-reviewer-glm Round-1 critical feedback.
+    deletePackNameEl.textContent = `"${packName}"`;
+    deletePackDetailListEl.innerHTML =
+      `<li>Paket <strong>${esc(packName)}</strong> berisi <strong>${questionCount}</strong> soal</li>`;
+
+    if (deletePackConfirmModal) deletePackConfirmModal.showModal();
   } catch (err) {
-    if (
-      err.message === "wrapFetch:SESSION_EXPIRED" ||
-      err.message.startsWith("wrapFetch:SERVER_ERROR_")
-    )
-      return;
-    alert("Gagal menghapus paket soal.");
+    console.error("Delete pack modal open failed:", err);
+  } finally {
+    isDeletePackInFlight = false;
   }
 };
+
+// ==== Delete Pack: confirmation modal cancel button ====
+if (deletePackCancelBtn) {
+  deletePackCancelBtn.addEventListener("click", () => {
+    if (deletePackConfirmModal) deletePackConfirmModal.close();
+    pendingDeletePackId = null;
+  });
+}
+
+// ==== Delete Pack: confirmation modal submit button ====
+// Runs the actual DELETE /api/packs/:id call after the user confirms.
+// Mirrors the single-delete confirm handler pattern: disable both
+// buttons during the in-flight DELETE, show "Menghapus...", re-enable
+// in finally. On success, close modal + init() to refresh the table.
+if (deletePackConfirmBtn) {
+  deletePackConfirmBtn.addEventListener("click", async () => {
+    const id = pendingDeletePackId;
+    if (id == null) {
+      if (deletePackConfirmModal) deletePackConfirmModal.close();
+      return;
+    }
+
+    deletePackConfirmBtn.disabled = true;
+    deletePackCancelBtn.disabled = true;
+    const originalConfirmLabel = deletePackConfirmBtn.textContent;
+    deletePackConfirmBtn.textContent = "Menghapus...";
+
+    try {
+      const res = await wrapFetch(`/api/packs/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (deletePackConfirmModal) deletePackConfirmModal.close();
+      pendingDeletePackId = null;
+      init();
+    } catch (err) {
+      if (
+        err.message === "wrapFetch:SESSION_EXPIRED" ||
+        err.message.startsWith("wrapFetch:SERVER_ERROR_")
+      )
+        return;
+      console.error("Delete pack submit failed:", err);
+      alert("Gagal menghapus paket soal. Coba lagi.");
+    } finally {
+      deletePackConfirmBtn.disabled = false;
+      deletePackCancelBtn.disabled = false;
+      deletePackConfirmBtn.textContent = originalConfirmLabel;
+    }
+  });
+}
 
 // ==========================================================
 // Per-subtes picker helpers (paket-soal-pack-type-spec.md §2)

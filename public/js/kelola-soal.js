@@ -131,6 +131,33 @@ const confirmTotalCountEl = document.getElementById("confirm-total-count");
 const modalConfirmCountEl = document.getElementById("modal-confirm-count");
 const confirmSoalListEl = document.getElementById("confirm-soal-list");
 
+// ==== Single Delete (per-row "Hapus" button) confirm modal ====
+// Mirror of the bulk-delete-confirm-modal but for a single question.
+// Replaces the old native confirm() dialog so the admin can SEE which
+// paket soal the question is tied to before confirming — same UX
+// affordance as the bulk flow. See public/kelola-soal.html for the
+// <dialog id="single-delete-confirm-modal"> markup.
+const singleDeleteConfirmModal = document.getElementById("single-delete-confirm-modal");
+const singleDeleteConfirmBtn = document.getElementById("single-delete-confirm-btn");
+const singleDeleteCancelBtn = document.getElementById("single-delete-cancel-btn");
+const singleConfirmIdEl = document.getElementById("single-confirm-id");
+const singleConfirmSoalListEl = document.getElementById("single-confirm-soal-list");
+// pendingSingleDeleteId holds the id of the question the user is
+// about to delete while the confirm modal is open. Set by
+// window.deleteQuestion() when the modal opens; cleared after the
+// confirm handler runs the DELETE call (success or failure).
+let pendingSingleDeleteId = null;
+// In-flight guard for window.deleteQuestion: set synchronously true
+// at the start of the call (before the first await) so a fast
+// double-click on the per-row Hapus button sees the flag as true
+// and returns immediately — preventing a second concurrent fetch
+// that would later throw InvalidStateError when it calls showModal()
+// on a dialog the first call already opened. The `.open` property
+// can't be used for this because the modal isn't open yet during the
+// await window. Cleared in the finally block of deleteQuestion.
+// Per code-reviewer-glm Round-2 critical feedback.
+let isDeleteQuestionInFlight = false;
+
 let questions = [];
 
 // Quill editor instances
@@ -1079,29 +1106,100 @@ window.editQuestion = (id) => {
   modal.showModal();
 };
 
-// Delete question
+// Delete question — opens the single-delete confirm modal (mirror of
+// the bulk-delete flow) so the admin can SEE which paket soal the
+// question is tied to before confirming. Replaces the old native
+// confirm() dialog. The actual DELETE call happens in the
+// singleDeleteConfirmBtn click handler below, after the user confirms.
+// pendingSingleDeleteId bridges the two handlers.
 window.deleteQuestion = async (id) => {
+  // Guard against double-click race: set the in-flight flag
+  // SYNCHRONOUSLY (before the first await) so a fast double-click on
+  // the Hapus button sees the flag as true and returns immediately.
+  // The `.open` property can't guard this because the modal isn't
+  // open yet during the await fetch window — both concurrent calls
+  // would pass an `.open` check, both would later try showModal(),
+  // and the second would throw InvalidStateError (misreported by the
+  // catch block as "Gagal memeriksa soal"). The flag is cleared in
+  // the finally block below. Per code-reviewer-glm Round-2 critical
+  // feedback (Round-1 `.open` guard was ineffective for the typical
+  // double-click-before-fetch-resolves race).
+  if (isDeleteQuestionInFlight) return;
+  isDeleteQuestionInFlight = true;
   try {
-    // Check usage first
+    // Check usage first (same endpoint as the old confirm() flow).
     const usageRes = await wrapFetch(`/api/questions/${id}/usage`);
     const usage = await usageRes.json();
 
-    let msg = "Apakah Anda yakin ingin menghapus soal ini dari Bank Soal?";
-    if (usage.used) {
-      msg = `Soal ini digunakan di ${usage.packs.join(", ")}. Hapus?`;
-    }
+    // Populate the modal with the question's pack-usage detail.
+    pendingSingleDeleteId = id;
+    singleConfirmIdEl.textContent = `#${id}`;
 
-    if (!confirm(msg)) return;
+    const q = questions.find((x) => x.id === id);
+    const tipe = q?.question_type || "—";
+    const hasPacks =
+      usage?.used && Array.isArray(usage.packs) && usage.packs.length > 0;
+    const packsText = hasPacks ? usage.packs.join(", ") : "tidak terkait paket manapun";
+    const verb = hasPacks ? "digunakan" : "tidak terkait";
+    singleConfirmSoalListEl.innerHTML =
+      `<li>Soal <strong>#${id}</strong> tipe <em>${esc(tipe)}</em> ${verb} di paket <strong>${esc(packsText)}</strong></li>`;
 
-    const res = await wrapFetch(`/api/questions/${id}`, { method: "DELETE" });
-    if (!res.ok) throw new Error();
-    init();
+    singleDeleteConfirmModal.showModal();
   } catch (err) {
     if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
-    alert("Gagal menghapus soal.");
-    console.error("Delete failed:", err);
+    alert("Gagal memeriksa soal. Coba lagi.");
+    console.error("Single usage pre-fetch failed:", err);
+  } finally {
+    isDeleteQuestionInFlight = false;
   }
 };
+
+// ==== Single Delete: confirmation modal cancel button ====
+// Mirrors the bulk-delete cancel handler. Closes the modal and clears
+// the pending id so a stale value can't leak into a future confirm.
+if (singleDeleteCancelBtn) {
+  singleDeleteCancelBtn.addEventListener("click", () => {
+    if (singleDeleteConfirmModal) singleDeleteConfirmModal.close();
+    pendingSingleDeleteId = null;
+  });
+}
+
+// ==== Single Delete: confirmation modal submit button ====
+// Runs the actual DELETE /api/questions/:id call after the user
+// confirms. Mirrors the bulk-delete confirm handler's UX pattern:
+// disable both buttons during the in-flight DELETE, show "Menghapus...",
+// re-enable in finally. On success, close modal + init() to refresh
+// the table; on failure, alert + keep modal open so the user can retry.
+if (singleDeleteConfirmBtn) {
+  singleDeleteConfirmBtn.addEventListener("click", async () => {
+    const id = pendingSingleDeleteId;
+    if (id == null) {
+      if (singleDeleteConfirmModal) singleDeleteConfirmModal.close();
+      return;
+    }
+
+    singleDeleteConfirmBtn.disabled = true;
+    singleDeleteCancelBtn.disabled = true;
+    const originalConfirmLabel = singleDeleteConfirmBtn.textContent;
+    singleDeleteConfirmBtn.textContent = "Menghapus...";
+
+    try {
+      const res = await wrapFetch(`/api/questions/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (singleDeleteConfirmModal) singleDeleteConfirmModal.close();
+      pendingSingleDeleteId = null;
+      init();
+    } catch (err) {
+      if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
+      console.error("Single delete submit failed:", err);
+      alert("Gagal menghapus soal. Coba lagi.");
+    } finally {
+      singleDeleteConfirmBtn.disabled = false;
+      singleDeleteCancelBtn.disabled = false;
+      singleDeleteConfirmBtn.textContent = originalConfirmLabel;
+    }
+  });
+}
 
 // Initialize on load
 init();

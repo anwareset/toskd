@@ -135,6 +135,70 @@ let bankSearchTerm = "";
 // re-render doesn't re-check them.
 let tentativeSelections = new Set();
 
+// packSelectedIds — Set<number> of question IDs the user has ticked in
+// the pack-questions-list for bulk remove. Persistent across
+// renderLists()'s innerHTML rewrite so per-row checkbox state stays
+// in sync with render template (`checked` attribute when Set.has(id)).
+// Cleared (partially or fully) by the bulk-remove confirm handler after
+// each DELETE resolves, mirroring the tentativeSelections lifecycle for
+// add-to-pack. Used by updatePackSelectionUI() for the count display,
+// the select-all 3-state checkbox, and the bulk-remove button's
+// disabled flag.
+let packSelectedIds = new Set();
+
+// ==== Pack-list / bulk-remove element refs ====
+// Declared at top-level so handlers below can reference them. Mirrors
+// the single-delete-confirm-modal pattern (kelola-soal.html /
+// paket-soal.html): the modal popup is a sibling <dialog> in
+// paket-detail.html (mirrors .bulk-delete-summary layout); pending data
+// bridges the open handler (clicking bulk-remove button) and the
+// confirm handler (running the DELETE loop). Note: no
+// `isPackBulkRemoveInFlight` flag — the click handler is fully
+// synchronous before showModal() (no awaits; all data from cached
+// packQuestions), so a fast double-click is prevented by showModal()'s
+// dialog inertness, NOT by a flag. Per code-reviewer Round-1 feedback
+// #2.
+const bankSelectAllCheckbox = document.getElementById("bank-select-all-checkbox");
+const bankSelectAllCheckboxBottom = document.getElementById("bank-select-all-checkbox-bottom");
+const packSelectAllCheckbox = document.getElementById("pack-select-all-checkbox");
+const packSelectAllCheckboxBottom = document.getElementById("pack-select-all-checkbox-bottom");
+const packSelectionCountEl = document.getElementById("pack-selection-count");
+const bulkRemoveBtn = document.getElementById("bulk-remove-pack-btn");
+const bulkRemoveCountEl = document.getElementById("bulk-remove-pack-count");
+const bulkRemoveConfirmModal = document.getElementById("bulk-remove-confirm-modal");
+const bulkRemoveModalConfirmBtn = document.getElementById("bulk-remove-confirm-btn");
+const bulkRemoveModalCancelBtn = document.getElementById("bulk-remove-cancel-btn");
+const bulkRemoveConfirmCountEl = document.getElementById("bulk-remove-confirm-count");
+const bulkRemoveModalCountEl = document.getElementById("bulk-remove-modal-count");
+const bulkRemovePackListEl = document.getElementById("bulk-remove-pack-list");
+
+// ==== Notification modal (info-only, single OK button) ====
+// Replaces native alert() for SUCCESS notifications in this file
+// (per user request 2026-07-20). Errors that wrapFetch hasn't already
+// shown as toast (SESSION_EXPIRED / SERVER_ERROR_) still use alert()
+// because they may need to interrupt user attention; success messages
+// are informational and pair naturally with a dismissable modal.
+const notificationModal = document.getElementById("notification-modal");
+const notificationTitleEl = document.getElementById("notification-title");
+const notificationMessageEl = document.getElementById("notification-message");
+const notificationOkBtn = document.getElementById("notification-ok-btn");
+if (notificationOkBtn) {
+  notificationOkBtn.addEventListener("click", () => {
+    if (notificationModal) notificationModal.close();
+  });
+}
+function showNotification(title, message) {
+  if (!notificationModal) {
+    // Fallback if modal markup didn't load — keep behavior identical to
+    // old native alert so admin still sees the notification.
+    alert(message);
+    return;
+  }
+  if (notificationTitleEl) notificationTitleEl.textContent = title;
+  if (notificationMessageEl) notificationMessageEl.textContent = message;
+  notificationModal.showModal();
+}
+
 function esc(s) {
   const d = document.createElement("div");
   d.textContent = s;
@@ -325,6 +389,7 @@ function renderBankList() {
       .join("");
     typesetMath(bankList);
     updateAddButtonLabel();
+    updateBankSelectAllState();
   }
 
   // Show/hide controls
@@ -352,14 +417,92 @@ function renderLists() {
       .map(
         (q, i) => `
       <div class="pack-question-item" draggable="true" data-id="${q.id}" data-index="${i}">
+        <input type="checkbox" class="pack-row-checkbox" data-q-id="${q.id}"${packSelectedIds.has(q.id) ? " checked" : ""} aria-label="Pilih soal #${i + 1}">
         <span class="q-num">Soal ${i + 1}</span>
         <span class="q-preview">${window.bulkParser.previewHtmlForCell(q.content)}</span>
-        <button class="btn-danger" style="padding:4px 8px;font-size:0.8rem" onclick="removeQuestion(${q.id})">Hapus</button>        </div>
+        <button class="btn-danger" style="padding:4px 8px;font-size:0.8rem" onclick="removeQuestion(${q.id})">Hapus</button>      </div>
     `,
       )
       .join("");
     typesetMath(packList);
     setupDragAndDrop();
+  }
+
+  // Sync count display + select-all 3-state + bulk-remove button after
+  // every render (mandatory because renderLists rebuilds the DOM, so
+  // delegated `change` events on packList re-derive packSelectedIds from
+  // the rendered checkbox state). updatePackSelectionUI() also syncs
+  // bulk-remove button + count text + select-all indeterminate.
+  updatePackSelectionUI();
+}
+
+// updateBankSelectAllState — mirrors updateSelectionUI() in kelola-soal.js
+// but scoped to bank-list. Computes 3-state (checked / unchecked /
+// indeterminate) for BOTH the top + bottom header select-all
+// checkboxes based on how many of the CURRENT PAGE'S row checkboxes
+// are checked (per user request 2026-07-20: select-all di atas dan
+// bawah). Note the Set (tentativeSelections) authors state on a
+// per-id basis but the header checkboxes are UI affordances for the
+// CURRENT PAGE ONLY — when a user pages away, the Set retains their
+// selections but the headers re-sync against the new page's
+// checkboxes. Called by:
+//   - The delegated change handler in bankList (per-row toggle)
+//   - The select-all change handlers (after proving the visible rows)
+//   - renderBankList() at every page change / filter change
+function updateBankSelectAllState() {
+  const cbs = bankList.querySelectorAll('input[name="add-q"]');
+  const total = cbs.length;
+  const checked = Array.from(cbs).filter((cb) => cb.checked).length;
+  let state;
+  if (total === 0 || checked === 0) state = { indeterminate: false, checked: false };
+  else if (checked === total) state = { indeterminate: false, checked: true };
+  else state = { indeterminate: true, checked: false };
+  if (bankSelectAllCheckbox) {
+    bankSelectAllCheckbox.indeterminate = state.indeterminate;
+    bankSelectAllCheckbox.checked = state.checked;
+  }
+  if (bankSelectAllCheckboxBottom) {
+    bankSelectAllCheckboxBottom.indeterminate = state.indeterminate;
+    bankSelectAllCheckboxBottom.checked = state.checked;
+  }
+}
+
+// updatePackSelectionUI — mirror of updateSelectionUI() for the pack-list.
+// Pack-list is single-page (no pagination), so the select-all checkbox
+// reflects packSelectedIds.size === packQuestions.length instead of a
+// per-page slice. Reads from packSelectedIds (state) NOT from rendered
+// DOM, so packSelectedIds must be the source of truth for both the
+// row checkboxes (rendered from Set.has(id)) and the count UI (from
+// Set.size). Called by:
+//   - renderLists() at every render (post-rebuild sync)
+//   - The delegated change handler in packList (per-row toggle)
+//   - The select-all change handler (after toggling all ids)
+function updatePackSelectionUI() {
+  const total = packSelectedIds.size;
+  if (packSelectionCountEl) {
+    packSelectionCountEl.textContent =
+      total === 0 ? "0 dipilih" : `${total} dipilih`;
+  }
+  if (bulkRemoveCountEl) bulkRemoveCountEl.textContent = total;
+  if (bulkRemoveBtn) bulkRemoveBtn.disabled = total === 0;
+  // Sync both top + bottom pack-select-all checkboxes in a single
+  // pass (per user request 2026-07-20: select-all di atas dan bawah).
+  // Both checkboxes derive their 3-state from the same packSelectedIds
+  // (source of truth) — looping over an array of refs prevents future
+  // state-divergence bugs if the 3-state logic ever changes here.
+  // DRY pattern mirrors updateBankSelectAllState() above.
+  for (const cb of [packSelectAllCheckbox, packSelectAllCheckboxBottom]) {
+    if (!cb) continue;
+    if (total === 0) {
+      cb.indeterminate = false;
+      cb.checked = false;
+    } else if (total === packQuestions.length) {
+      cb.indeterminate = false;
+      cb.checked = true;
+    } else {
+      cb.indeterminate = true;
+      cb.checked = false;
+    }
   }
 }
 
@@ -472,17 +615,221 @@ bankList.addEventListener("change", (e) => {
       tentativeSelections.delete(id);
     }
     updateAddButtonLabel();
+    updateBankSelectAllState();
   }
 });
 
-// setControlsLocked — lock or unlock every bank-side control during the
-// add-to-pack POST loop (spec §4.6). Reads addBtn.disabled as the single
-// source of truth for "is the panel busy" so drag/removeQ guards share
-// the same state without a parallel flag.
-// `locked=true` ⇒ all bank inputs/selects/buttons + addBtn + saveBtn
-// become disabled; `locked=false` ⇒ re-enable everything (saveBtn only
-// re-enables per its own logic — keep it disabled if user hasn't dragged).
+// Same delegation strategy for packList — renderLists() rebuilds the
+// DOM but parent-level change listener catches per-row toggles, mutating
+// packSelectedIds (source of truth) + calling updatePackSelectionUI() to
+// sync count display, select-all 3-state, and bulk-remove button.
+packList.addEventListener("change", (e) => {
+  if (e.target.matches('input.pack-row-checkbox')) {
+    const id = parseInt(e.target.dataset.qId, 10);
+    if (e.target.checked) {
+      packSelectedIds.add(id);
+    } else {
+      packSelectedIds.delete(id);
+    }
+    updatePackSelectionUI();
+  }
+});
+
+// ==== Bank-list: select-all header checkbox (TOP + BOTTOM mirror) ====
+// When user toggles EITHER header (top or bottom), mirror the checked
+// state onto every row checkbox on the CURRENT PAGE and update
+// tentativeSelections. The sibling header (the unw-toggled one) is
+// synced via updateBankSelectAllState() at the end. Off-page
+// selections are preserved (Set source-of-truth) — only the visible
+// rows are flipped.
+function handleBankSelectAllChange(e) {
+  const checked = e.target.checked;
+  e.target.indeterminate = false;
+  const cbs = bankList.querySelectorAll('input[name="add-q"]');
+  cbs.forEach((cb) => {
+    const id = parseInt(cb.value, 10);
+    cb.checked = checked;
+    if (checked) tentativeSelections.add(id);
+    else tentativeSelections.delete(id);
+  });
+  updateAddButtonLabel();
+  updateBankSelectAllState();
+}
+if (bankSelectAllCheckbox) bankSelectAllCheckbox.addEventListener("change", handleBankSelectAllChange);
+if (bankSelectAllCheckboxBottom) bankSelectAllCheckboxBottom.addEventListener("change", handleBankSelectAllChange);
+
+// ==== Pack-list: select-all header checkbox (TOP + BOTTOM mirror) ====
+// Pack-list has no pagination, so the headers reflect ALL pack
+// questions. Toggling EITHER header flips all rows + packSelectedIds
+// Set + re-renders. The sibling header (the unw-toggled one) gets
+// re-derived via updatePackSelectionUI() during renderLists() at the
+// end. Centralized in a handler function so the two event listeners
+// stay in lockstep.
+function handlePackSelectAllChange(e) {
+  const checked = e.target.checked;
+  e.target.indeterminate = false;
+  if (checked) {
+    packSelectedIds = new Set(packQuestions.map((q) => q.id));
+  } else {
+    packSelectedIds.clear();
+  }
+  renderLists();
+}
+if (packSelectAllCheckbox) packSelectAllCheckbox.addEventListener("change", handlePackSelectAllChange);
+if (packSelectAllCheckboxBottom) packSelectAllCheckboxBottom.addEventListener("change", handlePackSelectAllChange);
+
+// ==== Pack-list: bulk-remove button → confirmation modal ====
+// Opens the bulk-remove-confirm-modal populated with the sorted list of
+// selected soal + their pack-order index. The handler body is fully
+// synchronous (no awaits; all data from cached packQuestions), so the
+// modal opens in the same tick — dialog inertness from showModal()
+// prevents a fast double-click from re-opening the modal. No in-flight
+// flag needed. Per code-reviewer Round-1 feedback #2.
+if (bulkRemoveBtn) {
+  bulkRemoveBtn.addEventListener("click", () => {
+    if (packSelectedIds.size === 0) return;
+    const n = packSelectedIds.size;
+    if (bulkRemoveConfirmCountEl) bulkRemoveConfirmCountEl.textContent = n;
+    if (bulkRemoveModalCountEl) bulkRemoveModalCountEl.textContent = n;
+
+    // Sort by id ascending so the modal list order matches user
+    // expectation (mirror bulk-delete-confirm-modal from
+    // kelola-soal.js). Index lookup via packQuestions.findIndex
+    // converts each id back to its pack-order number for display.
+    const sortedIds = Array.from(packSelectedIds).sort((a, b) => a - b);
+    const rowHtml = sortedIds
+      .map((id) => {
+        const idx = packQuestions.findIndex((q) => q.id === id);
+        const q = idx >= 0 ? packQuestions[idx] : null;
+        const qNum = idx >= 0 ? `Soal ${idx + 1}` : `#${id}`;
+        const preview = q
+          ? window.bulkParser.previewHtmlForCell(q.content)
+          : "—";
+        return `<li><strong>${esc(qNum)}</strong>: ${preview}</li>`;
+      })
+      .join("");
+    if (bulkRemovePackListEl) bulkRemovePackListEl.innerHTML = rowHtml;
+
+    if (bulkRemoveConfirmModal) bulkRemoveConfirmModal.showModal();
+  });
+}
+
+// ==== Pack-list bulk-remove: cancel button ====
+if (bulkRemoveModalCancelBtn) {
+  bulkRemoveModalCancelBtn.addEventListener("click", () => {
+    if (bulkRemoveConfirmModal) bulkRemoveConfirmModal.close();
+  });
+}
+
+// ==== Pack-list bulk-remove: confirm button ====
+// Runs sequential DELETE /api/packs/:packId/questions/:qId for each
+// selected id (mirror addBtn.onclick sequential POST loop). Sequential
+// (NOT Promise.allSettled) chosen per thinker-with-files-gemini
+// Round-1 feedback #3 to avoid concurrent pack_questions mutations.
+// Uses setControlsLocked(true/false) to lock BOTH panels for the
+// duration of the DELETE loop — extends beyond addBtn-only locking
+// (per code-reviewer Round-1 feedback #1) so the user cannot launch a
+// concurrent add-to-pack POST loop, toggle bank-side checkboxes, or
+// click any other control that would mutate packQuestions mid-loop.
+// On session/server error, the wrapFetch toast is already visible —
+// we bail without alert. Partial failures notify with a summary so
+// the user can retry; successfully-removed ids are pruned from
+// packSelectedIds and the list re-renders via init().
+if (bulkRemoveModalConfirmBtn) {
+  bulkRemoveModalConfirmBtn.addEventListener("click", async () => {
+    const ids = Array.from(packSelectedIds);
+    if (ids.length === 0) {
+      if (bulkRemoveConfirmModal) bulkRemoveConfirmModal.close();
+      return;
+    }
+
+    bulkRemoveModalConfirmBtn.disabled = true;
+    bulkRemoveModalCancelBtn.disabled = true;
+    const originalLabel = bulkRemoveModalConfirmBtn.textContent;
+    bulkRemoveModalConfirmBtn.textContent = "Menghapus...";
+
+    // Lock both panels (bank checkboxes/pagination/search + addBtn +
+    // pack row checkboxes + pack-select-all + saveBtn) to prevent
+    // concurrent mutation of packQuestions during the DELETE loop.
+    // Per code-reviewer Round-1 feedback #1.
+    setControlsLocked(true);
+
+    let successCount = 0;
+    let isSessionOrServerErr = false;
+    let alertMessage = null;
+
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        await wrapFetch(`/api/packs/${packId}/questions/${ids[i]}`, {
+          method: "DELETE",
+        });
+        successCount = i + 1;
+      }
+    } catch (err) {
+      if (
+        err.message === "wrapFetch:SESSION_EXPIRED" ||
+        err.message.startsWith("wrapFetch:SERVER_ERROR_")
+      ) {
+        isSessionOrServerErr = true;
+      } else if (successCount > 0 && successCount < ids.length) {
+        alertMessage = `${successCount} dari ${ids.length} soal berhasil dihapus dari paket. Sisanya gagal dan dapat dicoba lagi.`;
+      } else {
+        alertMessage = "Gagal menghapus soal dari paket.";
+      }
+    }
+
+    if (!isSessionOrServerErr) {
+      // Partial cleanup: drop successfully-removed ids so re-render
+      // highlights the remaining (un-removed) selections for retry.
+      // Sequential-index cleanup pairs 1:1 with the sequential DELETE
+      // loop above — the assurance comes from the loop's monotonic
+      // successCount. If this code is ever refactored to
+      // Promise.allSettled, replace this with a Set keyed by id.
+      for (let i = 0; i < successCount; i++) {
+        packSelectedIds.delete(ids[i]);
+      }
+      if (bulkRemoveConfirmModal) bulkRemoveConfirmModal.close();
+      await init();
+      if (alertMessage) {
+        alert(alertMessage);
+      } else if (successCount === ids.length) {
+        showNotification(
+          "✓ Soal Dihapus dari Paket",
+          `${ids.length} soal berhasil dihapus dari paket`,
+        );
+      }
+    }
+
+    bulkRemoveModalConfirmBtn.disabled = false;
+    bulkRemoveModalCancelBtn.disabled = false;
+    bulkRemoveModalConfirmBtn.textContent = originalLabel;
+    // Unlock both panels. After init() + renderLists() ran
+    // updatePackSelectionUI(), derived state (e.g. bulkRemoveBtn) is
+    // already re-applied; setControlsLocked(false) just lifts the
+    // blanket lock on inputs/pagination/saveBtn.
+    setControlsLocked(false);
+  });
+}
+
+// setControlsLocked — lock or unlock every input control on BOTH panels
+// during any panel-busy operation (spec §4.6: add-to-pack POST loop;
+// also extended per code-reviewer Round-1 feedback #1 to cover
+// bulk-remove DELETE loop). Reads addBtn.disabled as the canonical
+// "is the panel busy" state so drag/removeQ guards share the same
+// signal without a parallel flag.
+//
+// Scope (locked=true): all bank inputs/selects/buttons + addBtn +
+// packList row checkboxes + packSelectAllCheckbox + saveBtn become
+// disabled. bulkRemoveBtn is INTENTIONALLY excluded here because its
+// enabled state is derived from packSelectedIds.size via
+// updatePackSelectionUI(); derived states are restored by init() →
+// renderLists() → updatePackSelectionUI() AFTER the lock is lifted,
+// and forcing bulkRemoveBtn to a fixed value here would fight with the
+// derivation. `locked=false` simply re-enables everything; saveBtn
+// stays disabled unless pack has drag-reorder state — that re-enable
+// is owned by handleDrop + renderLists, not here.
 function setControlsLocked(locked) {
+  // Bank-list controls
   bankList.querySelectorAll('input[name="add-q"]').forEach((el) => {
     el.disabled = locked;
   });
@@ -498,6 +845,14 @@ function setControlsLocked(locked) {
     document.activeElement.blur();
   }
   addBtn.disabled = locked;
+  // Pack-list controls (added per code-reviewer Round-1 feedback #1 to
+  // prevent concurrent row-checkbox toggles + select-all clicks during
+  // the bulk-remove DELETE loop, which would otherwise mutate
+  // packSelectedIds/packQuestions while the loop is reading that state).
+  packList.querySelectorAll('input.pack-row-checkbox').forEach((el) => {
+    el.disabled = locked;
+  });
+  if (packSelectAllCheckbox) packSelectAllCheckbox.disabled = locked;
   // saveBtn stays disabled after unlock unless pack has drag-reorder
   // state. We track this cheaply by toggling disabled here and letting
   // handleDrop + renderLists own the re-enable logic for that button.
@@ -607,25 +962,112 @@ addBtn.onclick = async () => {
   if (alertMessage) {
     alert(alertMessage);
   } else if (successCount === checked.length) {
-    alert(`${checked.length} soal berhasil ditambahkan ke paket`);
+    showNotification(
+      "✓ Soal Ditambahkan",
+      `${checked.length} soal berhasil ditambahkan ke paket`,
+    );
   }
 };
 
+// ==== Remove Question from Pack: confirm modal element refs + in-flight guard ====
+// Replaces the old native confirm() dialog so the admin can SEE which
+// question will be removed from the pack before confirming. Mirror of
+// the single-delete-confirm-modal pattern in kelola-soal.html.
+// pendingRemoveQId bridges removeQuestion (opens modal) and the confirm
+// handler (runs the DELETE call). isRemoveQInFlight prevents double-click
+// race on the per-row Hapus button — set synchronously before the first
+// await so a fast double-click sees the flag as true and returns
+// immediately (the `.open` property can't guard this because the modal
+// isn't open yet during the await window).
+const removeQConfirmModal = document.getElementById("remove-question-confirm-modal");
+const removeQConfirmBtn = document.getElementById("remove-q-confirm-btn");
+const removeQCancelBtn = document.getElementById("remove-q-cancel-btn");
+const removeQNumEl = document.getElementById("remove-q-num");
+const removeQDetailListEl = document.getElementById("remove-q-detail-list");
+let pendingRemoveQId = null;
+let isRemoveQInFlight = false;
+
+// Remove question from pack — opens the confirm modal (replaces native
+// confirm()) populated with the question number + preview from the
+// cached packQuestions array. The actual DELETE call happens in the
+// removeQConfirmBtn click handler below, after the user confirms.
 window.removeQuestion = async (qId) => {
   // Spec §4.6 — guard against clicks while add-to-pack loop is mid-flight.
   if (addBtn.disabled) return;
-  if (!confirm("Hapus soal ini dari paket?")) return;
+  // Guard against double-click race (in-flight flag pattern per
+  // code-reviewer-glm feedback from the kelola-soal single-delete
+  // feature — the `.open` guard was ineffective for the typical
+  // double-click-before-resolves race).
+  if (isRemoveQInFlight) return;
+  isRemoveQInFlight = true;
   try {
-    const res = await wrapFetch(`/api/packs/${packId}/questions/${qId}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) throw new Error();
-    init();
+    // Look up the question from cached packQuestions to show the
+    // question number (1-based index in pack order) + preview.
+    const qIndex = packQuestions.findIndex((q) => q.id === qId);
+    const q = qIndex >= 0 ? packQuestions[qIndex] : null;
+    const qNum = qIndex >= 0 ? `Soal ${qIndex + 1}` : `#${qId}`;
+    const preview = q
+      ? window.bulkParser.previewHtmlForCell(q.content)
+      : "—";
+
+    pendingRemoveQId = qId;
+    removeQNumEl.textContent = qNum;
+    removeQDetailListEl.innerHTML =
+      `<li><strong>${esc(qNum)}</strong>: ${preview}</li>`;
+
+    if (removeQConfirmModal) removeQConfirmModal.showModal();
   } catch (err) {
-    if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
-    alert("Gagal menghapus soal dari paket.");
+    console.error("Remove question modal open failed:", err);
+  } finally {
+    isRemoveQInFlight = false;
   }
 };
+
+// ==== Remove Question: confirmation modal cancel button ====
+if (removeQCancelBtn) {
+  removeQCancelBtn.addEventListener("click", () => {
+    if (removeQConfirmModal) removeQConfirmModal.close();
+    pendingRemoveQId = null;
+  });
+}
+
+// ==== Remove Question: confirmation modal submit button ====
+// Runs the actual DELETE /api/packs/:packId/questions/:qId call after
+// the user confirms. Mirrors the single-delete confirm handler pattern:
+// disable both buttons during the in-flight DELETE, show "Menghapus...",
+// re-enable in finally. On success, close modal + init() to refresh.
+if (removeQConfirmBtn) {
+  removeQConfirmBtn.addEventListener("click", async () => {
+    const qId = pendingRemoveQId;
+    if (qId == null) {
+      if (removeQConfirmModal) removeQConfirmModal.close();
+      return;
+    }
+
+    removeQConfirmBtn.disabled = true;
+    removeQCancelBtn.disabled = true;
+    const originalConfirmLabel = removeQConfirmBtn.textContent;
+    removeQConfirmBtn.textContent = "Menghapus...";
+
+    try {
+      const res = await wrapFetch(`/api/packs/${packId}/questions/${qId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (removeQConfirmModal) removeQConfirmModal.close();
+      pendingRemoveQId = null;
+      init();
+    } catch (err) {
+      if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
+      console.error("Remove question submit failed:", err);
+      alert("Gagal menghapus soal dari paket. Coba lagi.");
+    } finally {
+      removeQConfirmBtn.disabled = false;
+      removeQCancelBtn.disabled = false;
+      removeQConfirmBtn.textContent = originalConfirmLabel;
+    }
+  });
+}
 
 // Drag and Drop
 let dragSourceEl = null;
@@ -697,7 +1139,10 @@ saveBtn.onclick = async () => {
       body: JSON.stringify({ questions: payload }),
     });
     if (!res.ok) throw new Error();
-    alert("Urutan soal berhasil disimpan!");
+    showNotification(
+      "✓ Urutan Tersimpan",
+      "Urutan soal berhasil disimpan!",
+    );
     init();
   } catch (err) {
     if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;

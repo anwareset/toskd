@@ -509,20 +509,63 @@ button:disabled {
     gap: 20px;
 }
 
-/* select-pack.html: cards in `#pack-grid` are arranged side-by-side
-   in horizontal rows that fill the container width before wrapping
-   to a new row. Uses flexbox with `flex: 1 1 280px` so each card
-   grows to fill its row evenly, ensuring no trailing gap. Scoped to
-   `#pack-grid` so other `.card-grid` users (bank-soal.html) are
-   unaffected. */
+/* select-pack.html: cards in `#pack-grid` are arranged in a CSS Grid
+   with EXPLICIT fixed column counts (per user feedback 2026-07-20
+   round-2).
+
+   History:
+     - Originally used the `.card-grid` base `auto-fit` rule, which
+       stretched orphan trailing cards to fill collapsed empty tracks
+       on row 3 (the 6 + 2 layout where the 2 orphan cards got 1.5fr
+       each, visibly wider than the 6 cards in rows 1+2).
+     - Round-1 fix (still in CSS at user-feedback-time): override to
+       `auto-fill + minmax(280px, 1fr)` so empty trailing tracks were
+       preserved. In theory this keeps all 3 tracks equal-width and
+       row 3's 2 cards at identical 1fr width as rows 1+2.
+
+   Round-2 (this version): user reported the orphan cards STILL
+   appeared stretched despite the round-1 auto-fill override being
+   loaded. Suspected causes include browser cache (the static page
+   serving the stale .card-grid `auto-fit` rule) and/or sub-pixel
+   rounding quirks with `minmax(280px, 1fr)` at fractional container
+   widths (some browsers compute slightly unequal track widths on
+   the partial row).
+
+   Round-2 fix: switch to fixed explicit column counts so the layout
+   is 100% deterministic and identical across all browsers:
+     - Desktop (>1023px): 3 fixed tracks. 8 packs render as 3 + 3 + 2.
+       Row 3's 2 orphans occupy slots 1 + 2 at exactly the same 1fr
+       width as the cards in rows 1+2. Empty slot 3 is preserved on
+       the right edge without any track-stretching.
+     - Tablet (768-1023px): 2 fixed tracks. 8 packs render as a clean
+       2 × 4 grid with ZERO orphans — best medium-screen experience.
+     - Mobile (<768px): 1 single column stack (handled by the @media
+       rule below this comment block).
+
+   `minmax(0, 1fr)` (not bare `1fr`) so each track can shrink below
+   the grid item's min-content size — a very long pack name cannot
+   accidentally force its track wider than the equal share. The
+   `#pack-grid > .card { min-width: 0 }` rule below is the companion
+   belt-and-suspenders on the item side for the same defensive
+   guarantee.
+
+   Scoped to `#pack-grid` so other `.card-grid` users (bank-soal.html)
+   remain unaffected. */
 #pack-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 1023px) {
+    /* Tablet step-down: 8 packs distribute cleanly into 2x4 with no
+       orphan cards at medium screen widths. `minmax(0, 1fr)` keeps
+       the min-content-shrink defensive guarantee consistent with
+       the desktop rule above. */
+    #pack-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 #pack-grid > .card {
-    flex: 1 1 280px;
-    min-width: 280px;
+    min-width: 0;
 }
 .card {
     border-radius: 12px;
@@ -1297,6 +1340,17 @@ tbody tr:hover {
     .card-grid {
         grid-template-columns: 1fr;
     }
+    /* Mobile step-down for the #pack-grid fix above: the @media
+       max-width: 1023px rule already drops tablet to 2 columns; this
+       rule finalizes single-column stack on phones (<768px) so cards
+       fill full row width without leaving big voids at narrow widths.
+       `minmax(0, 1fr)` (vs bare 1fr) keeps the min-content-shrink
+       defensive guarantee consistent with the desktop + tablet rules
+       above. Per user feedback 2026-07-20 round-2 (replaces the
+       round-1 auto-fill/minmax explanation). */
+    #pack-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 /* ==== paket-detail.html toolbar utilities (rev. 3) ==== */
@@ -1507,6 +1561,91 @@ tbody tr:hover {
     font-weight: 600;
     line-height: 1.4;
     white-space: nowrap;
+}
+
+/* ==== paket-detail.html: shared pack-list selection toolbar ====
+   Per user request 2026-07-20 — both the TOP (above pack-questions-list)
+   and BOTTOM (below) toolbars use the same class so any future style
+   update is applied to both at once, eliminating the divergence risk
+   the previous round flagged. Single source of truth for the flex
+   layout + checkbox sizing + helper-text rules.
+
+   Margin is `margin-top: 8px; margin-bottom: 8px` (shorthand `margin:
+   8px 0`) so each toolbar symmetrically has an 8px gap to the
+   questions list it sits above (bottom toolbar) or below (top toolbar).
+   The previous round used asymmetric margin (margin-bottom on top,
+   margin-top on bottom) which would diverge immediately on any
+   future update — this round unifies to symmetric.
+
+   Checkbox sizing: 18px native (mobile: 22px). Browser default
+   checkboxes are ~13px which is below Apple HIG / Material 24px touch
+   target minimum; sizing up gives comfortable thumb taps on touch
+   devices while keeping the native appearance (no custom skin that
+   could fight the form-control existing elsewhere).
+*/
+.pack-list-selection-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0;
+    flex-wrap: wrap;
+}
+.pack-list-selection-toolbar input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    /* Without flex-shrink: 0 a checkbox can be visually squeezed when
+       the label takes too much row space (would look unbalanced). */
+    flex-shrink: 0;
+}
+.pack-list-selection-helper {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    /* flex:1 + min-width:0 lets the helper text shrink alongside the
+       growing checkbox instead of overflowing the toolbar. Belt-and-
+       suspenders with the parent's flex-wrap:wrap. */
+    flex: 1;
+    min-width: 0;
+    line-height: 1.4;
+}
+@media (max-width: 767px) {
+    .pack-list-selection-toolbar {
+        gap: 10px;
+        margin: 10px 0;
+    }
+    .pack-list-selection-toolbar input[type="checkbox"] {
+        /* Bumped 22px → 24px (per code-reviewer-minimax-m3 Round-5
+           feedback #1) — Apple HIG 24pt minimum touch target so
+           finger taps have unambiguous hit areas on touch devices. */
+        width: 24px;
+        height: 24px;
+    }
+}
+
+/* ==== paket-detail.html: bank select-all checkbox touch target ====
+   Companion sizing rule for the bank pagination bar's two select-all
+   checkboxes (top + bottom). Without an explicit rule they render at
+   the browser default ~13px, which is below Apple HIG 24pt minimum
+   touch target and noticeably smaller than the pack-list-selection-
+   toolbar checkboxes above. Match mobile sizing (24px) with the pack-
+   list for touch-target consistency across the page; desktop uses 20px
+   (one notch smaller than 24px to maintain visual hierarchy vs the
+   pack toolbar checkboxes at 18px). cursor:pointer + flex-shrink:0
+   preserve the same accessibility affordances as the pack toolbar.
+*/
+#bank-select-all-checkbox,
+#bank-select-all-checkbox-bottom {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+@media (max-width: 767px) {
+    #bank-select-all-checkbox,
+    #bank-select-all-checkbox-bottom {
+        width: 24px;
+        height: 24px;
+    }
 }
 
 /* ==== Question content cells: tighten MathJax output ====

@@ -104,9 +104,22 @@
                             style="display: none"
                         >
                             <div class="pagination-bar-left">
+                                <!-- Select-all checkbox for bank-questions-list.
+                                     Toggles ALL visible row checkboxes on the
+                                     CURRENT page only (mirror kelola-soal.js
+                                     3-state pattern). Persisted select state
+                                     lives in tentativeSelections Set so user
+                                     selections stay across pagination/filter.
+                                     JS in paket-detail.js :: setupBankSelectAll(). -->
+                                <input
+                                    type="checkbox"
+                                    id="bank-select-all-checkbox"
+                                    aria-label="Pilih semua soal di halaman bank ini"
+                                />
                                 <label
                                     for="bank-rows-per-page-top"
                                     class="pagination-label"
+                                    style="margin-left: 4px"
                                 >
                                     Tampilkan:
                                 </label>
@@ -163,9 +176,22 @@
                             style="display: none"
                         >
                             <div class="pagination-bar-left">
+                                <!-- Mirror select-all checkbox for the bottom
+                                     pagination bar (per user request 2026-07-20:
+                                     select-all di atas dan bawah). The same
+                                     tentativeSelections Set is the source of
+                                     truth for both top + bottom widgets; the
+                                     bottom handler syncs the top via a simple
+                                     pointer-sync in paket-detail.js. -->
+                                <input
+                                    type="checkbox"
+                                    id="bank-select-all-checkbox-bottom"
+                                    aria-label="Pilih semua soal di halaman bank ini"
+                                />
                                 <label
                                     for="bank-rows-per-page-bottom"
                                     class="pagination-label"
+                                    style="margin-left: 4px"
                                 >
                                     Tampilkan:
                                 </label>
@@ -222,6 +248,30 @@
                             Tarik & lepas (Drag & Drop) item untuk mengatur
                             urutan soal
                         </p>
+                        <!-- Pack-list selection toolbar: select-all checkbox
+                             + count display, mirroring the selection-pill UX
+                             from kelola-soal.html. Uses shared
+                             .pack-list-selection-toolbar class so any future
+                             style update applies to both top + bottom
+                             toolbars in lockstep (per refactor request
+                             2026-07-20). The count span reuses
+                             .pack-list-selection-helper for visual parity
+                             with the bottom toolbar's helper text. JS in
+                             paket-detail.js :: setupPackSelectAll() +
+                             updatePackSelectionUI(). -->
+                        <div class="pack-list-selection-toolbar">
+                            <input
+                                type="checkbox"
+                                id="pack-select-all-checkbox"
+                                aria-label="Pilih semua soal di paket ini"
+                            />
+                            <span
+                                id="pack-selection-count"
+                                class="pack-list-selection-helper"
+                            >
+                                0 dipilih
+                            </span>
+                        </div>
                         <div id="loading-pack" class="loading-overlay">
                             <div class="spinner"></div>
                         </div>
@@ -235,16 +285,208 @@
                                 padding: 8px;
                             "
                         ></div>
+                        <!-- Pack-list select-all BOTTOM (per user request
+                             2026-07-20: select-all di atas dan bawah). Mirror
+                             of the top selection toolbar above the questions
+                             list. Both checkboxes are bound to the same
+                             packSelectedIds Set via delegated change handlers
+                             in paket-detail.js. -->
+                        <!-- Inline div/span styles replaced with
+                             .pack-list-selection-toolbar +
+                             .pack-list-selection-helper CSS classes (added
+                             2026-07-20 round-3 in styles.css; renamed
+                             round-4 to remove "bottom" qualifier since both
+                             top + bottom toolbars share the same class). -->
+                        <div class="pack-list-selection-toolbar">
+                            <input
+                                type="checkbox"
+                                id="pack-select-all-checkbox-bottom"
+                                aria-label="Pilih semua soal di paket ini"
+                            />
+                            <span class="pack-list-selection-helper">
+                                Pilih semua di paket ini (untuk hapus sekaligus)
+                            </span>
+                        </div>
+                        <!-- Bulk-remove button for selected pack questions.
+                             Disabled when 0 selected. JS in paket-detail.js
+                             :: setupBulkRemoveBtn() opens
+                             bulk-remove-confirm-modal populated from
+                             packSelectedIds Set + packQuestions array (mirror
+                             single-delete-confirm-modal pattern). -->
+                        <button
+                            class="btn-danger"
+                            id="bulk-remove-pack-btn"
+                            style="margin-top: 16px; width: 100%"
+                            disabled
+                        >
+                            🗑 Hapus Terpilih
+                            <span id="bulk-remove-pack-count">0</span>
+                            Soal
+                        </button>
                         <button
                             class="btn-success"
                             id="save-order-btn"
-                            style="margin-top: 16px; width: 100%"
+                            style="margin-top: 8px; width: 100%"
                             disabled
                         >
                             Simpan Urutan Soal
                         </button>
                     </div>
                 </div>
+
+                <!-- ==================== REMOVE QUESTION CONFIRM MODAL ====================
+                     Replaces the old native confirm() dialog for the per-row
+                     "Hapus" button (window.removeQuestion in paket-detail.js)
+                     so the admin can SEE which question will be removed from
+                     the pack before confirming. Mirror of the single-delete-
+                     confirm-modal pattern in kelola-soal.html. MARKUP ONLY —
+                     JS in public/js/paket-detail.js. -->
+                <dialog
+                    id="remove-question-confirm-modal"
+                    class="modal"
+                    style="max-width: 600px"
+                >
+                    <div class="modal-content">
+                        <h3>🗑 Konfirmasi Hapus Soal dari Paket</h3>
+
+                        <div class="bulk-delete-summary">
+                            <p style="font-weight: 600; margin-bottom: 8px">
+                                Anda akan mengeluarkan soal
+                                <span id="remove-q-num">—</span>
+                                dari paket ini.
+                            </p>
+                            <div
+                                id="remove-q-impact"
+                                class="bulk-delete-pack-list"
+                            >
+                                <strong>📊 Detail soal yang akan dikeluarkan:</strong>
+                                <ul id="remove-q-detail-list"></ul>
+                            </div>
+                            <p style="color: var(--text-muted); font-size: 0.9rem">
+                                Tindakan ini mengeluarkan soal dari paket ini
+                                saja. Soal tetap tersimpan di Bank Soal dan bisa
+                                dimasukkan kembali ke paket ini atau paket lain.
+                                Tidak dapat dibatalkan.
+                            </p>
+                        </div>
+
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-secondary"
+                                id="remove-q-cancel-btn"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                class="btn-danger"
+                                id="remove-q-confirm-btn"
+                            >
+                                Ya, Hapus dari Paket
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
+
+                <!-- ==================== BULK REMOVE FROM PACK CONFIRM MODAL ====================
+                     Mirror of bulk-delete-confirm-modal in kelola-soal.html but
+                     for bulk remove from pack (via the per-pack
+                     /api/packs/:packId/questions/:qId DELETE endpoint).
+                     Populated by paket-detail.js :: showBulkRemoveConfirmModal().
+                     Reuse CSS class .bulk-delete-summary + .bulk-delete-pack-list
+                     for visual consistency with existing delete modals. -->
+                <dialog
+                    id="bulk-remove-confirm-modal"
+                    class="modal"
+                    style="max-width: 600px"
+                >
+                    <div class="modal-content">
+                        <h3>🗑 Konfirmasi Hapus Massal dari Paket</h3>
+
+                        <div class="bulk-delete-summary">
+                            <p style="font-weight: 600; margin-bottom: 8px">
+                                Anda akan mengeluarkan
+                                <span id="bulk-remove-confirm-count">0</span>
+                                soal dari paket ini.
+                            </p>
+                            <div
+                                id="bulk-remove-pack-impact"
+                                class="bulk-delete-pack-list"
+                            >
+                                <strong>📊 Detail soal yang akan dikeluarkan:</strong>
+                                <ul id="bulk-remove-pack-list"></ul>
+                            </div>
+                            <p style="color: var(--text-muted); font-size: 0.9rem">
+                                Tindakan ini mengeluarkan soal dari paket ini
+                                saja. Soal tetap tersimpan di Bank Soal dan bisa
+                                dimasukkan kembali ke paket ini atau paket lain.
+                                Tidak dapat dibatalkan.
+                            </p>
+                        </div>
+
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-secondary"
+                                id="bulk-remove-cancel-btn"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                class="btn-danger"
+                                id="bulk-remove-confirm-btn"
+                            >
+                                Ya, Hapus
+                                <span id="bulk-remove-modal-count">0</span>
+                                Soal
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
+
+                <!-- ==================== NOTIFICATION MODAL ====================
+                     Replaces native alert() popups in paket-detail.js for
+                     success notifications (per user request 2026-07-20:
+                     "notifikasi soal berhasil dihapus menjadi modal").
+                     Single OK button — informational only, no confirmation.
+                     Reuse the .bulk-delete-summary / .modal pattern for
+                     visual consistency with existing modals. JS in
+                     paket-detail.js :: showNotification(title, message).
+                -->
+                <dialog
+                    id="notification-modal"
+                    class="modal"
+                    style="max-width: 480px"
+                >
+                    <div class="modal-content">
+                        <h3 id="notification-title">ℹ️ Info</h3>
+                        <div
+                            style="
+                                padding: 8px 0 16px;
+                                font-size: 0.95rem;
+                                line-height: 1.6;
+                            "
+                        >
+                            <p
+                                id="notification-message"
+                                style="margin: 0"
+                            >
+                                — placeholder —
+                            </p>
+                        </div>
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-primary"
+                                id="notification-ok-btn"
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
             </div>
             <footer class="footer">
                 Untuk latihan SKD · Made with ♥️ in

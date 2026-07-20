@@ -384,6 +384,60 @@
                         </form>
                     </div>
                 </dialog>
+
+                <!-- ==================== DELETE PACK CONFIRM MODAL ====================
+                     Replaces the old native confirm() dialog for the per-row
+                     "Hapus" button (window.deletePack in paket-soal.js) so
+                     the admin can SEE the pack name + question count before
+                     confirming deletion. Mirror of the single-delete-confirm-modal
+                     pattern in kelola-soal.html. MARKUP ONLY — JS in
+                     public/js/paket-soal.js. -->
+                <dialog
+                    id="delete-pack-confirm-modal"
+                    class="modal"
+                    style="max-width: 600px"
+                >
+                    <div class="modal-content">
+                        <h3>🗑 Konfirmasi Hapus Paket Soal</h3>
+
+                        <div class="bulk-delete-summary">
+                            <p style="font-weight: 600; margin-bottom: 8px">
+                                Anda akan menghapus paket soal:
+                                <span id="delete-pack-name">—</span>
+                            </p>
+                            <div
+                                id="delete-pack-impact"
+                                class="bulk-delete-pack-list"
+                            >
+                                <strong>📊 Detail paket yang akan dihapus:</strong>
+                                <ul id="delete-pack-detail-list"></ul>
+                            </div>
+                            <p style="color: var(--text-muted); font-size: 0.9rem">
+                                Tindakan ini menghapus paket secara permanen dan
+                                semua relasi soal di dalamnya (cascade). Soal
+                                di Bank Soal tidak terhapus. Tidak dapat
+                                dibatalkan.
+                            </p>
+                        </div>
+
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-secondary"
+                                id="delete-pack-cancel-btn"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                class="btn-danger"
+                                id="delete-pack-confirm-btn"
+                            >
+                                Ya, Hapus Paket
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
             </div>
             <footer class="footer">
                 Untuk latihan SKD · Made with ♥️ in
