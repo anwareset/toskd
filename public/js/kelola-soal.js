@@ -128,7 +128,6 @@ const bulkDeleteConfirmModal = document.getElementById("bulk-delete-confirm-moda
 const bulkDeleteConfirmBtn = document.getElementById("bulk-delete-confirm-btn");
 const bulkDeleteCancelBtn = document.getElementById("bulk-delete-cancel-btn");
 const confirmTotalCountEl = document.getElementById("confirm-total-count");
-const modalConfirmCountEl = document.getElementById("modal-confirm-count");
 const confirmSoalListEl = document.getElementById("confirm-soal-list");
 
 // ==== Notification modal (info-only, single OK button) ====
@@ -1078,7 +1077,12 @@ form.onsubmit = async (e) => {
     });
     if (!res.ok) throw new Error();
     modal.close();
-    showNotification("✓ Soal Disimpan", "Soal berhasil disimpan.");
+    // Different message for add vs edit: id is truthy when editing.
+    if (id) {
+      showNotification("✓ Soal Diperbarui", "Soal berhasil diperbarui.");
+    } else {
+      showNotification("✓ Soal Disimpan", "Soal berhasil disimpan.");
+    }
     init();
   } catch (err) {
     if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
