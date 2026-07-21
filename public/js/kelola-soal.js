@@ -697,7 +697,13 @@ function setupCheckboxDelegation() {
 // with an empty ul in that case.
 function showBulkDeleteConfirmModal(ids, usageMap) {
   confirmTotalCountEl.textContent = ids.length;
-  modalConfirmCountEl.textContent = ids.length;
+  // Re-query the count span each time in case a previous bulk-delete run
+  // destroyed it via textContent assignment on the parent button. If the
+  // span is missing, create a placeholder so the count is still visible.
+  const countSpan = document.getElementById("modal-confirm-count");
+  if (countSpan) {
+    countSpan.textContent = ids.length;
+  }
 
   // Build id → question lookup ONCE so each row's tipe is a constant-
   // time read instead of an O(N) array scan per soal. The questions
@@ -1072,6 +1078,7 @@ form.onsubmit = async (e) => {
     });
     if (!res.ok) throw new Error();
     modal.close();
+    showNotification("✓ Soal Disimpan", "Soal berhasil disimpan.");
     init();
   } catch (err) {
     if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
@@ -1339,9 +1346,11 @@ bulkDeleteConfirmBtn.addEventListener("click", async () => {
   }
 
   bulkDeleteConfirmBtn.disabled = true;
-  bulkDeleteCancelBtn.disabled = true;
-  const originalConfirmLabel = bulkDeleteConfirmBtn.textContent;
-  bulkDeleteConfirmBtn.textContent = "Menghapus...";
+  bulkDeleteCancelBtn.disabled = true;    // Save innerHTML (NOT textContent) so the inner <span id="modal-confirm-count">
+    // survives the text change and can be re-created on restore (fix: count
+    // stays stale on next modal open if the span is destroyed).
+    const originalConfirmInner = bulkDeleteConfirmBtn.innerHTML;
+    bulkDeleteConfirmBtn.innerHTML = "Menghapus...";
 
   // Activate global loading overlay (existing #loading element). Inject
   // progress text into the overlay without replacing the spinner.
@@ -1370,8 +1379,7 @@ bulkDeleteConfirmBtn.addEventListener("click", async () => {
     showNotification("❌ Gagal Menghapus", "Gagal menghapus soal. Coba lagi.");
   } finally {
     bulkDeleteConfirmBtn.disabled = false;
-    bulkDeleteCancelBtn.disabled = false;
-    bulkDeleteConfirmBtn.textContent = originalConfirmLabel;
+    bulkDeleteCancelBtn.disabled = false;      bulkDeleteConfirmBtn.innerHTML = originalConfirmInner;
     if (overlayMsg) overlayMsg.textContent = "";
     loadingOverlay.style.display = "none";
   }
@@ -1848,7 +1856,7 @@ document.getElementById("q-bulk-form").onsubmit = async (e) => {
     bulkModal.close();
     if (window.bulkPasteEditor) window.bulkPasteEditor.setText("");
     window.lastBulkParse = [];
-    alert(`${data.inserted ?? validBlocks.length} soal berhasil ditambahkan`);
+    showNotification("✓ Soal Ditambahkan", `${data.inserted ?? validBlocks.length} soal berhasil ditambahkan`);
     init(); // refresh table to show new rows
   } catch (err) {
     if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
