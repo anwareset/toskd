@@ -2598,6 +2598,21 @@ body.is-drawer-open > *:not(.global-header):not(.global-nav-drawer) {
     background: rgba(0, 0, 0, 0.55);
 }
 
+/* Loading overlay for the pack column (add-to-pack / delete operations).
+   Mirrors #loading-add on the bank column: absolute over the pack column's
+   position:relative wrapper, same z-index, same theme-aware tint.
+   Shown/hidden via setControlsLocked() in paket-detail.js. */
+#loading-pack-add {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 8px;
+}
+:root[data-theme="dark"] #loading-pack-add {
+    background: rgba(0, 0, 0, 0.55);
+}
+
 /* ============================================
  * TKP weighted-scoring UI
  * Spec: tkp-scoring-spec.md §19 (binding tables).
@@ -3273,6 +3288,13 @@ button.q-submit-btn:disabled,
     align-items: center;
     gap: 10px;
     margin: 12px 0 12px;
+}
+/* ID-scoped hidden override: tanpa ini, `hidden` attribute pada search-bar
+   tidak berefek karena `.search-bar { display: flex }` (specificity 0-1-0)
+   mengalahkan `[hidden]` UA rule (juga 0-1-0) karena letaknya lebih akhir
+   di stylesheet. ID specificity (1-0-0) menjamin display: none menang. */
+#pack-search-bar[hidden] {
+    display: none !important;
 }
 .search-bar-input-wrap {
     /* `position: relative` anchors the absolutely-positioned

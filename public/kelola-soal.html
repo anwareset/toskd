@@ -1096,6 +1096,46 @@ Jawaban C paling mencerminkan pentingnya gotong royong karena menjelaskan peran 
                         </div>
                     </div>
                 </dialog>
+
+                <!-- ==================== NOTIFICATION MODAL ====================
+                     Replaces native alert() success notifications for bulk-delete
+                     operations (per user request 2026-07-21). Single OK button —
+                     informational only, no confirmation. Mirror of the same
+                     pattern in public/paket-detail.html. JS in
+                     public/js/kelola-soal.js :: showNotification(title, message).
+                -->
+                <dialog
+                    id="notification-modal"
+                    class="modal"
+                    style="max-width: 480px"
+                >
+                    <div class="modal-content">
+                        <h3 id="notification-title">ℹ️ Info</h3>
+                        <div
+                            style="
+                                padding: 8px 0 16px;
+                                font-size: 0.95rem;
+                                line-height: 1.6;
+                            "
+                        >
+                            <p
+                                id="notification-message"
+                                style="margin: 0"
+                            >
+                                — placeholder —
+                            </p>
+                        </div>
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-primary"
+                                id="notification-ok-btn"
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
             </div>
             <footer class="footer">
                 Untuk latihan SKD · Made with ♥️ in

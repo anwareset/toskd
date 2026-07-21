@@ -6,6 +6,7 @@ const loading = document.getElementById("loading");
 const loadingStatus = document.getElementById("loading-status");
 const searchInput = document.getElementById("pack-search");
 const searchClear = document.getElementById("pack-search-clear");
+const searchBar = document.getElementById("pack-search-bar");
 const modal = document.getElementById("name-modal");
 const nameInput = document.getElementById("participant-name");
 
@@ -68,10 +69,11 @@ function updateClearVisibility() {
 }
 
 async function loadPacks() {
-  // Disable search while packs haven't loaded yet so the input
-  // visually signals "wait for data" instead of accepting keystrokes
-  // the listener would silently drop (per code-reviewer Round-21 V2).
+  // Sembunyikan search-bar selama proses muat (user request 2026-07-21).
+  // Begitu data siap, search-bar muncul kembali dengan input sudah
+  // enabled dan siap dipakai.
   if (searchInput) searchInput.disabled = true;
+  if (searchBar) searchBar.hidden = true;
   try {
     const res = await fetch("/api/packs");
     const packs = await res.json();
@@ -81,6 +83,9 @@ async function loadPacks() {
       renderPacks([], {
         emptyMessage: "Belum ada paket soal tersedia.",
       });
+      // Early return: tetap tampilkan search-bar karena loading sudah selesai
+      // (response-nya valid, cuma kosong).
+      if (searchBar) searchBar.hidden = false;
       return;
     }
     // Per-pack count phase: show inline progress so the user has
@@ -115,9 +120,9 @@ async function loadPacks() {
       '<p style="color:var(--danger)">Gagal memuat paket soal.</p>';
     setLoadingStatus(null);
   } finally {
-    // Re-enable search regardless of success/error so the user can
-    // still try a query after a failure (filtered list is empty in
-    // the error path but the input stays usable for retry).
+    // Tampilkan search-bar dan re-enable input di semua path
+    // (sukses, error, atau empty-list early return).
+    if (searchBar) searchBar.hidden = false;
     if (searchInput) searchInput.disabled = false;
   }
 }

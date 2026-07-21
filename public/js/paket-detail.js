@@ -171,6 +171,7 @@ const bulkRemoveModalCancelBtn = document.getElementById("bulk-remove-cancel-btn
 const bulkRemoveConfirmCountEl = document.getElementById("bulk-remove-confirm-count");
 const bulkRemoveModalCountEl = document.getElementById("bulk-remove-modal-count");
 const bulkRemovePackListEl = document.getElementById("bulk-remove-pack-list");
+const loadingPackAdd = document.getElementById("loading-pack-add");
 
 // ==== Notification modal (info-only, single OK button) ====
 // Replaces native alert() for SUCCESS notifications in this file
@@ -857,6 +858,11 @@ function setControlsLocked(locked) {
   // state. We track this cheaply by toggling disabled here and letting
   // handleDrop + renderLists own the re-enable logic for that button.
   if (locked) saveBtn.disabled = true;
+  // Toggle loading overlay for pack column (mirror #loading-add on bank
+  // column). Shows spinner + dims pack-questions-list and its controls
+  // during add-to-pack POST loop or DELETE loop. Created per user
+  // request 2026-07-21.
+  if (loadingPackAdd) loadingPackAdd.style.display = locked ? "flex" : "none";
 }
 
 addBtn.onclick = async () => {
@@ -1049,6 +1055,10 @@ if (removeQConfirmBtn) {
     const originalConfirmLabel = removeQConfirmBtn.textContent;
     removeQConfirmBtn.textContent = "Menghapus...";
 
+    // Tampilkan loading overlay pada pack column selama proses DELETE
+    // (user request 2026-07-21: loading indikator saat hapus soal).
+    if (loadingPackAdd) loadingPackAdd.style.display = "flex";
+
     try {
       const res = await wrapFetch(`/api/packs/${packId}/questions/${qId}`, {
         method: "DELETE",
@@ -1056,7 +1066,7 @@ if (removeQConfirmBtn) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (removeQConfirmModal) removeQConfirmModal.close();
       pendingRemoveQId = null;
-      init();
+      await init();
     } catch (err) {
       if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
       console.error("Remove question submit failed:", err);
@@ -1065,6 +1075,11 @@ if (removeQConfirmBtn) {
       removeQConfirmBtn.disabled = false;
       removeQCancelBtn.disabled = false;
       removeQConfirmBtn.textContent = originalConfirmLabel;
+      // Sembunyikan loading overlay setelah DELETE selesai (sukses/
+      // gagal). init() di path sukses akan memicu renderLists() yang
+      // memanggil setControlsLocked(false) — overlay di-sembunyikan
+      // dari sana; ini jaga-jaga untuk path gagal.
+      if (loadingPackAdd) loadingPackAdd.style.display = "none";
     }
   });
 }

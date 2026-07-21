@@ -131,6 +131,29 @@ const confirmTotalCountEl = document.getElementById("confirm-total-count");
 const modalConfirmCountEl = document.getElementById("modal-confirm-count");
 const confirmSoalListEl = document.getElementById("confirm-soal-list");
 
+// ==== Notification modal (info-only, single OK button) ====
+// Replaces native alert() for bulk-delete success notifications (per user
+// request 2026-07-21). Mirror of the same pattern in public/js/paket-detail.js.
+const kelolaNotificationModal = document.getElementById("notification-modal");
+const kelolaNotificationTitleEl = document.getElementById("notification-title");
+const kelolaNotificationMessageEl = document.getElementById("notification-message");
+const kelolaNotificationOkBtn = document.getElementById("notification-ok-btn");
+if (kelolaNotificationOkBtn) {
+  kelolaNotificationOkBtn.addEventListener("click", () => {
+    if (kelolaNotificationModal) kelolaNotificationModal.close();
+  });
+}
+function showNotification(title, message) {
+  if (!kelolaNotificationModal) {
+    // Fallback if modal markup didn't load.
+    alert(message);
+    return;
+  }
+  if (kelolaNotificationTitleEl) kelolaNotificationTitleEl.textContent = title;
+  if (kelolaNotificationMessageEl) kelolaNotificationMessageEl.textContent = message;
+  kelolaNotificationModal.showModal();
+}
+
 // ==== Single Delete (per-row "Hapus" button) confirm modal ====
 // Mirror of the bulk-delete-confirm-modal but for a single question.
 // Replaces the old native confirm() dialog so the admin can SEE which
@@ -1052,7 +1075,7 @@ form.onsubmit = async (e) => {
     init();
   } catch (err) {
     if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
-    alert("Gagal menyimpan soal.");
+    showNotification("❌ Gagal Menyimpan", "Gagal menyimpan soal. Coba lagi.");
     console.error("Save failed:", err);
   }
 };
@@ -1147,7 +1170,7 @@ window.deleteQuestion = async (id) => {
     singleDeleteConfirmModal.showModal();
   } catch (err) {
     if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
-    alert("Gagal memeriksa soal. Coba lagi.");
+    showNotification("❌ Gagal Memeriksa", "Gagal memeriksa soal. Coba lagi.");
     console.error("Single usage pre-fetch failed:", err);
   } finally {
     isDeleteQuestionInFlight = false;
@@ -1192,7 +1215,7 @@ if (singleDeleteConfirmBtn) {
     } catch (err) {
       if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
       console.error("Single delete submit failed:", err);
-      alert("Gagal menghapus soal. Coba lagi.");
+      showNotification("❌ Gagal Menghapus", "Gagal menghapus soal. Coba lagi.");
     } finally {
       singleDeleteConfirmBtn.disabled = false;
       singleDeleteCancelBtn.disabled = false;
@@ -1286,7 +1309,7 @@ bulkDeleteBtn.onclick = async () => {
     showBulkDeleteConfirmModal(ids, usageMap);  } catch (err) {
     if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
     console.error("Bulk usage pre-fetch failed:", err);
-    alert("Gagal memeriksa soal. Coba lagi.");
+    showNotification("❌ Gagal Memeriksa", "Gagal memeriksa soal. Coba lagi.");
   } finally {
     bulkDeleteBtn.textContent = originalLabel;
     // Re-enable iff selection is non-empty (user may have cleared it during pre-fetch
@@ -1344,7 +1367,7 @@ bulkDeleteConfirmBtn.addEventListener("click", async () => {
     handleBulkDeleteResponse(data, ids);  } catch (err) {
     if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
     console.error("Bulk delete submit failed:", err);
-    alert("Gagal menghapus soal. Coba lagi.");
+    showNotification("❌ Gagal Menghapus", "Gagal menghapus soal. Coba lagi.");
   } finally {
     bulkDeleteConfirmBtn.disabled = false;
     bulkDeleteCancelBtn.disabled = false;
@@ -1354,9 +1377,11 @@ bulkDeleteConfirmBtn.addEventListener("click", async () => {
   }
 });
 
-// handleBulkDeleteResponse — prune deleted ids, close modal, alert summary,
+// handleBulkDeleteResponse — prune deleted ids, close modal, show notification,
 // trigger table refresh. Per spec Section 4.9 + Appendix A: selectedIds
 // retained for failed ids (enables user retry without re-selecting).
+// Notifikasi memakai showNotification() (modal, bukan native alert())
+// per user request 2026-07-21.
 function handleBulkDeleteResponse(data, submittedIds) {
   const deleted = data.deleted || [];
   const failed = data.failed || [];
@@ -1366,12 +1391,14 @@ function handleBulkDeleteResponse(data, submittedIds) {
 
   bulkDeleteConfirmModal.close();
 
-  let alertMsg = `${deleted.length} soal berhasil dihapus`;
+  let notifTitle = "✓ Soal Dihapus";
+  let notifMsg = `${deleted.length} soal berhasil dihapus`;
   if (failed.length > 0) {
     const firstReason = failed[0]?.reason || "unknown error";
-    alertMsg = `${deleted.length} berhasil, ${failed.length} gagal — contoh #${failed[0].id}: ${firstReason}`;
+    notifTitle = "⚠️ Hapus Sebagian Gagal";
+    notifMsg = `${deleted.length} berhasil, ${failed.length} gagal — contoh #${failed[0].id}: ${firstReason}`;
   }
-  alert(alertMsg);
+  showNotification(notifTitle, notifMsg);
 
   // Refresh table — init() refetches questions, calls renderTable() which
   // ends with updateSelectionUI(). After refresh, remaining selectedIds
