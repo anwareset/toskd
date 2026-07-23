@@ -251,7 +251,7 @@ function renderQuestion(idx) {
         : "weight-badge";
       html2 += `<div class="${cls.join(" ")}"><input type="radio" disabled${
         isPick ? " checked" : ""
-      }><span class="option-label"><strong>${esc(k)}.</strong> ${renderInlineMd(esc(unwrapParagraph(v)))}</span><span class="${badgeCls}">${badgeText}</span></div>`;
+      }><span class="option-label"><strong>${esc(k)}.</strong> ${renderInlineMd(unwrapParagraph(v))}</span><span class="${badgeCls}">${badgeText}</span></div>`;
     }
     optionsEl.innerHTML = html2;
   } else {
@@ -263,7 +263,7 @@ function renderQuestion(idx) {
         else if (k === a && a !== q.correct_answer) cls += " wrong-answer";
         return `<div class="${cls}"><input type="radio" disabled${
           k === a ? " checked" : ""
-        }><span class="option-label"><strong>${esc(k)}.</strong> ${renderInlineMd(esc(unwrapParagraph(v)))}</span></div>`;
+        }><span class="option-label"><strong>${esc(k)}.</strong> ${renderInlineMd(unwrapParagraph(v))}</span></div>`;
       })
       .join("");
   }

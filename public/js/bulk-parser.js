@@ -256,7 +256,7 @@ function buildNewFormatContent(premises, question) {
 // Image chip (`📷 Ada Gambar`) is RETAINED because (a) it's still
 // useful admin signal ("this question has a gambar"), and (b) the
 // user only asked to drop the OL chip specifically, not all chips.
-const MAX_PREVIEW_CELL_CHARS = 70;
+const MAX_PREVIEW_CELL_CHARS = 90;
 
 function previewHtmlForCell(html) {
   if (!html) return "";
@@ -268,6 +268,21 @@ function previewHtmlForCell(html) {
   // from `explanation` and other fields, but a future parser
   // change shouldn't leak a Bobot: line into the cell preview.
   result = result.replace(/^\s*Bobot:[^\n]*$/gmi, "");
+
+  // Convert Quill formula spans to MathJax inline delimiters.
+  // Quill v1 formula module stores math as
+  // `<span class="ql-formula" data-value="e=mc^2">e=mc^2</span>`
+  // (raw text, NO LaTeX delimiters). MathJax only typesets \()
+  // and $$ delimiters, so ql-formula spans render as plain text
+  // in the table cell. Replacing them with \( data-value \)
+  // lets the existing MathJax.typesetPromise() calls in
+  // renderTable() (kelola-soal.js) and renderBankList()
+  // (paket-detail.js) render them as proper math notation.
+  // Done BEFORE <p> stripping so the delimiter survives.
+  result = result.replace(
+    /<span class="ql-formula"[^>]*data-value="([^"]+)"[^>]*>.*?<\/span>/gi,
+    "\\( $1 \\)",
+  );
 
   // Replace <img> with chip (Round-5 retained). Attribute-tolerant
   // opener matches future `<img loading="lazy">` etc.
@@ -303,8 +318,33 @@ function previewHtmlForCell(html) {
   // so wide premise listings don't wrap the cell onto a 2nd row.
   // Append the Unicode ellipsis `…` (1 char, not "..." which is 3)
   // when truncated so admins can see the cell was clipped.
+  //
+  // Smart truncation: if the cut falls inside a MathJax delimiter
+  // (`$$ … $$` or `\( … \)`), strip the orphaned opener from the
+  // snippet rather than trimming the whole cell. The opener itself is
+  // only 2 isolated characters — the surrounding text stays visible.
+  // This fixes the user-reported bug where `$$2{,}742343244 + … =
+  // \cdots$$` (72 chars) got sliced to 70, losing the closing `$$`
+  // and the entire formula displayed as escaped TeX instead of math
+  // notation. The previous trim-back approach had two flaws:
+  //   (a) `lastDd > 0` guard skipped formulas starting at position 0,
+  //       which is the common case (formula at start of cell).
+  //   (b) Trimming back discarded all text after the opener position,
+  //       not just the orphaned characters — bad UX.
   if (result.length > MAX_PREVIEW_CELL_CHARS) {
-    result = result.slice(0, MAX_PREVIEW_CELL_CHARS) + "…";
+    let snippet = result.slice(0, MAX_PREVIEW_CELL_CHARS);
+    const ddCount = (snippet.match(/\$\$/g) || []).length;
+    if (ddCount % 2 !== 0) {
+      // Strip the last (orphaned) $$ — keeps surrounding text visible.
+      snippet = snippet.replace(/\$\$(?!.*\$\$)/, "");
+    }
+    const openP = (snippet.match(/\\\(/g) || []).length;
+    const closeP = (snippet.match(/\\\)/g) || []).length;
+    if (openP > closeP) {
+      // Strip the last (orphaned) \( — keeps surrounding text visible.
+      snippet = snippet.replace(/\\\((?!.*\\\))/, "");
+    }
+    result = snippet + "…";
   }
 
   return result;
