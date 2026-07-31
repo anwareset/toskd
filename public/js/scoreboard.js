@@ -7,8 +7,9 @@
 //
 // Sort key resolvers (extract the comparable value from a row) and the
 // DEFAULT_DIR map give the column's first-click direction (Round 1).
-// Stable id-based tiebreak so two rows with identical sort keys never
-// shuffle between re-renders (§8.14).
+// Stable created_at-desc tiebreak: when two rows have identical sort keys,
+// the newest participant ranks higher (recently-created first). Deterministic
+// so rows never shuffle between re-renders (§8.14).
 
 const loadingEl = document.getElementById("loading");
 const tableEl = document.getElementById("score-table");
@@ -143,9 +144,11 @@ function comparator(col, dir) {
     const bv = key(b);
     if (av < bv) return -1 * sign;
     if (av > bv) return 1 * sign;
-    // Stable tiebreak: id ascending so equal-key rows have deterministic
-    // ordering across re-renders (§8.14).
-    return Number(a.id || 0) - Number(b.id || 0);
+    // Stable tiebreak: created_at descending so equal-key rows rank newest
+    // participant higher. Deterministic across re-renders (§8.14).
+    const da = new Date(a.created_at || 0).getTime();
+    const db = new Date(b.created_at || 0).getTime();
+    return db - da;
   };
 }
 

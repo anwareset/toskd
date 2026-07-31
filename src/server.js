@@ -937,6 +937,24 @@ app.post("/api/exam/submit", async (req, res) => {
   try {
     const { pack_id, participant_name, answers } = req.body;
 
+    // Duplicate-submission guard (§defense-in-depth): satu peserta hanya
+    // boleh submit satu kali per paket. Cek exact match participant_name +
+    // pack_id sebelum melakukan scoring (mahal). Mengembalikan 409 Conflict
+    // sehingga client bisa menampilkan pesan yang sesuai.
+    const { data: existing, error: dupCheckErr } = await supabase
+      .from("exam_results")
+      .select("id")
+      .eq("pack_id", pack_id)
+      .eq("participant_name", participant_name)
+      .limit(1);
+    if (dupCheckErr) throw dupCheckErr;
+    if (existing && existing.length > 0) {
+      return res.status(409).json({
+        error: "Anda sudah menyelesaikan ujian ini sebelumnya.",
+        existing_id: existing[0].id,
+      });
+    }
+
     const { data: packData, error: packError } = await supabase
       .from("question_packs")
       .select("passing_grade, subtests, subtest_thresholds")
@@ -1285,7 +1303,8 @@ app.get("/api/scoreboard-all", async (req, res) => {
       .select(
         "id, participant_name, score, status, created_at, pack_id, question_packs(name)",
       )
-      .order("score", { ascending: false });
+      .order("score", { ascending: false })
+      .order("created_at", { ascending: false });
     const { pack_id } = req.query;
     if (pack_id) query = query.eq("pack_id", pack_id);
     const { data, error } = await query;

@@ -690,8 +690,55 @@ dialog.modal {
     background: var(--surface) !important;
     color: var(--text);
 }
+/* Opening animation: scale-in box on showModal() */
+@keyframes modalBoxIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.92);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+dialog.modal[open] {
+    animation: modalBoxIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* Opening animation: fade-in backdrop on showModal() */
+@keyframes modalBackdropIn {
+    from { background: rgba(0, 0, 0, 0); }
+    to   { background: rgba(0, 0, 0, 0.5); }
+}
+dialog.modal[open]::backdrop {
+    animation: modalBackdropIn 0.3s ease;
+}
+/* Steady-state backdrop (after animation completes). */
 dialog.modal::backdrop {
     background: rgba(0, 0, 0, 0.5);
+}
+
+/* Closing animation: scale-out box + fade-out backdrop on close().
+   Triggered by JS monkey-patch in theme.js that adds .modal-closing
+   before calling the original close(). */
+@keyframes modalBoxOut {
+    from {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.92);
+    }
+}
+@keyframes modalBackdropOut {
+    from { background: rgba(0, 0, 0, 0.5); }
+    to   { background: rgba(0, 0, 0, 0); }
+}
+dialog.modal[open].modal-closing {
+    animation: modalBoxOut 0.2s ease forwards;
+}
+dialog.modal[open].modal-closing::backdrop {
+    animation: modalBackdropOut 0.2s ease forwards;
 }
 .modal-content {
     padding: 28px;
@@ -1203,6 +1250,60 @@ tbody tr:hover {
     align-items: center;
     padding: 60px;
 }
+
+/* ==== exam.html: already-done overlay (Back-button guard) ==== */
+#exam-done-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: fadeIn 0.35s ease;
+}
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+.exam-done-card {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 40px 36px;
+    max-width: 420px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    animation: scaleIn 0.35s ease;
+}
+@keyframes scaleIn {
+    from { transform: scale(0.92); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+}
+.exam-done-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+.exam-done-card h2 {
+    margin-bottom: 8px;
+    color: var(--text);
+}
+.exam-done-card p {
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+.exam-done-card .btn-primary {
+    width: 100%;
+    margin-bottom: 12px;
+}
+.exam-done-timer {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
 /* Toast uses fixed-tone tokens so the notification card stays
    readable as a "system" element regardless of the user's theme. */
 .toast {

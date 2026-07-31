@@ -422,6 +422,63 @@
 
     // ============ end Phase 2 ============
 
+    // ============ Modal closing animation (global monkey-patch) ============
+    // Intercepts every HTMLDialogElement.close() call. If the dialog has
+    // class "modal", we add .modal-closing to play the scale-out +
+    // backdrop-fade-out CSS animation, then call the original close()
+    // once animationend fires. This gives ALL modal dialogs a smooth
+    // closing transition with zero changes to existing call sites.
+    //
+    // Guard: skip re-entry if .modal-closing is already present (e.g.
+    // rapid double-close or Escape-while-animating).
+    (function patchDialogAnimations() {
+      const origShowModal = HTMLDialogElement.prototype.showModal;
+
+      // Patch showModal(): hapus .modal-closing jika masih menempel dari
+      // closing animation sebelumnya (mencegah race condition reopening
+      // di tengah animasi closing).
+      HTMLDialogElement.prototype.showModal = function () {
+        if (this.classList.contains("modal") && this.classList.contains("modal-closing")) {
+          this.classList.remove("modal-closing");
+        }
+        origShowModal.call(this);
+      };
+
+      // Patch close(): tambah animasi closing sebelum benar-benar close.
+      const origClose = HTMLDialogElement.prototype.close;
+      HTMLDialogElement.prototype.close = function () {
+        const args = arguments;
+        if (
+          this.classList.contains("modal") &&
+          this.open &&
+          !this.classList.contains("modal-closing")
+        ) {
+          this.classList.add("modal-closing");
+          let settled = false;
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            this.removeEventListener("animationend", onEnd);
+            clearTimeout(fallback);
+            this.classList.remove("modal-closing");
+            origClose.apply(this, args);
+          };
+          const onEnd = (e) => {
+            // Guard: ignore animationend from child elements (bubbling).
+            if (e.target !== this) return;
+            done();
+          };
+          this.addEventListener("animationend", onEnd);
+          // Belt-and-suspenders: jika animationend tidak pernah fire
+          // (CSS disabled, dialog dihapus dari DOM mid-animation),
+          // timeout 600ms memastikan close() tetap dipanggil.
+          const fallback = setTimeout(done, 600);
+        } else {
+          origClose.apply(this, args);
+        }
+      };
+    })();
+
     // Live OS-preference tracking. We only honor it while the user has
     // never clicked the toggle; once they make an explicit choice via
     // UI, their decision wins over the OS signal.

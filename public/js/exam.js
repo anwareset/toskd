@@ -75,7 +75,84 @@ const prevBtn = document.getElementById("prev-btn");
 const nextBtn = document.getElementById("next-btn");
 const endBtn = document.getElementById("end-exam-btn");
 
+// Try/catch wrapper around sessionStorage (defense-in-depth untuk private
+// browsing mode atau storage yang di-disable — mirip safeStorage untuk
+// localStorage). Return null pada getItem jika storage tidak tersedia.
+const safeSession = (() => {
+  try {
+    const probe = "__exam_sess_" + Date.now().toString(36);
+    sessionStorage.setItem(probe, "1");
+    sessionStorage.removeItem(probe);
+    return {
+      getItem: (k) => sessionStorage.getItem(k),
+      setItem: (k, v) => sessionStorage.setItem(k, v),
+    };
+  } catch {
+    return { getItem: () => null, setItem: () => {} };
+  }
+})();
+
+// Tampilkan overlay ramah saat partisipan mencoba kembali ke halaman ujian
+// setelah sudah menyelesaikannya (Back-button detection via sessionStorage).
+function showAlreadyDoneOverlay() {
+  const resultId = safeSession.getItem(`exam_done_result_${sid}`);
+  const reviewBtnHtml = resultId
+    ? `<button class="btn-secondary" id="exam-done-review-btn" style="width:100%;margin-bottom:8px">📋 Lihat Hasil Ujian</button>`
+    : "";
+
+  const overlay = document.createElement("div");
+  overlay.id = "exam-done-overlay";
+  overlay.innerHTML = `
+    <div class="exam-done-card">
+      <div class="exam-done-icon">✅</div>
+      <h2>Ujian Telah Selesai</h2>
+      <p>Kamu sudah menyelesaikan ujian ini sebelumnya.</p>
+      ${reviewBtnHtml}
+      <button class="btn-primary" id="exam-done-home-btn">🏠 Kembali ke Beranda</button>
+      <p class="exam-done-timer">Kamu akan diarahkan otomatis dalam <span id="exam-done-countdown">5</span> detik…</p>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Tombol "Lihat Hasil Ujian" (hanya muncul jika resultId tersedia).
+  const reviewBtn = document.getElementById("exam-done-review-btn");
+  if (reviewBtn) {
+    reviewBtn.onclick = () => {
+      clearInterval(interval);
+      location.href = `/review.html?id=${resultId}`;
+    };
+  }
+
+  // Tombol manual "Kembali ke Beranda".
+  document.getElementById("exam-done-home-btn").onclick = () => {
+    clearInterval(interval);
+    location.href = "/";
+  };
+
+  // Auto-redirect countdown (5 detik).
+  let sec = 5;
+  const countdownEl = document.getElementById("exam-done-countdown");
+  const interval = setInterval(() => {
+    sec--;
+    if (sec <= 0) {
+      clearInterval(interval);
+      location.href = "/";
+    } else {
+      countdownEl.textContent = sec;
+    }
+  }, 1000);
+}
+
 async function init() {
+  // Client-side defense: jika sesi ini sudah pernah submit (flag dari
+  // submitExam), redirect langsung ke home — mencegah Back-button
+  // menciptakan sesi ujian baru. sessionStorage bertahan di dalam tab
+  // yang sama (termasuk navigasi Back/Forward).
+  if (safeSession.getItem(`exam_done_${sid}`)) {
+    showAlreadyDoneOverlay();
+    return;
+  }
+
   let pack;
   try {
     const [packRes, qRes] = await Promise.all([
@@ -233,11 +310,22 @@ async function submitExam() {
       }),
     });
     const result = await res.json();
-    // AC4: bersihkan semua key yang terkait sesi ini
+
+    // Bersihkan localStorage + set sessionStorage flag (berlaku untuk
+    // kedua path: 409 duplicate maupun success). Hanya redirectId
+    // yang berbeda: existing_id dari 409, atau id dari response sukses.
     safeStorage.removeItem(TIMER_KEY);
     safeStorage.removeItem(ANSWERS_KEY);
     safeStorage.removeItem(LEGACY_ANSWERS_KEY);
-    location.href = `/review.html?id=${result.id}`;
+    safeSession.setItem(`exam_done_${sid}`, "1");
+
+    // Server-side duplicate guard: redirect ke review halaman yang sudah ada.
+    const redirectId =
+      res.status === 409 ? result.existing_id : result.id;
+    // Simpan resultId agar overlay "Ujian Telah Selesai" bisa
+    // menampilkan tombol "Lihat Hasil Ujian".
+    safeSession.setItem(`exam_done_result_${sid}`, String(redirectId));
+    location.href = `/review.html?id=${redirectId}`;
   } catch {
     alert("Gagal mengirim jawaban. Coba lagi.");
     endBtn.disabled = false;
@@ -250,7 +338,20 @@ prevBtn.onclick = () => {
 nextBtn.onclick = () => {
   if (currentIndex < questions.length - 1) renderQuestion(currentIndex + 1);
 };
+const endExamModal = document.getElementById("end-exam-modal");
+const endExamCancelBtn = document.getElementById("end-exam-cancel-btn");
+const endExamConfirmBtn = document.getElementById("end-exam-confirm-btn");
+
 endBtn.onclick = () => {
-  if (confirm("Apakah Anda yakin ingin mengakhiri ujian?")) submitExam();
+  endExamModal.showModal();
+};
+
+endExamCancelBtn.onclick = () => {
+  endExamModal.close();
+};
+
+endExamConfirmBtn.onclick = () => {
+  endExamModal.close();
+  submitExam();
 };
 init();
