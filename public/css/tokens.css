@@ -32,7 +32,7 @@
 
 :root {
     /* Brand */
-    --primary: #3e63dd;            /* indigo.9 — 5.1:1 on white */
+    --primary: #003580;            /* indigo.9 — 5.1:1 on white */
     --primary-light: #eef0fc;      /* indigo.3 — soft tint */
     --primary-hover: #2c4fbd;      /* darker indigo for hover state */
 
@@ -68,7 +68,7 @@
     --amber-500: #f59e0b;         /* amber.5 — option-item weight-3 border */
 
     /* Surfaces & text */
-    --bg: #fcfcfd;                 /* slate.1 — page background */
+    --bg: #f0f4f8;                 /* slate.1 — page background */
     --surface: #ffffff;            /* cards, panels, modals */
     --surface-header: #eff0f3;     /* slate.3 — table headers, header bar */
     --text: #11181c;               /* slate.12 — body text */
@@ -86,7 +86,7 @@
 
 [data-theme="dark"] {
     /* Brand stays consistent across themes for logo familiarity. */
-    --primary: #3e63dd;
+    --primary: #003580;
     --primary-light: #202347;      /* dim indigo for dark-mode header bg */
     --primary-hover: #5680eb;      /* lighter hover against dark surfaces */
 

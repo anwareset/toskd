@@ -16,6 +16,19 @@
     background: var(--surface);
     border-top: 1px solid var(--border);
 }
+[data-theme="dark"] .footer {
+    background: #202347;
+    color: #ecedee;
+    border-top-color: #202347;
+}
+
+.home-accent {
+    background: var(--primary);
+    height: 5px;
+}
+[data-theme="dark"] .home-accent {
+    background: #00409d;
+}
 
 .site-wrapper {
     display: flex;
@@ -159,7 +172,7 @@ body.is-drawer-open .global-header {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: #3e63dd; /* indigo thumb on white track (light mode) */
+    background: #003580; /* indigo thumb on white track (light mode) */
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     /* Animate BOTH the thumb slide AND its color so the thumb's
        position + icon-color change move together (per user request
@@ -256,6 +269,9 @@ body.is-drawer-open .global-header {
     background: var(--surface);
     color: var(--primary);
 }
+[data-theme="dark"] .global-header-link:hover {
+    color: #ecedee;
+}
 .global-header-link:focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
@@ -344,6 +360,20 @@ body.is-drawer-open .global-header {
            any explicit width rule. */
     }
 }
+
+/* ==== Desktop: compact header & footer ====
+   Slightly tighter vertical padding on desktop (≥768px) while
+   keeping the original generous padding on mobile for touch targets.
+   Mobile rules above inherit the base padding unchanged. */
+@media (min-width: 768px) {
+    .global-header {
+        padding: 14px 24px;
+    }
+    .footer {
+        padding: 16px 0;
+    }
+}
+
 *,
 *::before,
 *::after {
@@ -418,6 +448,9 @@ body {
     color: var(--primary);
     font-size: 1.5rem;
 }
+[data-theme="dark"] .app-title {
+    color: #ecedee;
+}
 
 /* Buttons */
 .btn-primary,
@@ -444,6 +477,7 @@ body {
 }
 .btn-primary:hover {
     background: var(--primary-hover);
+    transform: scale(1.02);
 }
 .btn-secondary {
     background: var(--surface-header);
@@ -472,6 +506,9 @@ body {
     color: var(--primary);
     padding: 8px 0;
 }
+[data-theme="dark"] .btn-back {
+    color: #ecedee;
+}
 .btn-back:hover {
     text-decoration: underline;
 }
@@ -489,9 +526,20 @@ body {
     transition: all 0.2s;
     text-align: center;
 }
+[data-theme="dark"] .btn-main {
+    background: #00409d;
+    color: #ecedee;
+    border-color: #00409d;
+}
+[data-theme="dark"] .btn-main:hover {
+    background: #3e63dd;
+    color: #ecedee;
+    border-color: #3e63dd;
+}
 .btn-main:hover {
     background: var(--primary);
     color: var(--on-primary);
+    transform: scale(1.02);
 }
 button:disabled {
     opacity: 0.5;
@@ -566,6 +614,7 @@ button:disabled {
 }
 #pack-grid > .card {
     min-width: 0;
+    border-top: 4px solid var(--primary);
 }
 .card {
     border-radius: 12px;
@@ -608,7 +657,7 @@ select.input-field {
     border-color: var(--primary);
     /* Soft halo in --primary's hue; uses the new --primary #3e63dd
        (62,99,221) at 10% alpha so it follows the palette. */
-    box-shadow: 0 0 0 3px rgba(62, 99, 221, 0.1);
+    box-shadow: 0 0 0 3px rgba(0, 53, 128, 0.1);
 }
 textarea.input-field {
     min-height: 100px;
@@ -698,14 +747,33 @@ tbody tr:hover {
     text-decoration: none;
     font-weight: 600;
 }
+[data-theme="dark"] .participant-link {
+    color: #3e63dd;
+}
 .participant-link:hover {
     color: var(--primary-hover);
     text-decoration: underline;
+}
+[data-theme="dark"] .participant-link:hover {
+    color: #7fc2ff;
 }
 .participant-link:focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
     border-radius: 2px;
+}
+[data-theme="dark"] .participant-link:focus-visible {
+    outline-color: #7fc2ff;
+}
+
+/* ==== scoreboard.html: No column sizing ====
+   Bump the sticky-col-left font in #score-body so rank numbers
+   don't look undersized next to 🥇🥈🥉 emoji medals. Larger font,
+   bold weight, and centered alignment create visual parity. */
+#score-body .sticky-col-left {
+    font-size: 1.15rem;
+    font-weight: 700;
+    text-align: center;
 }
 
 /* Exam Layout */
@@ -803,7 +871,7 @@ tbody tr:hover {
     border-color: var(--danger);
 }
 .answer-grid button.active {
-    box-shadow: 0 0 0 3px rgba(62, 99, 221, 0.4);
+    box-shadow: 0 0 0 3px rgba(0, 53, 128, 0.4);
     transform: scale(1.1);
 }
 .answer-grid button.correct {

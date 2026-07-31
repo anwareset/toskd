@@ -158,7 +158,11 @@ function renderTable(rankById) {
       // /api/scoreboard-all response (allResults). Stable across sort /
       // filter / pagination — sort moves ROWS, not their No. Falls back
       // to em-dash for missing or corrupted r.id.
-      const globalIdx = rankById.get(r.id) ?? "—";
+      const rawIdx = rankById.get(r.id);
+      const trophyMap = { 1: "🥇", 2: "🥈", 3: "🥉" };
+      const globalIdx = rawIdx != null && trophyMap[rawIdx]
+        ? `<span title="Peringkat ${rawIdx}">${trophyMap[rawIdx]}</span>`
+        : rawIdx ?? "—";
       const d = new Date(r.created_at).toLocaleDateString("id-ID");
       const sc = r.status === "Lulus PG" ? "status-pass" : "status-fail";
       // Participant name deep-links to the pembahasan review page.
