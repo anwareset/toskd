@@ -622,10 +622,15 @@ button:disabled {
     padding: 20px;
     background: var(--surface);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-    transition: box-shadow 0.2s;
+    transition: box-shadow 0.2s, background 0.2s, border-color 0.2s;
 }
 .card:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+[data-theme="dark"] .card:hover {
+    background: #1e1e21;
+    border-color: #525560;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 .card h3 {
     margin: 0 0 8px;
@@ -869,10 +874,16 @@ tbody tr:hover {
        1200px: question-container +43px, answer-panel -43px. Mobile
        rules (max-width: 1023px + 767px) tidak berubah — sudah stack
        column + width:100% per-breakpoint, jadi reduction ini purely
-       desktop-only. */
+       desktop-only.
+
+       Rev. 2026-07-31: answer panel dipindah ke KIRI (desktop only)
+       via order: -1. Di mobile column stack, order di-reset ke 0
+       via max-width:1023px media query supaya urutan tetap question
+       dulu baru answer — order swap hanya visual desktop. */
     flex: 2.5;
     position: sticky;
     top: 100px;
+    order: -1;
     align-self: flex-start;
     background: var(--surface);
     border-radius: 12px;
@@ -907,6 +918,14 @@ tbody tr:hover {
        See .q-bobot-chip below for the floating badge style. */
     position: relative;
 }
+.answer-grid button:hover {
+    border-color: var(--primary);
+    background: var(--primary-light);
+}
+[data-theme="dark"] .answer-grid button:hover {
+    background: #202347;
+    border-color: #3e63dd;
+}
 .answer-grid button.answered {
     background: var(--success);
     color: var(--on-primary);
@@ -920,6 +939,14 @@ tbody tr:hover {
 .answer-grid button.active {
     box-shadow: 0 0 0 3px rgba(0, 53, 128, 0.4);
     transform: scale(1.1);
+}
+.answer-grid button.active:hover {
+    background: var(--surface);
+    border-color: var(--primary);
+}
+[data-theme="dark"] .answer-grid button.active:hover {
+    background: var(--surface);
+    border-color: #3e63dd;
 }
 .answer-grid button.correct {
     background: var(--success);
@@ -1153,6 +1180,15 @@ tbody tr:hover {
     margin-bottom: 8px;
     cursor: grab;
     gap: 8px;
+    transition: background 0.15s, border-color 0.15s;
+}
+.pack-question-item:hover {
+    border-color: var(--primary);
+    background: var(--primary-light);
+}
+[data-theme="dark"] .pack-question-item:hover {
+    background: #202347;
+    border-color: #3e63dd;
 }
 .pack-question-item.dragging {
     opacity: 0.4;
@@ -1431,6 +1467,7 @@ tbody tr:hover {
     .review-answer-panel {
         position: static;
         max-height: none;
+        order: 0; /* Reset desktop order swap — pada column stack, question tetap di atas */
         /* Mobile/tablet: width parity with question-container.
            Base rule (line ~719) sets `align-self: flex-start` so the
            panel shrink-wraps to its content's intrinsic width on
@@ -1988,8 +2025,8 @@ tbody tr:hover {
     align-items: center;
     gap: 6px;
     padding: 4px 10px;
-    background: var(--primary-light);
-    color: var(--on-primary);
+    background: #BBBBBB;
+    color: #11181C;
     border-radius: 16px;
     font-size: 0.85rem;
     font-weight: 600;
@@ -1998,11 +2035,18 @@ tbody tr:hover {
 .selection-pill button {
     background: none;
     border: none;
-    color: var(--on-primary);
+    color: #11181C;
     cursor: pointer;
     font-weight: 700;
     padding: 0 4px;
     text-decoration: underline;
+}
+[data-theme="dark"] .selection-pill {
+    background: var(--primary-light);
+    color: var(--on-primary);
+}
+[data-theme="dark"] .selection-pill button {
+    color: var(--on-primary);
 }
 
 /* ==== Bulk Delete confirmation modal (per spec Section 4.8 / Section 3.8) ==== */
@@ -2992,6 +3036,9 @@ button.q-submit-btn:disabled,
     color: var(--primary);
     font-weight: 600;
 }
+[data-theme="dark"] .weight-badge--pick {
+    color: #ecedee;
+}
 
 /* Per user feedback 2026-07-18: .tkp-unanswered-caption rule removed --
    the "Tidak dijawab · 0 poin" / "Bobot Anda: X poin" caption was
@@ -3072,6 +3119,9 @@ button.q-submit-btn:disabled,
     background: var(--orange-300);
     color: var(--text);
 }
+[data-theme="dark"] .q-bobot-chip.weight-2 {
+    color: #11181c;
+}
 .q-bobot-chip.weight-3 {
     /* Same rationale as weight-2: shifted from #fef3c7 (amber-100, pale
        yellow) to #fde047 (yellow-300, more saturated yellow) so it
@@ -3079,6 +3129,9 @@ button.q-submit-btn:disabled,
        surface bg. */
     background: var(--yellow-300);
     color: var(--text);
+}
+[data-theme="dark"] .q-bobot-chip.weight-3 {
+    color: #11181c;
 }
 .q-bobot-chip.weight-4 {
     background: var(--success-light);
