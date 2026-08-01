@@ -926,8 +926,13 @@ tbody tr:hover {
     background: var(--primary-light);
 }
 [data-theme="dark"] .answer-grid button:hover {
-    background: #202347;
     border-color: #3e63dd;
+}
+/* Dark-mode hover background hanya untuk tombol tanpa state class
+   (answered/correct/incorrect/unanswered/not-answered) — supaya
+   warna state tidak ditimpa oleh specificity [data-theme]. */
+[data-theme="dark"] .answer-grid button:hover:not(.answered):not(.unanswered):not(.correct):not(.incorrect):not(.not-answered) {
+    background: #202347;
 }
 .answer-grid button.answered {
     background: var(--success);
@@ -940,17 +945,22 @@ tbody tr:hover {
     border-color: var(--danger);
 }
 .answer-grid button.active {
-    box-shadow: 0 0 0 3px rgba(0, 53, 128, 0.4);
-    transform: scale(1.1);
-}
-.answer-grid button.active:hover {
-    background: var(--surface);
+    /* Double ring: 2px surface gap + 3px primary ring = sangat terlihat
+       tanpa menimpa warna state (answered/correct/incorrect).
+       z-index: 2 agar shadow + scale tumpang tindih tombol sekitar. */
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 5px var(--primary);
     border-color: var(--primary);
+    transform: scale(1.15);
+    z-index: 2;
+    transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
 }
-[data-theme="dark"] .answer-grid button.active:hover {
-    background: var(--surface);
+[data-theme="dark"] .answer-grid button.active {
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 5px #3e63dd;
     border-color: #3e63dd;
 }
+/* Tidak ada .active:hover override di kedua tema — biarkan warna state
+   (answered/correct/incorrect) tetap terlihat natural saat hover.
+   Double ring 5px sudah cukup sebagai indikator aktif. */
 .answer-grid button.correct {
     background: var(--success);
     color: var(--on-primary);

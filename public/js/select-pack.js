@@ -45,6 +45,7 @@ function renderPacks(list, opts = {}) {
         <h3>${esc(p.name)}</h3>
         <p>⏱️ Durasi: ${p.duration_minutes} Menit</p>
         <p>📝 Jumlah Soal: ${p.count}</p>
+        <p>👥 Dikerjakan: ${p.completion_count ?? 0}×</p>
         <p>🎯 Nilai Kelulusan: ${p.passing_grade}</p>
         <button class="btn-primary" onclick="selectPack(${p.id})">Pilih Paket</button>
       </div>`,

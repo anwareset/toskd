@@ -703,12 +703,30 @@ app.get("/api/packs", async (req, res) => {
     // same created_at get a stable order instead of an undefined
     // PostgREST tiebreaker. (UUID lex order is arbitrary for fresh rows;
     // the tiebreaker is for stability, not chronological meaning.)
-    const { data, error } = await supabase
-      .from("question_packs")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false });
-    if (error) throw error;
+    const [packsRes, countsRes] = await Promise.all([
+      supabase
+        .from("question_packs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false }),
+      supabase
+        .from("exam_results")
+        .select("pack_id")
+        .limit(100000),
+    ]);
+    if (packsRes.error) throw packsRes.error;
+    if (countsRes.error) throw countsRes.error;
+
+    // Aggregate: count exam_results per pack_id
+    const countsByPack = {};
+    for (const row of countsRes.data) {
+      countsByPack[row.pack_id] = (countsByPack[row.pack_id] || 0) + 1;
+    }
+
+    const data = packsRes.data.map((pack) => ({
+      ...pack,
+      completion_count: countsByPack[pack.id] || 0,
+    }));
     res.json(data);
   } catch (error) {
     console.error("Error fetching packs:", error);

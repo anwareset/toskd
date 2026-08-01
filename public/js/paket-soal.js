@@ -165,12 +165,14 @@ const SORT_KEYS = {
   duration_minutes: (r) => Number(r.duration_minutes || 0),
   passing_grade: (r) => Number(r.passing_grade || 0),
   question_count: (r) => Number(state.countsById[r.id] || 0),
+  completion_count: (r) => Number(r.completion_count || 0),
 };
 const DEFAULT_DIR = {
   name: "asc", // A → Z
   duration_minutes: "desc", // longest first
   passing_grade: "desc", // highest first
   question_count: "desc", // most first
+  completion_count: "desc", // most first
 };
 const DIRECTION_SIGN = { asc: 1, desc: -1 };
 const DIR_GLYPH = { asc: " ▲", desc: " ▼" };
@@ -285,6 +287,7 @@ function renderBody(pageData, startIdx) {
           <td>${p.duration_minutes} Menit</td>
           <td>${p.passing_grade}</td>
           <td>${count ?? 0} Soal</td>
+          <td>${p.completion_count ?? 0}&times;</td>
           <td>${subtesLabel}</td>
           <td class="sticky-col-right">
             <button class="btn-secondary" onclick="editPack(${p.id})">Edit</button>
