@@ -81,7 +81,7 @@ toskd/
 │   ├── test-tkp-bobot.mjs                         # Unit tests untuk TKP Bobot validation (option_scores invariants: himpunan {1..5})
 │   └── test-tkp-scoring.mjs                       # Integration tests untuk TKP weighted scoring (scoreForQuestion + computePackScore)
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)
-├── Dockerfile                    # Multi-stage Docker build (node:20-alpine, non-root, HEALTHCHECK)
+├── Dockerfile                    # Multi-stage Docker build (node:22-alpine, non-root, HEALTHCHECK)
 ├── .dockerignore                 # Exclude node_modules, .env, specs/, tests/ dari image
 ├── vercel.json                   # Konfigurasi routing Vercel
 └── package.json
@@ -113,7 +113,7 @@ toskd/
 
 ### 1. Prerequisites
 
-- Node.js v18 ke atas
+- Node.js v22 ke atas (WAJIB — `@supabase/supabase-js@2.110+` butuh native WebSocket; Node ≤20 akan crash saat startup)
 - PNPM
 - Akun Vercel & Supabase
 
