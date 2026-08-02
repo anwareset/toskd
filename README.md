@@ -140,11 +140,14 @@ SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...          # service_role key (Wajib, bukan anon)
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxxxxxxxxxxx
 JWT_SECRET=<random-32+-chars>                                    # Generate: openssl rand -hex 32
+COOKIE_SECURE=true                                              # Opsional: variabel ini mengatur keamanan cookie login, sistem otomatis mendeteksi apakah situs diakses lewat `https://` (koneksi aman) atau `http://` (koneksi biasa).
 BOOTSTRAP_ADMIN_USERNAME=admin                                  # Opsional: untuk bootstrap admin pertama
 BOOTSTRAP_ADMIN_PASSWORD=<strong-password>                      # Opsional: akan di-hash bcrypt lalu di-insert
 ```
 
 **Catatan `BOOTSTRAP_ADMIN_*`**: env var ini dibaca sekali di cold-start. Jika tabel `admins` kosong, server akan otomatis hash password (bcrypt cost 10) dan insert admin pertama. **PENTING: DELETE kedua env var ini dari Vercel dashboard setelah admin pertama berhasil login**. Server log warning setiap cold-start kalau masih ada (plaintext password leak risk).
+
+**Catatan `COOKIE_SECURE`**: **Kosongkan** (recommended) → otomatis: aman di `https://`, tetap berfungsi di `http://localhost` (misal Docker di komputer sendiri). Atau **isi `true`** → paksa cookie login hanya dikirim lewat koneksi aman `https://`, dipakai hanya jika situs Anda diakses lewat `https://` tapi login tetap selalu balik ke halaman login (misalnya di belakang reverse proxy HTTPS). **JANGAN isi `true` jika akses masih `http://`** — malah membuat login tidak akan pernah bisa masuk. Bisa **diisi `false`** → paksa cookie boleh lewat `http://`, hanya untuk percobaan lokal; di jaringan publik berisiko (data login bisa terbaca orang lain).
 
 ### 4. Setup Database
 

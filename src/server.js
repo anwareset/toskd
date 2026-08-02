@@ -65,14 +65,28 @@ function readSession(req) {
   }
 }
 
+// Should the session cookie carry the `Secure` flag? MUST NOT be tied to
+// NODE_ENV alone: the Docker image sets NODE_ENV=production, and when a
+// container is served over plain http://localhost:PORT (self-host), a
+// `Secure` cookie is never sent back by browsers — login "succeeds"
+// server-side but every protected page bounces to /login.html. Base it on
+// the actual connection instead: req.secure honors `trust proxy`
+// (X-Forwarded-Proto), so Vercel over HTTPS still gets Secure while plain
+// HTTP self-host does not. COOKIE_SECURE env var forces the decision.
+function shouldUseSecureCookie(req) {
+  if (process.env.COOKIE_SECURE === "true") return true;
+  if (process.env.COOKIE_SECURE === "false") return false;
+  return req?.secure === true;
+}
+
 // Set a fresh session cookie. Guard against writing after headers flushed
 // (Express 5 may stream earlier than Express 4).
-function setSessionCookie(res, payload) {
+function setSessionCookie(req, res, payload) {
   if (res.headersSent) return;
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "24h" });
   res.setHeader(
     "Set-Cookie",
-    `${COOKIE_NAME}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE_MS / 1000}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
+    `${COOKIE_NAME}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE_MS / 1000}${shouldUseSecureCookie(req) ? "; Secure" : ""}`,
   );
 }
 
@@ -110,7 +124,7 @@ function requireAdmin(req, res, next) {
   const now = Math.floor(Date.now() / 1000);
   const remaining = (session.exp || 0) - now;
   if (remaining > 0 && remaining < SLIDING_REFRESH_THRESHOLD_MS / 1000) {
-    setSessionCookie(res, {
+    setSessionCookie(req, res, {
       adminId: session.adminId,
       username: session.username,
     });
@@ -260,7 +274,7 @@ app.post("/api/admin/login", async (req, res) => {
     console.log(
       `[admin-auth] successful login for username="${normalizedUsername}" (id=${admin.id})`,
     );
-    setSessionCookie(res, { adminId: admin.id, username: admin.username });
+    setSessionCookie(req, res, { adminId: admin.id, username: admin.username });
     res.json({ ok: true, username: admin.username });
   } catch (err) {
     console.error("[admin-auth] login error:", err);
@@ -273,7 +287,7 @@ app.post("/api/admin/logout", (req, res) => {
   if (!res.headersSent) {
     res.setHeader(
       "Set-Cookie",
-      `${COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
+      `${COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${shouldUseSecureCookie(req) ? "; Secure" : ""}`,
     );
   }
   res.json({ ok: true });
