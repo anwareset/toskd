@@ -81,6 +81,8 @@ toskd/
 │   ├── test-tkp-bobot.mjs                         # Unit tests untuk TKP Bobot validation (option_scores invariants: himpunan {1..5})
 │   └── test-tkp-scoring.mjs                       # Integration tests untuk TKP weighted scoring (scoreForQuestion + computePackScore)
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)
+├── Dockerfile                    # Multi-stage Docker build (node:20-alpine, non-root, HEALTHCHECK)
+├── .dockerignore                 # Exclude node_modules, .env, specs/, tests/ dari image
 ├── vercel.json                   # Konfigurasi routing Vercel
 └── package.json
 ```
@@ -169,4 +171,24 @@ vercel               # untuk production deployment
 ```
 
 Akses platform di [`http://localhost:3000`](http://localhost:3000).
+
+### 6. Container
+
+Tersedia file `Dockerfile` multi-stage yang dioptimalkan untuk containerization:
+
+```bash
+# Build image
+docker build -t toskd .
+
+# Jalankan container dengan env vars dari .env
+docker run -p 3000:3000 --env-file .env toskd
+
+# Atau pass env satu per satu
+docker run -p 3000:3000 \
+  -e SUPABASE_URL=... \
+  -e SUPABASE_KEY=... \
+  -e BLOB_READ_WRITE_TOKEN=... \
+  -e JWT_SECRET=... \
+  toskd
+```
 
