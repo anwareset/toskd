@@ -1,6 +1,7 @@
 // src/server.js
 // Spec: specs/admin-auth-spec.md (rev 0.1). All admin auth code is
 // grouped under "ADMIN AUTH" headers below for easy audit.
+import "dotenv/config";
 import express from "express";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";

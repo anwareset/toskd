@@ -74,7 +74,6 @@ toskd/
 │       └── bulk-parser.js        # ESM parser untuk bulk-add soal format v2 (premise list + lead-in + options A–E + key + TKP `Bobot:` line parsing) + previewHtmlForCell helper
 ├── src/
 │   ├── server.js                 # API Express.js (Vercel Serverless Function) - TKP weighted scoring (scoreForQuestion + validateOptionScores) + normalizePackInput + validateQuestionMatchesPack
-│   ├── blob.js                   # Vercel Blob storage helper (signed-token upload/delete)
 │   └── db.js                     # Supabase client connection
 ├── tests/                        # Unit tests (Node built-in test runner; run via `pnpm test`)
 │   ├── test-bulk-parser.mjs                       # Unit tests untuk public/js/bulk-parser.js (parser + previewHtmlForCell)
@@ -158,13 +157,15 @@ Jalankan query SQL di `schema.sql` melalui **Supabase SQL Editor**:
 ### 5. Jalankan Project
 
 ```bash
-# Install dependensi
+# Install dependencies
 pnpm install
 
 # Jalankan development server
-vercel dev # untuk local development
+vercel dev           # untuk local development (auto-load .env)
 # atau
-vercel # untuk production deployment
+pnpm start           # node src/server.js langsung (load .env via dotenv)
+# atau
+vercel               # untuk production deployment
 ```
 
 Akses platform di [`http://localhost:3000`](http://localhost:3000).
