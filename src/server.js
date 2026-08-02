@@ -1349,9 +1349,38 @@ maybeBootstrapAdmin().catch((err) =>
 // just hang). Enable with `pnpm start` for local curl testing.
 if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`[server] listening on http://localhost:${PORT}`);
   });
+
+  // Graceful shutdown. IMPORTANT: without explicit handlers, Node running
+  // as container PID 1 silently ignores SIGINT (Ctrl+C on `docker run -it`)
+  // and SIGTERM (`docker stop`) — the kernel skips the default terminating
+  // disposition for PID 1, so the container only dies via docker's 10s
+  // SIGKILL fallback (or `docker stop --signal KILL`). Registering the
+  // handlers makes Ctrl+C and `docker stop` stop the container instantly.
+  let shuttingDown = false;
+  function shutdown(signal) {
+    if (shuttingDown) return; // second signal during grace period: ignore
+    shuttingDown = true;
+    console.log(`[server] received ${signal}, shutting down gracefully...`);
+    server.close(() => {
+      console.log("[server] http server closed, exiting");
+      process.exit(0);
+    });
+    // Close idle keep-alive sockets so close() completes immediately
+    // (otherwise browser keep-alive conns wait for the 5s force-exit below
+    // and the container exits code 1 instead of clean 0).
+    server.closeIdleConnections?.();
+    // Safety net: if connections stay open, force exit so the container
+    // never hangs past docker's stop timeout.
+    setTimeout(() => {
+      console.error(`[server] ${signal} graceful shutdown timed out, forcing exit`);
+      process.exit(1);
+    }, 5000).unref();
+  }
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
 // Export for Vercel serverless

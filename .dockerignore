@@ -10,6 +10,14 @@ node_modules/
 specs/
 tests/
 
+# pnpm cache / local store (dapat ratusan MB jika ada di project)
+.pnpm-store/
+.pnpm/
+
+# Test & coverage artifacts
+coverage/
+.nyc_output/
+
 vercel.json
 .vscode/
 .idea/
