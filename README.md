@@ -20,9 +20,8 @@ Platform CAT (Computer Assisted Test) untuk simulasi ujian SKD (Seleksi Kompeten
 
 ### 🎯 Ujian
 - Timer real-time dengan auto-submit saat waktu habis
-- Navigasi soal via grid lembar jawaban (hijau = dijawab, merah = belum)
-- Score per soal = 5 poin (benar), 0 poin (salah/tidak dijawab)
-- Passing grade absolut (bukan persentase)
+- Scoring: TWK/TIU biner (5 poin benar / 0 salah) + TKP weighted (bobot 1–5 per opsi / 0 jika tak dijawab)
+- Passing grade per-subtes: lulus jika SEMUA subtes mencapai ambang (default TWK=65, TIU=80, TKP=166)
 - Hasil ujian dengan pembahasan lengkap
 
 ### 📝 CMS Bank Soal
@@ -81,7 +80,7 @@ toskd/
 │   ├── test-tkp-bobot.mjs                         # Unit tests untuk TKP Bobot validation (option_scores invariants: himpunan {1..5})
 │   └── test-tkp-scoring.mjs                       # Integration tests untuk TKP weighted scoring (scoreForQuestion + computePackScore)
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)
-├── Dockerfile                    # Multi-stage Docker build (node:22-alpine, non-root, HEALTHCHECK)
+├── Dockerfile                    # Multi-stage Docker build (node:22-alpine, non-root, tini init, HEALTHCHECK)
 ├── .dockerignore                 # Exclude node_modules, .env, specs/, tests/ dari image
 ├── vercel.json                   # Konfigurasi routing Vercel
 └── package.json
@@ -113,7 +112,7 @@ toskd/
 
 ### 1. Prerequisites
 
-- Node.js v22 ke atas (WAJIB — `@supabase/supabase-js@2.110+` butuh native WebSocket; Node ≤20 akan crash saat startup)
+- Node.js v22+
 - PNPM
 - Akun Vercel & Supabase
 
@@ -181,14 +180,13 @@ Tersedia file `Dockerfile` multi-stage yang dioptimalkan untuk containerization:
 docker build -t toskd .
 
 # Jalankan container dengan env vars dari .env
-docker run -p 3000:3000 --env-file .env toskd
+docker run -it -p 3000:3000 --env-file .env toskd
 
 # Atau pass env satu per satu
-docker run -p 3000:3000 \
+docker run -it -p 3000:3000 \
   -e SUPABASE_URL=... \
   -e SUPABASE_KEY=... \
   -e BLOB_READ_WRITE_TOKEN=... \
   -e JWT_SECRET=... \
   toskd
 ```
-
