@@ -1584,7 +1584,7 @@ tbody tr:hover {
      dan lebar penuh (full-width).
 
    Reusable untuk halaman lain yang butuh pola pagination presisi.
-   Lihat paket-detail-toolbar-spec.md rev. 3 untuk rationale. */
+   Lihat UI-paket-detail-toolbar-spec.md rev. 3 untuk rationale. */
 
 .pagination-bar--precise .pagination-bar-right {
     display: grid;
@@ -1631,7 +1631,7 @@ tbody tr:hover {
    lebih sempit (mis. max-width: 1200px setelah standarisasi container).
    Berlaku untuk kelola-soal.html dan halaman lain yang pakai tabel
    dengan kolom lebar (seperti Konten Soal Preview).
-   Lihat kelola-soal-toolbar-spec.md untuk rationale. */
+   Lihat kelola-soal-mobile-table-spec.md untuk rationale. */
 
 .table-condensed th,
 .table-condensed td {
@@ -3223,7 +3223,7 @@ button.q-submit-btn:disabled,
 }
 
 /* ============================================
- * Subtes chip picker (paket-soal-pack-type-spec.md §2)
+ * Subtes chip picker (subtes-picker-spec.md §2.2)
  * Replaces the old checkbox-list picker with a compact chip/badge
  * toggle UI. Pattern: visually-hidden <input type="checkbox"> +
  * styled <span> for chip appearance. Form submission still reads

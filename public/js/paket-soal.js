@@ -539,7 +539,7 @@ form.onsubmit = async (e) => {
     document.getElementById("pack-duration").value,
   );
   // Passing grade total = jumlah kelulusan per subtes. Field input total
-  // sudah dihapus dari modal (lihat paket-soal-pack-type-spec.md §2).
+  // sudah dihapus dari modal (lihat subtes-picker-spec.md §2.2).
   // Server tetap menerima passing_grade untuk backward compat dengan
   // schema existing — nilainya cukup dihitung client-side dari subtest
   // thresholds yang sudah dikumpulkan di bawah.
@@ -755,7 +755,7 @@ if (deletePackConfirmBtn) {
 }
 
 // ==========================================================
-// Per-subtes picker helpers (paket-soal-pack-type-spec.md §2)
+// Per-subtes picker helpers (subtes-picker-spec.md §2.2)
 // ==========================================================
 //
 // Tidak ada lagi konsep Tipe Paket (Single/Combo) — admin cukup pilih

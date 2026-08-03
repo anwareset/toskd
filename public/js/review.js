@@ -137,7 +137,7 @@ async function init() {
     const bd = computeBreakdowns();
 
     // Subtest breakdown harus HANYA menampilkan subtes yang termasuk
-    // dalam paket ini (per paket-soal-pack-type-spec.md §2). Paket
+    // dalam paket ini (per subtes-picker-spec.md §2.1). Paket
     // Single-TWK hanya menampilkan TWK; Combo TWK+TIU menampilkan
     // keduanya; Combo 3-subtes menampilkan ketiganya. Legacy packs
     // (pre-migration-003, tidak ada field subtests) default ke

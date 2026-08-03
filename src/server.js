@@ -865,7 +865,7 @@ app.post("/api/packs", async (req, res) => {
 });
 
 // validateQuestionMatchesPack — server-side defense-in-depth for the
-// subtes filter (paket-soal-pack-type-spec.md §3.4). The client-side
+// subtes filter (subtes-picker-spec.md §2.3). The client-side
 // filter in paket-detail.js `renderBankList` covers the happy path;
 // this catches direct API calls (curl, future endpoints) that would
 // otherwise let an admin bypass the UI and add a TKP soal to a
