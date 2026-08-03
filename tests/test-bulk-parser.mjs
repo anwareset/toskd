@@ -1172,13 +1172,13 @@ test("§8.25e findExplicitOptionsIndex: case-insensitive prefix matching", () =>
 // ============================================================================
 // §8.26 Happy path: N bare premises with no question line is VALID
 // ============================================================================
-// With the §8.28+ sentence-splitting + question-detection extension,
-// the "premises + no question" pattern is now accepted as valid with
-// an EMPTY question (the conclusion is left implicit — common for
-// Indonesian TIU silogisme items where the test-taker must derive
-// it from the premises). This replaces the previous round's stricter
-// guard reject. The previous test name "§8.26 invalid: 3 bare
-// premises with no question line is rejected" was retired.
+// Per the Round-4 verbatim-display policy, the "premises + no
+// question" pattern is accepted as valid with an EMPTY question (the
+// conclusion is left implicit — common for Indonesian TIU silogisme
+// items where the test-taker must derive it from the premises). This
+// replaces the previous round's stricter guard reject. The previous
+// test name "§8.26 invalid: 3 bare premises with no question line is
+// rejected" was retired.
 test("§8.26 happy path: 3 bare premises with no question line is valid (implicit question)", () => {
   const input = [
     "Semua warga negara wajib membayar pajak.",
@@ -1301,15 +1301,14 @@ test("§8.27m looksLikeQuestion: 'YANG PALING TEPAT' (caps) matches (regex is /i
 // ============================================================================
 // §8.28 Happy path: multi-premise on one line + explicit question (TIU 2024)
 // ============================================================================
-// Common Indonesian TIU silogisme pattern where 2 premise sentences
-// are joined on a single line with ". " (instead of proper \n
-// separators) followed by an explicit "Manakah kesimpulan..." question
-// line. The parser must:
-//   1. Split line 0 on ". " (after "herbivora." before "Menurut")
-//   2. Re-locate optIdx on the expanded lines (2 → 3 after split)
-//   3. Recognize "Manakah kesimpulan..." as a question line
-//   4. Treat the 2 split sentences as premises
-test("§8.28 happy path: multi-premise on one line + explicit question (sentence split + Manakah ... cue)", () => {
+// Indonesian TIU silogisme pattern where 2 premise sentences are
+// joined on a single line with ". " (instead of proper \n separators)
+// followed by an explicit "Manakah kesimpulan..." question line. Per
+// the Round-4 verbatim-display policy, the parser does NOT split the
+// line — the whole line is kept as ONE verbatim premise (no internal
+// sentence split), and the "Manakah ..." line becomes the question
+// (matched by the "manakah" cue).
+test("§8.28 happy path: multi-premise on one line + explicit question (verbatim premise, no sentence split)", () => {
   const input = [
     "Semua hewan yang berada di Kebun Binatang A merupakan hewan herbivora. Menurut para peneliti dari Universitas Haluoleo, hewan herbivora adalah hewan dengan rasa takut yang tinggi.",
     "Manakah kesimpulan yang paling tepat berdasarkan premis di atas... (TIU CPNS 2024)",
@@ -1327,10 +1326,9 @@ test("§8.28 happy path: multi-premise on one line + explicit question (sentence
   assert.equal(r[0].status, "valid");
   assert.deepEqual(r[0].errors, []);
 
-  // 2 split premises captured from line 0
+  // 1 verbatim premise captured from line 0 (no sentence split)
   assert.deepEqual(r[0].premises, [
-    "Semua hewan yang berada di Kebun Binatang A merupakan hewan herbivora.",
-    "Menurut para peneliti dari Universitas Haluoleo, hewan herbivora adalah hewan dengan rasa takut yang tinggi.",
+    "Semua hewan yang berada di Kebun Binatang A merupakan hewan herbivora. Menurut para peneliti dari Universitas Haluoleo, hewan herbivora adalah hewan dengan rasa takut yang tinggi.",
   ]);
 
   // Question = the "Manakah kesimpulan..." line
@@ -1347,17 +1345,13 @@ test("§8.28 happy path: multi-premise on one line + explicit question (sentence
   });
   assert.equal(r[0].correct_answer, "A");
 
-  // Content HTML: standard <ol>...<p> shape with both premises + question
+  // Content HTML: standard <ol>...<p> shape — ONE <li> holding the whole
+  // verbatim line + the question <p>
   assert.ok(r[0].content.startsWith("<ol"));
   assert.ok(r[0].content.includes("<p>"));
   assert.ok(
     r[0].content.includes(
-      "<li>Semua hewan yang berada di Kebun Binatang A merupakan hewan herbivora.</li>",
-    ),
-  );
-  assert.ok(
-    r[0].content.includes(
-      "<li>Menurut para peneliti dari Universitas Haluoleo, hewan herbivora adalah hewan dengan rasa takut yang tinggi.</li>",
+      "<li>Semua hewan yang berada di Kebun Binatang A merupakan hewan herbivora. Menurut para peneliti dari Universitas Haluoleo, hewan herbivora adalah hewan dengan rasa takut yang tinggi.</li>",
     ),
   );
   assert.ok(
@@ -1414,68 +1408,15 @@ test("§8.29 happy path: 2 bare premise lines + no question line (implicit-quest
 });
 
 // ============================================================================
-// §8.30 Happy path: premise + premise+question on same line
-// ============================================================================
-// Pattern where line 0 is a single-sentence premise and line 1
-// combines a 2nd premise ("Naruto tidak rajin belajar.") with a
-// question prompt ("Kesimpulannya adalah") joined by ". ". The
-// parser must split line 1, recognize that both the 2nd premise and
-// the question-prompt are present, and treat the latter as the
-// question (matched by the "kesimpulan" cue).
-test("§8.30 happy path: premise + premise+question joined on line 1 (sentence split + kesimpulan cue)", () => {
-  const input = [
-    "Jika Naruto rajin belajar maka dia akan memperoleh Indeks Prestasi yang baik.",
-    "Naruto tidak rajin belajar. Kesimpulannya adalah",
-    "A. Naruto memperoleh Indeks Prestasi yang baik",
-    "B. Naruto memperoleh Indeks Prestasi yang baik walau-pun tidak rajin belajar",
-    "C. Naruto adalah anak yang pintar",
-    "D. Naruto tidak mendapat Indeks Prestasi yang baik",
-    "E. Tidak dapat disimpulkan.",
-    "E",
-    "Premis 1: p -> q (Jika Naruto rajin belajar maka dia akan memperoleh Indeks Prestasi yang baik). Premis 2: ~p (Naruto tidak rajin belajar). Dalam logika formal, bentuk ~p dari p -> q tidak menghasilkan kesimpulan yang valid (Denying the Antecedent), sehingga tidak dapat disimpulkan (TDDS).",
-  ].join("\n");
-
-  const r = parseBulkText(input, TYPE);
-  assert.equal(r.length, 1);
-  assert.equal(r[0].status, "valid");
-
-  // 2 premises (line 0 + the 2nd split-off part of line 1)
-  assert.deepEqual(r[0].premises, [
-    "Jika Naruto rajin belajar maka dia akan memperoleh Indeks Prestasi yang baik.",
-    "Naruto tidak rajin belajar.",
-  ]);
-  // Question = the "Kesimpulannya adalah" portion of line 1
-  assert.equal(r[0].question, "Kesimpulannya adalah");
-  assert.deepEqual(r[0].options, {
-    A: "Naruto memperoleh Indeks Prestasi yang baik",
-    B: "Naruto memperoleh Indeks Prestasi yang baik walau-pun tidak rajin belajar",
-    C: "Naruto adalah anak yang pintar",
-    D: "Naruto tidak mendapat Indeks Prestasi yang baik",
-    E: "Tidak dapat disimpulkan.",
-  });
-  assert.equal(r[0].correct_answer, "E");
-
-  // Content HTML: standard <ol>...<p> shape
-  assert.ok(r[0].content.startsWith("<ol"));
-  assert.ok(r[0].content.includes("<p>"));
-  assert.ok(
-    r[0].content.endsWith("<p>Kesimpulannya adalah</p>"),
-    `content should end with the question-line <p>; got: ${r[0].content}`,
-  );
-});
-
-// ============================================================================
-// §8.31 Happy path: 3 sentences on 1 line + no question (implicit)
+// §8.31 Fallback: 3 sentences on 1 line + no question → old format
 // ============================================================================
 // Pattern where line 0 contains 3 premise sentences all joined by
 // ". ", followed directly by A-E options with NO question line at
-// all. The parser must:
-//   1. Split line 0 into 3 sentences on ". " (after each sentence)
-//   2. Locate optIdx on the expanded lines (1 → 3 after split)
-//   3. Recognize there is no explicit question (last line
-//      "Goku..." doesn't match any cue)
-//   4. Treat all 3 split sentences as premises with empty question
-test("§8.31 happy path: 3 sentences on one line + no question line (implicit, multi-sentence split)", () => {
+// all. Because everything sits on ONE line, optIdx = 1 (< 2) so the
+// bare-premise path is skipped and the block falls through to
+// old-format parsing (verbatim policy — NO sentence split): the whole
+// line becomes the question, premises stays empty.
+test("§8.31 fallback: 3 sentences on one line + no question → old format (verbatim, no sentence split)", () => {
   const input = [
     "Jika tubuh sehat, maka jiwa akan sehat pula. Jika jiwa sehat, maka proses hidup akan dijalani dengan sehat. Goku memiliki tubuh yang tidak sehat.",
     "A. Proses hidup Goku dijalani dengan tidak sehat.",
@@ -1491,13 +1432,12 @@ test("§8.31 happy path: 3 sentences on one line + no question line (implicit, m
   assert.equal(r.length, 1);
   assert.equal(r[0].status, "valid");
 
-  // 3 split premises + empty question
-  assert.deepEqual(r[0].premises, [
-    "Jika tubuh sehat, maka jiwa akan sehat pula.",
-    "Jika jiwa sehat, maka proses hidup akan dijalani dengan sehat.",
-    "Goku memiliki tubuh yang tidak sehat.",
-  ]);
-  assert.equal(r[0].question, ""); // implicit
+  // Old-format semantics: no premises, whole line becomes the question
+  assert.deepEqual(r[0].premises, []);
+  assert.equal(
+    r[0].question,
+    "Jika tubuh sehat, maka jiwa akan sehat pula. Jika jiwa sehat, maka proses hidup akan dijalani dengan sehat. Goku memiliki tubuh yang tidak sehat.",
+  );
   assert.deepEqual(r[0].options, {
     A: "Proses hidup Goku dijalani dengan tidak sehat.",
     B: "Proses hidup Goku dijalani dengan sehat.",
@@ -1507,19 +1447,11 @@ test("§8.31 happy path: 3 sentences on one line + no question line (implicit, m
   });
   assert.equal(r[0].correct_answer, "E");
 
-  // Content HTML: <ol>…</ol> only (no <p>) since question is empty
-  assert.ok(r[0].content.startsWith("<ol>"));
-  assert.ok(r[0].content.endsWith("</ol>"));
+  // Content: plain text (old format), verbatim line, no HTML wrapping
+  assert.equal(
+    r[0].content,
+    "Jika tubuh sehat, maka jiwa akan sehat pula. Jika jiwa sehat, maka proses hidup akan dijalani dengan sehat. Goku memiliki tubuh yang tidak sehat.",
+  );
+  assert.ok(!r[0].content.includes("<ol"));
   assert.ok(!r[0].content.includes("<p>"));
-  // All 3 premises appear as <li> entries
-  assert.ok(
-    r[0].content.includes(
-      "<li>Jika tubuh sehat, maka jiwa akan sehat pula.</li>",
-    ),
-  );
-  assert.ok(
-    r[0].content.includes(
-      "<li>Goku memiliki tubuh yang tidak sehat.</li>",
-    ),
-  );
 });

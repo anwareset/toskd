@@ -383,12 +383,13 @@ function findExplicitOptionsIndex(lines) {
   return -1;
 }
 
-// Parse a "bare-premise new format" block on PRE-EXPANDED lines.
-// The caller (parseBlock) has already applied
-// `expandToSentencesBefore` to the original lines and re-located
-// `optIdx` to `newOptIdx` on the post-expansion array. This
-// function operates directly on the expanded array; no further
-// splitting is performed here.
+// Parse a "bare-premise new format" block on the RAW block lines.
+// The caller (parseBlock) passes the lines as-is (verbatim policy —
+// NO pre-expansion / sentence-splitting happens anywhere in the
+// parser anymore; the old `expandToSentencesBefore`/`newOptIdx`
+// pipeline was removed in Round 4), together with `optIdx` located
+// by `findExplicitOptionsIndex`. This function treats each line
+// verbatim; no internal sentence splitting is performed here.
 //
 // Two Indonesian CAT patterns supported:
 //   (a) Explicit question (TWK reading-passage OR TIU silogisme
@@ -453,9 +454,12 @@ function parseBarePremiseNewFormatBlock(lines, idx, questionType, optIdx) {
   //       sentence split. Examples: §8.22/§8.28/§8.33 and catalog
   //       #6/#11d/#12.
   //
-  //   (F) NO EXPLICIT QUESTION: all lines[0..optIdx-1] are premises,
-  //       each kept verbatim (no `. A-Z` auto-split). Question is
-  //       empty. Examples: §8.26/§8.29/§8.31, catalog #A and #C.
+//   (F) NO EXPLICIT QUESTION: all lines[0..optIdx-1] are premises,
+//       each kept verbatim (no `. A-Z` auto-split). Question is
+//       empty. Examples: §8.26/§8.29, catalog #A and #C.
+//       (§8.31 was retired as a scenario-F example on 2026-08-03 —
+//       its single-line-3-sentences input now falls through to old
+//       format because optIdx = 1 < 2.)
   //
   // Note: the previous scenario (E) "split Premise line by sentence
   // when last chunk looks like a question" is REMOVED. It collapsed
