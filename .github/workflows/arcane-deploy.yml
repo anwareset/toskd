@@ -19,27 +19,17 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Dua syarat sebelum trigger webhook Arcane:
+    # 1. docker-build.yml selesai dengan conclusion == 'success'
+    #    (failure/cancelled/skipped → job di-skip, run tetap hijau)
+    # 2. Run pemicu berasal dari default branch (main) — feature branch
+    #    dan tag v* TIDAK men-deploy (keputusan user).
+    # FIX 2026-08-03: pakai top-level `github.event.repository.default_branch`
+    # — nested `workflow_run.repository.default_branch` null di context Actions
+    # (dulu bikin job skipped padahal build sukses; fix diverifikasi 2026-08-03).
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == github.event.repository.default_branch }}
     steps:
-      # --- DEBUG SEMENTARA: verifikasi nilai payload workflow_run ---
-      # (hapus setelah deploy terbukti jalan — lihat riwayat fix 2026-08-03)
-      - name: Debug workflow_run payload
-        run: |
-          echo "conclusion: [${{ github.event.workflow_run.conclusion }}]"
-          echo "head_branch: [${{ github.event.workflow_run.head_branch }}]"
-          echo "nested workflow_run.repository.default_branch: [${{ github.event.workflow_run.repository.default_branch }}]"
-          echo "top-level repository.default_branch: [${{ github.event.repository.default_branch }}]"
-          echo '--- toJson(workflow_run.repository) ---'
-          echo '${{ toJson(github.event.workflow_run.repository) }}'
-
-      # Dua syarat sebelum trigger webhook Arcane:
-      # 1. docker-build.yml selesai dengan conclusion == 'success'
-      #    (failure/cancelled/skipped → step di-skip)
-      # 2. Run pemicu berasal dari default branch (main) — feature branch
-      #    dan tag v* TIDAK men-deploy (keputusan user).
-      #    FIX 2026-08-03: pakai top-level `github.event.repository.default_branch`
-      #    — nested `workflow_run.repository.default_branch` null di context Actions.
       - name: Trigger Arcane deployment webhook
-        if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == github.event.repository.default_branch }}
         env:
           ARCANE_WEBHOOK_URL: ${{ secrets.ARCANE_WEBHOOK_URL }}
         run: |
