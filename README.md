@@ -82,6 +82,7 @@ toskd/
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)
 ├── Dockerfile                    # Multi-stage Docker build (node:22-alpine, non-root, tini init, HEALTHCHECK)
 ├── .dockerignore                 # Exclude node_modules, .env, specs/, tests/ dari image
+├── .github/workflows/            # CI/CD (GitHub Actions): docker-build.yml — pnpm test gate (non-blocking) + build & push image multi-arch (amd64+arm64) ke GHCR
 ├── vercel.json                   # Konfigurasi routing Vercel
 └── package.json
 ```
