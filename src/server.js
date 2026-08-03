@@ -3,6 +3,7 @@
 // grouped under "ADMIN AUTH" headers below for easy audit.
 import "dotenv/config";
 import express from "express";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import supabase from "./db.js";
@@ -47,6 +48,38 @@ const BOOTSTRAP_USERNAME = process.env.BOOTSTRAP_ADMIN_USERNAME;
 const BOOTSTRAP_PASSWORD = process.env.BOOTSTRAP_ADMIN_PASSWORD;
 
 const PUBLIC_DIR = join(__dirname, "..", "public");
+
+// --- Health check helpers ---
+// Short git commit hash (7 chars) untuk response /health.
+// Prioritas: env Vercel (VERCEL_GIT_COMMIT_SHA) → env Docker build-arg
+// (GIT_COMMIT_SHA, lihat Dockerfile ARG GIT_SHA) → git CLI (local dev) →
+// "unknown". Di-cache setelah resolusi pertama (module-level lazy).
+let _cachedCommitSha = null;
+function getShortCommitSha() {
+  if (_cachedCommitSha) return _cachedCommitSha;
+  const envSha =
+    process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA;
+  if (envSha && envSha.trim()) {
+    const s = envSha.trim();
+    _cachedCommitSha = s.length > 7 ? s.slice(0, 7) : s;
+    return _cachedCommitSha;
+  }
+  try {
+    const out = execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+      encoding: "utf8",
+      timeout: 3000,
+    });
+    const s = out.trim();
+    _cachedCommitSha = s.length > 7 ? s.slice(0, 7) : s;
+    return _cachedCommitSha;
+  } catch {
+    // git tidak tersedia (serverless / image tanpa .git) — fallback.
+    _cachedCommitSha = "unknown";
+    return _cachedCommitSha;
+  }
+}
+
+const APP_VERSION = getShortCommitSha();
 
 // --- Session helpers ---
 
@@ -1346,6 +1379,43 @@ app.get("/api/scoreboard-all", async (req, res) => {
   } catch (error) {
     console.error("Error fetching scoreboard:", error);
     res.status(500).json({ error: "Failed to fetch scoreboard" });
+  }
+});
+
+// --- Health check (BEFORE static) ---
+// GET /health — readiness probe. 200 { status: "ready", version } jika
+// aplikasi berjalan + database reachable; 503 { status: "unavailable",
+// version } jika DB check gagal. Dipakai Docker HEALTHCHECK (lihat
+// Dockerfile) dan Caddy/monitoring eksternal.
+// Timeout untuk DB smoke-test di /health — supabase-js fetch tidak punya
+// default timeout; tanpa ini endpoint bisa hang selamanya untuk probe
+// eksternal (Caddy/monitoring) saat network stall. Docker HEALTHCHECK punya
+// --timeout sendiri, tapi probe lain butuh jaminan balasan cepat.
+const HEALTH_DB_TIMEOUT_MS = 5000;
+
+app.get("/health", async (req, res) => {
+  try {
+    // Smoke-test DB connectivity dengan query terkecil (limit 1, tanpa
+    // data yang dibutuhkan). supabase-js tidak mengekspos raw SQL
+    // (`select version()`), jadi cukup buktikan Supabase/PostgREST
+    // reachable — error apa pun di sini berarti DB belum siap.
+    const dbCheck = supabase.from("questions").select("id").limit(1);
+    const timeout = new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`DB check timed out after ${HEALTH_DB_TIMEOUT_MS}ms`)),
+        HEALTH_DB_TIMEOUT_MS,
+      ),
+    );
+    const { error } = await Promise.race([dbCheck, timeout]);
+    if (error) throw error;
+    res.json({ status: "ready", version: APP_VERSION });
+  } catch (err) {
+    console.error("[health] DB check failed:", err?.message || err);
+    res.status(503).json({
+      status: "unavailable",
+      version: APP_VERSION,
+      error: err?.message || "database unreachable",
+    });
   }
 });
 

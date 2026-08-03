@@ -78,6 +78,7 @@ toskd/
 │   ├── test-bulk-parser.mjs                       # Unit tests untuk public/js/bulk-parser.js (parser + previewHtmlForCell)
 │   ├── test-bulk-patterns-catalog.mjs             # Catalog regression suite untuk bulk-input patterns (parser integration)
 │   ├── test-image-url-paste.mjs                   # IMAGE_URL_REGEX / IMAGE_MD_REGEX paste contract (kelola-soal.js bindPasteImageHandler)
+│   ├── test-health.mjs                            # GET /health readiness probe (mock PostgREST: 200 ready / 503 unavailable / version fallback)
 │   ├── test-tkp-bobot.mjs                         # Unit tests untuk TKP Bobot validation (option_scores invariants: himpunan {1..5})
 │   └── test-tkp-scoring.mjs                       # Integration tests untuk TKP weighted scoring (scoreForQuestion + computePackScore)
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)

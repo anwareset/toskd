@@ -36,12 +36,20 @@ COPY public/ ./public/
 
 ENV NODE_ENV=production
 
+# Short git commit hash untuk endpoint /health — di-inject dari CI via
+# build-arg GIT_SHA (lihat .github/workflows/docker-build.yml
+# build-args: GIT_SHA=${{ github.sha }}). Fallback: "unknown".
+ARG GIT_SHA=unknown
+ENV GIT_COMMIT_SHA=$GIT_SHA
+
 EXPOSE 3000
 
 # BuildKit required (enabled by default in Docker 23+).
 # For older Docker: DOCKER_BUILDKIT=1 docker build ...
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:'+(process.env.PORT||3000)+'/',r=>process.exit(r.statusCode===200?0:1))"
+# Healthcheck memakai /health (bukan /) — baru "healthy" jika server + DB
+# benar-benar siap (200), bukan sekadar HTTP up (root selalu 200 walau DB mati).
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:'+(process.env.PORT||3000)+'/health',r=>process.exit(r.statusCode===200?0:1))"
 
 USER app
 

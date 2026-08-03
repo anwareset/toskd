@@ -82,6 +82,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # GIT_SHA dipakai endpoint /health (version: short commit hash)
+          # via ENV GIT_COMMIT_SHA di Dockerfile
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           # Cache antar-build di GitHub Actions — rebuild berikutnya jauh lebih cepat
           cache-from: type=gha
           cache-to: type=gha,mode=max
