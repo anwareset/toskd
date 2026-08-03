@@ -59,6 +59,13 @@
         color: var(--primary);
         text-decoration: none;
       }
+      /* Dark mode: --primary stays #003580 (dark indigo), which is hard
+         to read on the dark surface — flip to the app's dark-mode
+         near-white text (#ecedee), same convention as .app-title /
+         .btn-back / .question-no elsewhere. */
+      [data-theme="dark"] .login-back-link a {
+        color: #ecedee;
+      }
       .login-back-link a:hover {
         text-decoration: underline;
       }
