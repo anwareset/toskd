@@ -1,0 +1,76 @@
+# Container ini menggunakan network eksternal "net1" untuk berjalan bersama
+# reverse proxy HTTPS (Caddy) yang terpisah. Container lain dalam network
+# yang sama bisa mengakses toskd via hostname "toskd" pada port 3000.
+#
+# ⚠️  Persiapan sebelum menjalankan:
+#   1. Buat file .env dari .env.example dan isi semua variabel.
+#   2. Pastikan network "net1" sudah ada: docker network create net1
+#   3. Pastikan sudah ada image: docker pull ghcr.io/anwareset/toskd:latest
+#      (atau build sendiri: docker build -t toskd .)
+#
+# Jalankan: docker compose -p toskd up
+
+services:
+  toskd:
+    container_name: toskd
+    image: ghcr.io/anwareset/toskd:latest
+    # Untuk development / build lokal, ganti image di atas dengan:
+    # build:
+    #   context: .
+    # image: toskd:latest
+
+    networks:
+      - net1
+
+    restart: unless-stopped
+
+    # Port mapping: biarkan host port kosong (:3000) agar port host dipilih
+    # secara acak, karena akses publik melalui reverse proxy Caddy (port 443),
+    # bukan langsung ke container.
+    # Hanya untuk health check / debugging lokal, bisa diganti "3000:3000".
+    ports:
+      - ":3000"
+
+    environment:
+      # ---- Runtime ----
+      - TZ=${TZ}
+      - NODE_ENV=${NODE_ENV}
+
+      # ---- Auth ----
+      # JWT_SECRET: minimal 32 karakter. Generate: openssl rand -hex 32
+      - JWT_SECRET=${JWT_SECRET}
+      # COOKIE_SECURE=true karena di belakang Caddy (HTTPS termination).
+      # Jika Caddy di container lain di net1, Express melihat X-Forwarded-Proto
+      # dari Caddy, dan req.secure = true → Secure flag otomatis ditambahkan.
+      - COOKIE_SECURE=${COOKIE_SECURE}
+
+      # ---- Supabase (PostgreSQL backend via Supabase) ----
+      - SUPABASE_TELEMETRY_DISABLED=${SUPABASE_TELEMETRY_DISABLED}
+      - DO_NOT_TRACK=${DO_NOT_TRACK}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+
+      # ---- Vercel Blob (image/file storage) ----
+      - BLOB_STORE_ID=${BLOB_STORE_ID}
+      - BLOB_READ_WRITE_TOKEN=${BLOB_READ_WRITE_TOKEN}
+
+      # ---- Vercel ----
+      - VERCEL_CLI_DISABLE_TELEMETRY=${VERCEL_CLI_DISABLE_TELEMETRY}
+      - VERCEL_OIDC_TOKEN=${VERCEL_OIDC_TOKEN}
+
+      # ---- Bootstrap admin (HAPUS setelah admin pertama berhasil login) ----
+      # - BOOTSTRAP_ADMIN_USERNAME=${BOOTSTRAP_ADMIN_USERNAME}
+      # - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD}
+
+    # Health check: container dianggap sehat jika HTTP GET ke / return 200.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', r => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+networks:
+  net1:
+    name: net1
+    external: true
