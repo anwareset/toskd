@@ -1,0 +1,39 @@
+name: Arcane Deploy
+
+# Trigger via workflow_run, BUKAN langsung dari push — jadi hanya berjalan
+# SETELAH workflow build selesai, dan hanya jika hasilnya SUCCESS (image GHCR
+# benar-benar ter-publish). Jika docker-build.yml gagal, workflow ini tidak
+# akan men-deploy (job di-skip).
+#
+# Catatan: event `workflow_run` hanya bisa memicu workflow yang ada di default
+# branch — pastikan file ini sudah di-commit ke `main` agar berfungsi.
+on:
+  workflow_run:
+    workflows: ["Docker Build & Push to GHCR"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Dua syarat sebelum trigger webhook Arcane:
+    # 1. docker-build.yml selesai dengan conclusion == 'success'
+    #    (failure/cancelled/skipped → job di-skip, run tetap hijau)
+    # 2. Run pemicu berasal dari default branch (main) — feature branch
+    #    dan tag v* TIDAK men-deploy (keputusan user)
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == github.event.workflow_run.repository.default_branch }}
+    steps:
+      - name: Trigger Arcane deployment webhook
+        env:
+          ARCANE_WEBHOOK_URL: ${{ secrets.ARCANE_WEBHOOK_URL }}
+        run: |
+          # Cukup trigger/hit URL webhook — tidak ada verifikasi container up.
+          # --fail: HTTP >= 400 → exit non-zero → job merah (deploy dianggap gagal)
+          # --retry: transient network hiccup tidak langsung menggagalkan deploy
+          # Secret dipassing via env (bukan inline) supaya tidak bocor ke log
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 --max-time 60 \
+            -X POST "$ARCANE_WEBHOOK_URL" \
+            -H "Content-Type: application/json"
