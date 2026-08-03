@@ -28,7 +28,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ---- Unit tests (pre-build gate, non-blocking) ----
+      # ---- Unit tests (pre-build gate — blocking: suite harus hijau sebelum build) ----
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -43,12 +43,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # continue-on-error: suite punya 3 kegagalan pre-existing di
-      # tests/test-bulk-parser.mjs (88/91 pass, lihat AGENTS.md §5) —
-      # kegagalan TIDAK memblokir build image multi-arch, tapi hasilnya
-      # tetap terlihat jelas di ringkasan run.
       - name: Run tests
-        continue-on-error: true
         run: pnpm test
 
       - name: Set up QEMU

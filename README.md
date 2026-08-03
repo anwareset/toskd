@@ -77,12 +77,13 @@ toskd/
 ├── tests/                        # Unit tests (Node built-in test runner; run via `pnpm test`)
 │   ├── test-bulk-parser.mjs                       # Unit tests untuk public/js/bulk-parser.js (parser + previewHtmlForCell)
 │   ├── test-bulk-patterns-catalog.mjs             # Catalog regression suite untuk bulk-input patterns (parser integration)
+│   ├── test-image-url-paste.mjs                   # IMAGE_URL_REGEX / IMAGE_MD_REGEX paste contract (kelola-soal.js bindPasteImageHandler)
 │   ├── test-tkp-bobot.mjs                         # Unit tests untuk TKP Bobot validation (option_scores invariants: himpunan {1..5})
 │   └── test-tkp-scoring.mjs                       # Integration tests untuk TKP weighted scoring (scoreForQuestion + computePackScore)
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)
 ├── Dockerfile                    # Multi-stage Docker build (node:22-alpine, non-root, tini init, HEALTHCHECK)
 ├── .dockerignore                 # Exclude node_modules, .env, specs/, tests/ dari image
-├── .github/workflows/            # CI/CD (GitHub Actions): docker-build.yml — pnpm test gate (non-blocking) + build & push image multi-arch (amd64+arm64) ke GHCR
+├── .github/workflows/            # CI/CD (GitHub Actions): docker-build.yml — pnpm test gate (blocking) + build & push image multi-arch (amd64+arm64) ke GHCR
 ├── vercel.json                   # Konfigurasi routing Vercel
 └── package.json
 ```
