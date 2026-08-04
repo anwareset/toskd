@@ -1603,6 +1603,36 @@ tbody tr:hover {
            di sini tidak akan efektif dan malah misleading. */
         grid-column: 1 / -1;
     }
+    /* Mobile polish (per user request): navigasi soal "← Sebelumnya |
+       1 / 30 | Selanjutnya →" (exam.html + review.html). Sebelumnya
+       tombol memakai padding base (10px 20px) + font 0.95rem sehingga
+       min-content total melebihi lebar layar phone — baris sesak /
+       meluber dan counter tidak terpusat. Perbaikan:
+       - flex: 1 pada kedua tombol = lebar sama rata; counter di tengah
+         benar-benar terpusat (pola sama dengan polish exam-header).
+       - padding + font lebih ramping supaya muat di layar phone.
+       - white-space: nowrap + overflow hidden/ellipsis sebagai fallback
+         di viewport sangat sempit (≤320px). */
+    .question-nav {
+        gap: 8px;
+    }
+    .question-nav #prev-btn,
+    .question-nav #next-btn {
+        flex: 1;
+        min-width: 0;
+        padding: 10px 8px;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .question-nav #q-counter {
+        flex-shrink: 0;
+        padding: 0 4px;
+        white-space: nowrap;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
     .card-grid {
         grid-template-columns: 1fr;
     }
