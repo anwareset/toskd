@@ -130,7 +130,12 @@ async function init() {
     const q = await fetch(`/api/packs/${result.pack_id}/questions`);
     questions = (await q.json()) || [];
     loadingEl.style.display = "none";
-    infoEl.style.display = "flex";
+    // Kosongkan inline display agar stylesheet yang mengontrol:
+    // flex di desktop, grid 2×2 di mobile (≤767px). Inline "flex"
+    // sebelumnya mengalahkan rule media query grid (inline style
+    // selalu menang atas CSS selector). Base .review-header-info
+    // sudah display: flex, jadi desktop tidak berubah.
+    infoEl.style.display = "";
     bodyEl.style.display = "flex";
     const sc = result.status === "Lulus PG" ? "status-pass" : "status-fail";
 

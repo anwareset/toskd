@@ -1549,15 +1549,59 @@ tbody tr:hover {
     }
     .exam-header {
         padding: 12px 16px;
+        gap: 12px;
+    }
+    /* Mobile polish (per user request): nama paket + timer di baris 1
+       (nama truncate ellipsis, timer di kanan via flex: 1), tombol
+       Akhiri Ujian full-width di baris 2 sendiri. Sebelumnya tombol
+       yang wrap ke baris baru menempel di pinggir kiri (space-between
+       dengan satu item = flex-start) sehingga terlihat tidak rapi. */
+    .exam-header h2 {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #end-exam-btn {
+        width: 100%;
     }
     .exam-layout,
     .review-layout {
         padding: 16px;
     }
     .review-header-info {
-        flex-direction: column;
-        gap: 16px;
-        align-items: flex-start;
+        /* Mobile polish (per user request): 4 stat (Nama Peserta /
+           Paket Soal / Skor / Status) jadi grid 2×2 rata tengah yang
+           mengisi lebar penuh — sebelumnya menumpuk di kiri (flex
+           column + align-items: flex-start) sehingga terlihat tidak
+           rapi. Baris Subtest di bawah melintasi kedua kolom. */
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px 12px;
+    }
+    .review-header-info > * {
+        /* min-width: 0: nama peserta / nama paket yang panjang tidak
+           boleh memaksa kolom lebih lebar dari porsinya (min-content
+           trap — pola sama dengan #pack-grid di stylesheet ini). */
+        min-width: 0;
+    }
+    .review-header-info .stat .value {
+        /* Nama peserta / paket sangat panjang: izinkan wrap di mana pun
+           (termasuk memutus kata panjang tanpa spasi) supaya tidak
+           meluber keluar sel grid. Dipilih wrap penuh, BUKAN
+           ellipsis-truncate — nama adalah info identitas, dan di layar
+           sentuh tooltip (title) tidak bisa diandalkan, jadi memotong
+           nama akan menyembunyikan informasi. Nama normal dengan spasi
+           tetap wrap di batas kata seperti biasa. */
+        overflow-wrap: anywhere;
+    }
+    .review-stats-subtest {
+        /* Full-width row di bawah grid 2×2. Hanya set grid-column;
+           padding base (8px 16px, baris ~3184) dibiarkan — rule yang
+           lebih akhir di stylesheet menang cascade, jadi reset padding
+           di sini tidak akan efektif dan malah misleading. */
+        grid-column: 1 / -1;
     }
     .card-grid {
         grid-template-columns: 1fr;
