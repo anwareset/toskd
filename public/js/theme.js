@@ -55,8 +55,18 @@
 
     const title = document.createElement("a");
     title.className = "global-header-title";
-    title.textContent = "TOSKD";
     title.href = "/";
+    // Brand mark (favicon SVG) + wordmark. The <img> is decorative
+    // (aria-hidden) — the title text is the accessible label.
+    const titleLogo = document.createElement("img");
+    titleLogo.className = "global-header-logo";
+    titleLogo.src = "/assets/toskd-emoticon.svg";
+    titleLogo.alt = "";
+    titleLogo.setAttribute("aria-hidden", "true");
+    titleLogo.setAttribute("width", "22");
+    titleLogo.setAttribute("height", "22");
+    title.appendChild(titleLogo);
+    title.appendChild(document.createTextNode("TOSKD"));
 
     let nav = null;
     // Create navlinks when:
@@ -82,6 +92,16 @@
         a.className = "global-header-link";
         a.href = link.href;
         a.textContent = link.label;
+        // Highlight the nav link for the page the user is currently on
+        // (normalize /index.html → /). Applies to the desktop header
+        // AND the mobile drawer since the same elements move between
+        // them via relayout().
+        const currentPath = path.replace(/\/index\.html$/, "/");
+        const linkPath = new URL(a.href, window.location.origin).pathname.replace(
+          /\/index\.html$/,
+          "/",
+        );
+        if (linkPath === currentPath) a.classList.add("active");
         nav.appendChild(a);
       });
     }

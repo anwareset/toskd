@@ -1,132 +1,142 @@
-/* TOSKD CAT — theme tokens
+/* TOSKD CAT — theme tokens (UI revamp)
  * ==========================================================
- * Single source of truth for color across the app.
+ * Single source of truth for color + design tokens across the app.
+ * Loaded BEFORE styles.css on every HTML page so all var(--…) lookups
+ * resolve. Theme toggling is via `[data-theme="dark"]` on <html>,
+ * set by theme.js (respects OS preference until the user picks one).
  *
- * Loaded BEFORE styles.css on every HTML page so all
- * var(--…) lookups resolve. Toggle between light and dark
- * is via `[data-theme="dark"]` on <html>, set by theme.js
- * (which respects OS preference if localStorage is empty).
- *
- * Palette construction is based on Radix Colors step values
- * (https://www.radix-ui.com/colors), with one custom token
- * (`--text-muted` in light mode) tuned to pass WCAG AAA on
- * body text simultaneously with a calmer visual weight.
- *
- * Contrast verifications (WebAIM contrast checker, recorded
- * at design time):
- *
- *   Light mode
- *     --text          on --bg        ~17 : 1   AAA body
- *     --text-muted    on --bg        ~7.8 : 1   AAA body
- *     --on-primary    on --primary   ~5.1 : 1   AAA UI
- *     #fff            on --success   ~5.0 : 1   AAA UI
- *     #fff            on --danger    ~6.0 : 1   AAA UI
- *
- *   Dark mode
- *     --text          on --bg        ~15 : 1   AAA body
- *     --text-muted    on --bg        ~9.0 : 1   AAA body
- *     --on-primary    on --primary   ~5.1 : 1   AAA UI
- *     #fff            on --success   ~5.4 : 1   AAA UI
- *     #fff            on --danger    ~4.0 : 1   AA UI
+ * Design language — "quiet product": refined indigo accent on warm
+ * neutral surfaces, hairline borders, soft layered shadows, crisp
+ * system typography. Every component in styles.css consumes these
+ * tokens only; no hex literals outside this file (except the theme
+ * toggle's stable track/thumb colors, per the 2026-07-16 revert note
+ * that was carried over from the previous stylesheet).
  */
 
 :root {
-    /* Brand */
-    --primary: #003580;            /* indigo.9 — 5.1:1 on white */
-    --primary-light: #eef0fc;      /* indigo.3 — soft tint */
-    --primary-hover: #2c4fbd;      /* darker indigo for hover state */
+    /* ---- Accent (refined indigo) ---- */
+    --primary: #4f46e5;           /* button / strong action fill */
+    --primary-hover: #4338ca;     /* hover fill */
+    --primary-light: #eef2ff;     /* soft tint for fills / selected rows */
+    --accent: #4f46e5;            /* links, emphasis text (light mode) */
+    --accent-strong: #3730a3;     /* deepest indigo for focusable text */
+    --ring: color-mix(in srgb, var(--primary) 24%, transparent);
 
-    /* Status — success */
-    --success: #218358;            /* green.10 — 5.0:1 on white */
-    --success-light: #e9f9ee;      /* green.3 — soft tint */
-    --success-hover: #1a6b48;      /* darker green for hover */
+    /* ---- Status ---- */
+    --success: #1f8a5b;           /* AA on white, used for fills + text */
+    --success-light: #e7f5ee;     /* soft green tint */
+    --success-hover: #157347;
+    --danger: #c62828;            /* AA on white */
+    --danger-light: #fdecec;      /* soft red tint */
+    --danger-hover: #a81e1e;
+    --warning: #b45309;           /* amber-700 — text/visual accent */
 
-    /* Status — danger */
-    --danger: #b62226;             /* red.11 — 6.0:1 on white */
-    --danger-light: #fee4e2;       /* red.3 lightened hue */
-    --danger-hover: #951f24;       /* even darker for hover */
+    /* TKP bobot mid-tones (high-contrast chips). Kept from the
+       previous palette — already tuned for read-at-a-glance weight. */
+    --orange-300: #fdba74;
+    --yellow-300: #fde047;
+    /* Big-surface tints + dark borders for option rows. */
+    --orange-200: #fed7aa;
+    --orange-600: #ea580c;
+    --amber-100: #fef3c7;
+    --amber-500: #f59e0b;
 
-    /* Status — warning (visual accent only) */
-    --warning: #b86b0c;           /* amber.10 */
+    /* ---- Neutrals (quiet, layered) ---- */
+    --bg: #f4f5f7;                /* page background */
+    --surface: #ffffff;           /* cards, panels, modals */
+    --surface-2: #f8f9fb;         /* nested fills, inputs */
+    --surface-header: #eef0f4;    /* table headers, toolbars */
+    --surface-hover: #f2f3f8;     /* hover fill on surfaces */
+    --text: #161b26;              /* body text */
+    --text-muted: #5a6474;        /* secondary text */
+    --text-faint: #8b94a3;        /* tertiary / placeholder */
+    --border: #e4e7ec;            /* hairline dividers */
+    --border-strong: #ccd2dc;     /* stronger outlines, focusables */
 
-    /* TKP bobot mid-tones (high contrast for small chips). The chip
-       relies on bg color to convey weight at low pixel counts; we use
-       the saturated mid stop (300) so the badge reads at a glance
-       against any cell bg. Light-mode hex matches orange.3 / yellow.3
-       from Radix Colors. */
-    --orange-300: #fdba74;        /* orange.3 — chip weight-2 */
-    --yellow-300: #fde047;        /* yellow.3 — chip weight-3 */
+    /* ---- Typography ---- */
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+        Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+        Consolas, "Liberation Mono", monospace;
 
-    /* TKP bobot light tints + dark borders for big option rows. Two
-       stops per hue: bg = light tint (calmer visual on big surfaces),
-       border = dark stop (high contrast against --surface). Tokens
-       named by hex family step (200/600) following Radix convention
-       so palette tweaks can be done in this single file. */
-    --orange-200: #fed7aa;        /* orange.2 — option-item weight-2 bg */
-    --orange-600: #ea580c;        /* orange.6 — option-item weight-2 border */
-    --amber-100: #fef3c7;         /* amber.1 — option-item weight-3 bg */
-    --amber-500: #f59e0b;         /* amber.5 — option-item weight-3 border */
+    /* ---- Radius ---- */
+    --radius: 10px;               /* buttons, inputs */
+    --radius-sm: 8px;
+    --radius-md: 12px;            /* cards, tables */
+    --radius-lg: 16px;
+    --radius-xl: 20px;
 
-    /* Surfaces & text */
-    --bg: #f0f4f8;                 /* slate.1 — page background */
-    --surface: #ffffff;            /* cards, panels, modals */
-    --surface-header: #eff0f3;     /* slate.3 — table headers, header bar */
-    --text: #11181c;               /* slate.12 — body text */
-    --text-muted: #475467;         /* custom dark slate — AAA on --bg */
-    --border: #d8dcde;             /* slate.5 — subtle dividers */
+    /* ---- Shadows (soft, layered) ---- */
+    --shadow-xs: 0 1px 2px rgba(20, 24, 33, 0.05);
+    --shadow-sm: 0 1px 2px rgba(20, 24, 33, 0.04),
+        0 3px 8px rgba(20, 24, 33, 0.05);
+    --shadow-md: 0 2px 4px rgba(20, 24, 33, 0.04),
+        0 12px 28px rgba(20, 24, 33, 0.09);
+    --shadow-lg: 0 6px 16px rgba(20, 24, 33, 0.08),
+        0 24px 56px rgba(20, 24, 33, 0.14);
+    --shadow-xl: 0 12px 28px rgba(20, 24, 33, 0.12),
+        0 40px 80px rgba(20, 24, 33, 0.2);
 
-    /* Utility */
-    --radius: 10px;
-    --on-primary: #ffffff;         /* text/icons on primary surfaces */
+    /* ---- Motion ---- */
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-    /* Toast: a fixed dark card regardless of theme. */
-    --toast-bg: #11181c;
-    --toast-text: #fcfcfd;
+    /* ---- Utility ---- */
+    --on-primary: #ffffff;        /* text/icons on filled surfaces */
+    --toast-bg: #161b26;          /* fixed dark toast card */
+    --toast-text: #f6f7f9;
 }
 
 [data-theme="dark"] {
-    /* Brand stays consistent across themes for logo familiarity. */
-    --primary: #003580;
-    --primary-light: #202347;      /* dim indigo for dark-mode header bg */
-    --primary-hover: #5680eb;      /* lighter hover against dark surfaces */
+    /* Accent stays on the same indigo hue family; --accent flips to a
+       light indigo so text reads on dark surfaces. */
+    --primary: #4f46e5;           /* fills stay saturated + AA with white */
+    --primary-hover: #5b55ee;
+    --primary-light: #232748;     /* deep indigo tint for dark fills */
+    --accent: #a5b4fc;            /* links / emphasis text on dark */
+    --accent-strong: #c7d2fe;
+    --ring: color-mix(in srgb, var(--accent) 26%, transparent);
 
-    --success: #30a46c;            /* green.9 — pops on dark */
-    --success-light: #14352a;      /* deep green surface tone */
-    --success-hover: #4cc38a;      /* lighter hover */
+    --success: #30a46c;
+    --success-light: #123525;
+    --success-hover: #45cf91;
+    --danger: #e5484d;
+    --danger-light: #3a1a1c;
+    --danger-hover: #ec5d63;
+    --warning: #fbbf24;
 
-    --danger: #e5484d;             /* red.9 — pops on dark */
-    --danger-light: #481a18;       /* maroon surface tone */
-    --danger-hover: #ec5d63;       /* lighter hover */
+    /* TKP bobot mid-tones stay vivid on dark surfaces. */
+    --orange-300: #fb923c;
+    --yellow-300: #facc15;
+    /* Dark mode inverts the surface/border pairing: dark tint bg +
+       light border so the weight reads from the outline. */
+    --orange-200: #3d2210;
+    --orange-600: #fed7aa;
+    --amber-100: #3d2a0a;
+    --amber-500: #fef3c7;
 
-    --warning: #ffb224;            /* amber.10 — pops on dark */
+    --bg: #0e1116;
+    --surface: #161a21;
+    --surface-2: #1b2029;
+    --surface-header: #1e242e;
+    --surface-hover: #212836;
+    --text: #e9ebf0;
+    --text-muted: #a7b0bd;
+    --text-faint: #7c8694;
+    --border: #2a313d;
+    --border-strong: #3d4654;
 
-    /* TKP bobot mid-tones — dark mode chips stay vivid yellow/orange
-       so the badge still pops against dark gray answer-grid cells.
-       Slightly less harsh than the light-mode neon: #facc15 (yellow.4)
-       reads as bright but not blinding on dark surfaces. */
-    --orange-300: #fb923c;        /* orange.4 — saturated for dark */
-    --yellow-300: #facc15;        /* yellow.4 — saturated for dark */
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3),
+        0 3px 10px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.35),
+        0 14px 32px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 8px 20px rgba(0, 0, 0, 0.4),
+        0 28px 64px rgba(0, 0, 0, 0.55);
+    --shadow-xl: 0 16px 36px rgba(0, 0, 0, 0.5),
+        0 44px 96px rgba(0, 0, 0, 0.6);
 
-    /* TKP bobot tints + borders — dark mode inverts the surface/border
-       pairing. Light-mode = light-tint bg + dark border. Dark-mode =
-       dark-tint bg + LIGHT-tint border (using the light-mode 200 hue
-       as the border so the weight signal reads from the OUTLINE rather
-       than the FILL — better contrast on already-dark cells). */
-    --orange-200: #3d2210;        /* dimmed orange surface tone */
-    --orange-600: #fed7aa;        /* light-mode bg hue as dark-mode border */
-    --amber-100: #3d2a0a;         /* dimmed amber surface tone */
-    --amber-500: #fef3c7;         /* light-mode bg hue as dark-mode border */
-
-    --bg: #111113;                 /* slate.1 dark — page background */
-    --surface: #161618;            /* slate.2 dark — card/panel */
-    --surface-header: #20212a;     /* slate.3 dark — table headers */
-    --text: #ecedee;               /* slate.12 dark — body text */
-    --text-muted: #b4b8be;         /* slate.11 dark — AAA on --bg */
-    --border: #3b3d44;             /* slate.6 dark — subtle dividers */
-
-    --radius: 10px;
     --on-primary: #ffffff;
-
-    --toast-bg: #ecedee;
-    --toast-text: #11181c;
+    --toast-bg: #e9ebf0;
+    --toast-text: #161a21;
 }

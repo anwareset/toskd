@@ -3,58 +3,282 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-        <link rel="icon" href="/assets/toskd-emoticon.svg" type="image/svg+xml">
-        <title>TOSKD Beranda</title>
+        <link rel="icon" href="/assets/toskd-emoticon.svg" type="image/svg+xml" />
+        <title>TOSKD · Try Out SKD, Simulasi CAT Online</title>
+        <meta
+            name="description"
+            content="Try Out SKD gratis: simulasi CAT (Computer Assisted Test) TWK, TIU, dan TKP dengan timer real-time, penilaian otomatis, dan pembahasan lengkap."
+        />
         <link rel="stylesheet" href="/css/tokens.css" />
         <link rel="stylesheet" href="/css/styles.css" />
         <script src="/js/theme.js"></script>
     </head>
     <body>
         <div class="site-wrapper">
-            <div
-                class="container"
-                style="max-width: 520px; margin-top: 80px; flex: 1;"
-            >
-                <div class="card" style="text-align: center; padding: 0; overflow: hidden;">
-                    <!-- Accent bar at top -->
-                    <div class="home-accent"></div>
-                    <div style="padding: 36px 32px 32px 32px;">
-                        <h1 class="app-title" style="font-size: 2rem; margin-bottom: 6px;">
-                            Try Out SKD
-                        </h1>
-                        <p
-                            style="
-                                color: var(--text-muted);
-                                margin-bottom: 32px;
-                                font-size: 0.95rem;
-                            "
-                        >
-                            Simulasi CAT (Computer Assisted Test)
-                        </p>
-                        <button
-                            class="btn-main"
-                            onclick="location.href = '/select-pack.html'"
-                        >
-                            📝 Mulai Ujian
-                        </button>
-                        <button
-                            class="btn-main"
-                            onclick="location.href = '/bank-soal.html'"
-                        >
-                            📚 Bank Soal
-                        </button>
-                        <button
-                            class="btn-main"
-                            style="margin-bottom: 0;"
-                            onclick="location.href = '/scoreboard.html'"
-                        >
-                            🏆 Scoreboard
-                        </button>
+            <main class="landing">
+                <!-- ============ HERO ============ -->
+                <section class="landing-hero">
+                    <div class="container landing-hero-inner">
+                        <div class="landing-hero-copy">
+                            <span class="landing-eyebrow">Simulasi CAT Online</span>
+                            <h1 class="landing-title">
+                                Asah Kemampuan SKD,<br />
+                                <span class="landing-title-accent">Siap Lolos Seleksi</span>
+                            </h1>
+                            <p class="landing-lead">
+                                Latihan soal <strong>TWK</strong>, <strong>TIU</strong>,
+                                dan <strong>TKP</strong> dengan penilaian otomatis ala CAT
+                                BKN. Timer real-time, lembar jawaban, dan pembahasan
+                                lengkap tersedia di setiap soal.
+                            </p>
+                            <div class="landing-cta">
+                                <a class="btn-primary btn-lg" href="/select-pack.html">
+                                    Mulai Ujian
+                                </a>
+                                <a class="btn-secondary btn-lg" href="/scoreboard.html">
+                                    Lihat Scoreboard
+                                </a>
+                            </div>
+                            <div class="landing-stats">
+                                <div class="landing-stat">
+                                    <strong>3</strong>
+                                    <span>Subtes SKD</span>
+                                </div>
+                                <div class="landing-stat">
+                                    <strong>100%</strong>
+                                    <span>Penilaian otomatis</span>
+                                </div>
+                                <div class="landing-stat">
+                                    <strong>∞</strong>
+                                    <span>Latihan sepuasnya</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="landing-hero-visual">
+                            <div class="mock-exam" aria-hidden="true">
+                                <div class="mock-exam-head">
+                                    <span class="mock-exam-title">Try Out TIU · Paket 3</span>
+                                    <span class="mock-exam-timer">23:45</span>
+                                    <span class="mock-exam-end">Akhiri Ujian</span>
+                                </div>
+                                <div class="mock-exam-body">
+                                    <span class="mock-exam-qno">Soal 12 · TIU</span>
+                                    <p class="mock-exam-question">
+                                        Suatu proyek dikerjakan oleh 45 pekerja dan
+                                        direncanakan selesai dalam 36 hari. Setelah bekerja
+                                        selama 12 hari, 15 pekerja mengikuti pelatihan
+                                        selama 6 hari, sehingga hanya 30 pekerja yang tetap
+                                        bekerja. Setelah pelatihan selesai, seluruh pekerja
+                                        kembali bekerja. Agar proyek selesai tepat pada
+                                        hari ke-36, berapa pekerja tambahan yang harus
+                                        ditambahkan mulai hari ke-19 hingga proyek selesai?
+                                    </p>
+                                    <div class="mock-exam-options">
+                                        <div class="mock-opt">
+                                            <span class="mock-opt-key">A</span>
+                                            <span>3 orang</span>
+                                        </div>
+                                        <div class="mock-opt">
+                                            <span class="mock-opt-key">B</span>
+                                            <span>4 orang</span>
+                                        </div>
+                                        <div class="mock-opt selected">
+                                            <span class="mock-opt-key">C</span>
+                                            <span>5 orang</span>
+                                        </div>
+                                        <div class="mock-opt">
+                                            <span class="mock-opt-key">D</span>
+                                            <span>6 orang</span>
+                                        </div>
+                                        <div class="mock-opt">
+                                            <span class="mock-opt-key">E</span>
+                                            <span>7 orang</span>
+                                        </div>
+                                    </div>
+                                    <div class="mock-exam-grid">
+                                        <span class="mock-cell answered">1</span>
+                                        <span class="mock-cell answered">2</span>
+                                        <span class="mock-cell answered">3</span>
+                                        <span class="mock-cell">4</span>
+                                        <span class="mock-cell answered">5</span>
+                                        <span class="mock-cell answered">6</span>
+                                        <span class="mock-cell">7</span>
+                                        <span class="mock-cell answered">8</span>
+                                        <span class="mock-cell unanswered">9</span>
+                                        <span class="mock-cell answered">10</span>
+                                        <span class="mock-cell">11</span>
+                                        <span class="mock-cell current">12</span>
+                                        <span class="mock-cell answered">13</span>
+                                        <span class="mock-cell">14</span>
+                                        <span class="mock-cell answered">15</span>
+                                        <span class="mock-cell answered">16</span>
+                                        <span class="mock-cell unanswered">17</span>
+                                        <span class="mock-cell answered">18</span>
+                                        <span class="mock-cell">19</span>
+                                        <span class="mock-cell answered">20</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="float-badge float-badge--score" aria-hidden="true">
+                                🏅 Skor 87 · Lulus PG
+                            </div>
+                            <div class="float-badge float-badge--timer" aria-hidden="true">
+                                ⏱️ Timer sinkron multi-tab
+                            </div>
+                        </div>
                     </div>
+                </section>
+
+                <!-- ============ FITUR ============ -->
+                <section class="landing-section landing-section--alt">
+                    <div class="container">
+                        <div class="section-head">
+                            <span class="landing-eyebrow">Mengapa TOSKD</span>
+                            <h2 class="section-title">Menyimulasikan ujian CAT BKN sungguhan</h2>
+                            <p class="section-sub">
+                                Dari penilaian hingga suasana ujian, semua dirancang
+                                semirip mungkin dengan seleksi kompetensi dasar yang sebenarnya.
+                            </p>
+                        </div>
+                        <div class="landing-features">
+                            <div class="feature-card">
+                                <div class="feature-icon" aria-hidden="true">🧭</div>
+                                <h3>TWK · Wawasan Kebangsaan</h3>
+                                <p>
+                                    Meliputi Pilar Negara, Nilai Kebangsaan, dan Bahasa
+                                    Indonesia, dengan bobot 5 poin untuk setiap jawaban
+                                    benar.
+                                </p>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon" aria-hidden="true">🔢</div>
+                                <h3>TIU · Intelegensi Umum</h3>
+                                <p>
+                                    Meliputi aspek Verbal, Numerik, dan Figural untuk
+                                    mengasah logika berpikir.
+                                </p>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon" aria-hidden="true">⚖️</div>
+                                <h3>TKP · Karakteristik Pribadi</h3>
+                                <p>
+                                    Meliputi Pelayanan Publik, Jejaring Kerja, Sosial
+                                    Budaya, TIK, Anti Radikalisme, dan Profesionalisme.
+                                </p>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon" aria-hidden="true">⏱️</div>
+                                <h3>Timer CAT Real-time</h3>
+                                <p>
+                                    Hitung mundur yang sinkron antar tab dan perangkat,
+                                    dengan auto-submit saat waktu habis.
+                                </p>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon" aria-hidden="true">🗂️</div>
+                                <h3>Lembar Jawaban</h3>
+                                <p>
+                                    Navigasi cepat antar soal dengan status terjawab,
+                                    belum terjawab, dan lompatan satu ketukan.
+                                </p>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon" aria-hidden="true">📖</div>
+                                <h3>Pembahasan Lengkap</h3>
+                                <p>
+                                    Ulas jawaban benar-salah, skor per subtes, dan status
+                                    kelulusan terhadap passing grade.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ============ CARA KERJA ============ -->
+                <section class="landing-section">
+                    <div class="container">
+                        <div class="section-head">
+                            <span class="landing-eyebrow">Cara Kerja</span>
+                            <h2 class="section-title">Tiga langkah menuju skor terbaik</h2>
+                        </div>
+                        <div class="step-list">
+                            <div class="step-card">
+                                <span class="step-num">1</span>
+                                <h3>Pilih Paket Soal</h3>
+                                <p>
+                                    Pilih paket ujian sesuai subtes yang ingin kamu
+                                    latih, atau kerjakan semuanya sekaligus.
+                                </p>
+                            </div>
+                            <div class="step-card">
+                                <span class="step-num">2</span>
+                                <h3>Kerjakan dengan Timer</h3>
+                                <p>
+                                    Jawab soal dalam batas waktu ala CAT. Status jawaban
+                                    terpantau langsung di lembar jawaban.
+                                </p>
+                            </div>
+                            <div class="step-card">
+                                <span class="step-num">3</span>
+                                <h3>Lihat Hasil &amp; Pembahasan</h3>
+                                <p>
+                                    Terima skor otomatis, status kelulusan, dan pembahasan
+                                    lengkap untuk setiap soal.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ============ CTA ============ -->
+                <section class="landing-cta-band">
+                    <div class="container">
+                        <div class="cta-panel">
+                            <h2 class="cta-title">Siap mengukur kesiapanmu?</h2>
+                            <p class="cta-text">
+                                Latihan rutin adalah kunci menaklukkan SKD. Mulai dari
+                                paket ujian pertamamu sekarang.
+                            </p>
+                            <div class="landing-cta">
+                                <a class="btn-primary btn-lg" href="/select-pack.html">
+                                    Mulai Ujian Sekarang
+                                </a>
+                                <a class="btn-secondary btn-lg" href="/scoreboard.html">
+                                    Lihat Scoreboard
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+
+            <!-- ============ FOOTER ============ -->
+            <footer class="footer landing-footer">
+                <div class="landing-footer-inner">
+                    <div class="footer-brand-head">
+                        <img
+                            class="footer-logo"
+                            src="/assets/toskd-emoticon.svg"
+                            alt=""
+                            aria-hidden="true"
+                        />
+                        <strong>TOSKD</strong>
+                    </div>
+                    <p class="footer-tagline">
+                        Try Out SKD, simulasi CAT (Computer Assisted Test) untuk
+                        seleksi kompetensi dasar. Gratis dan tanpa batas.
+                    </p>
+                    <nav class="footer-nav">
+                        <a href="/select-pack.html">Mulai Ujian</a>
+                        <a href="/bank-soal.html">Bank Soal</a>
+                        <a href="/scoreboard.html">Scoreboard</a>
+                        <a href="/login.html">Login Admin</a>
+                    </nav>
                 </div>
-            </div>
-            <footer class="footer">
-                Untuk latihan SKD · Made with ♥️ in 2026
+                <div class="landing-footer-bottom">
+                    Untuk latihan SKD · Made with ♥️ in 2026
+                </div>
             </footer>
         </div>
     </body>
