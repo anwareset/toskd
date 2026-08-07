@@ -69,7 +69,6 @@ web_modules/
 # dotenv environment variable files
 .env
 .env.*
-!.env.example
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -152,6 +151,10 @@ vite.config.ts.timestamp-*
 Thumbs.db
 .vercel
 .env*
+# .env.example di-track sebagai referensi (contoh file env). Negasi harus
+# berada SETELAH pattern `.env*` di atas (semantik gitignore: pattern
+# terakhir yang match menang).
+!.env.example
 
 # Editors
 .vscode/
