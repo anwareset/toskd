@@ -581,16 +581,76 @@ body.is-drawer-open > *:not(.global-header):not(.global-nav-drawer):not(.global-
 }
 
 .btn-back {
-    background: none;
-    color: var(--accent);
-    padding: 8px 6px;
-    gap: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px 6px 6px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-xs);
+    color: var(--text);
+    white-space: nowrap;
+    transition: background 0.16s ease, color 0.16s ease,
+        border-color 0.16s ease, box-shadow 0.16s ease,
+        transform 0.16s var(--ease-out);
+}
+
+.btn-back .btn-back-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex: none;
+    border-radius: 999px;
+    background: var(--primary-light);
+    border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+    color: var(--primary);
+    transition: background 0.16s ease, color 0.16s ease,
+        border-color 0.16s ease, transform 0.14s var(--ease-out);
+}
+
+/* Chevron kiri digambar murni CSS (tanpa karakter panah teks) */
+.btn-back-icon::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-left: 2px solid currentColor;
+    border-top: 2px solid currentColor;
+    transform: rotate(-45deg);
+    margin-left: -1px;
+    border-radius: 1px;
+}
+
+.btn-back .btn-back-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.4;
 }
 
 .btn-back:hover {
-    color: var(--accent-strong);
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+    text-decoration: none;
+}
+
+.btn-back:hover .btn-back-icon {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--on-primary);
+    transform: translateX(-2px);
+}
+
+.btn-back:active {
+    transform: translateY(0) scale(0.97);
+}
+
+.btn-back:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--ring), var(--shadow-sm);
 }
 
 .btn-main {
