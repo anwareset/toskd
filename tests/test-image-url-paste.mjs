@@ -3,21 +3,23 @@
 // (raw URL) and IMAGE_MD_REGEX (markdown syntax) contracts used by
 // bindPasteImageHandler() in public/js/kelola-soal.js.
 //
-// Drift risk: regex literals are duplicated here (not exported from the
-// source). If public/js/kelola-soal.js changes either regex, update this
-// test file. Acceptable for a single-source-pattern contract.
+// Round-17 (2026-08-09): IMAGE_MD_REGEX is now IMPORTED from
+// public/js/markdown-image.js — the shared single source of truth (also
+// used by exam.js / review.js / kelola-soal.js and image-uploader.js) —
+// so the markdown contract can no longer drift. Only IMAGE_URL_REGEX is
+// still mirrored here (see NOTE below — it is no longer used in source).
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { IMAGE_MD_REGEX } from "../public/js/markdown-image.js";
 
-// Regexes mirrored from public/js/kelola-soal.js (keep in sync).
 // NOTE (post-Round-9d): IMAGE_URL_REGEX is no longer used in source (raw URL whole-text
 // auto-embed was dropped per user request). The 11 IMAGE_URL_REGEX tests below are
 // KEPT as documented contract for the URL-extension subpattern shared with
 // IMAGE_MD_REGEX's URL group. If you remove the regex from source entirely,
 // delete the IMAGE_URL_REGEX tests too.
+// IMAGE_MD_REGEX itself comes from public/js/markdown-image.js (import above).
 const IMAGE_URL_REGEX = /^https?:\/\/[^\s]+\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i;
-const IMAGE_MD_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\?[^)]*)?)\)/g;
 
 // ============================================================================
 // Round-9 / Round-9b: raw URL tests

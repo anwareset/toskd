@@ -10,17 +10,17 @@
 //   * isTkp(q) = false → unchanged binary flow (green/red highlights).
 // ============================================================================
 
-// Round-10 (2026-07-19): inline markdown ![]() → <img> tag helper.
-// Mirror of Round-9f's IMAGE_INLINE_REGEX + renderInlinePreview di
-// public/js/kelola-soal.js, adapted for HTML contexts (regex-replace
-// after each esc() call so injected <img> tags aren't escaped).
-const IMAGE_INLINE_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\?[^)]*)?)\)/g;
+// Round-17 (2026-08-09): renderInlineMd — thin local wrapper over the
+// shared helper in public/js/markdown-image.js (single source of truth;
+// the regex + render logic previously lived here AND in exam.js /
+// kelola-soal.js with slight drift). Input is already-pre-escaped HTML
+// (Quill innerHTML / DB rows), so the shared HTML-input variant is used
+// (no local esc — that would double-escape entities like `&amp;`).
+// Loaded before review.js via <script type="module"> in review.html, so
+// window.MarkdownImage is set when this runs. Used in renderQuestion()
+// at 4 sites: q.content, option labels (TKP + binary), q.explanation.
 function renderInlineMd(html) {
-  if (typeof html !== "string") return html;
-  return html.replace(
-    IMAGE_INLINE_REGEX,
-    '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin-top:8px">',
-  );
+  return window.MarkdownImage?.renderInlineMd(html) ?? html;
 }
 
 const resultId = new URLSearchParams(location.search).get("id");
@@ -231,7 +231,7 @@ function renderQuestion(idx) {
   qNoEl.textContent = `Soal ${idx + 1}`;
   let html = renderInlineMd(q.content);
   if (q.image_url)
-    html += `<img src="${q.image_url}" style="max-width:100%;margin-top:12px;border-radius:8px">`;
+    html += `<img src="${q.image_url}" referrerpolicy="no-referrer" style="max-width:100%;margin-top:12px;border-radius:8px">`;
   contentEl.innerHTML = html;
 
   if (isTkp(q)) {
@@ -276,7 +276,7 @@ function renderQuestion(idx) {
   explanationEl.style.display = "block";
   let expHtml = `<strong>Pembahasan:</strong><br>${renderInlineMd(q.explanation || "").replace(/(\r?\n)/g, "<br>")}`;
   if (q.explanation_image_url) {
-    expHtml += `<br><img src="${q.explanation_image_url}" style="max-width:100%;margin-top:12px;border-radius:8px">`;
+    expHtml += `<br><img src="${q.explanation_image_url}" referrerpolicy="no-referrer" style="max-width:100%;margin-top:12px;border-radius:8px">`;
   }
   explanationEl.innerHTML = expHtml;
   counterEl.textContent = `${idx + 1} / ${questions.length}`;

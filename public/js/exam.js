@@ -7,18 +7,17 @@
    AC6: wall-clock (timeLeft = duration − elapsed), bukan tick-count
    AC7/AC8: tidak ada perubahan server; tanpa sid di URL tetap tidak crash
 */
-// Round-10 (2026-07-19): inline markdown ![]() → <img> tag helper.
-// Mirror of Round-9f's IMAGE_INLINE_REGEX + renderInlinePreview di
-// public/js/kelola-soal.js, adapted for HTML contexts (regex-replace on
-// post-esc strings + raw content/explanation). Used in renderQuestion()
+// Round-17 (2026-08-09): renderInlineMd — thin local wrapper over the
+// shared helper in public/js/markdown-image.js (single source of truth;
+// the regex + render logic previously lived here AND in review.js /
+// kelola-soal.js with slight drift). Input is already-pre-escaped HTML
+// (Quill innerHTML / DB rows), so the shared HTML-input variant is used
+// (no local esc — that would double-escape entities like `&amp;`).
+// Loaded before exam.js via <script type="module"> in exam.html, so
+// window.MarkdownImage is set when this runs. Used in renderQuestion()
 // below at 2 sites: q.content + per-option label.
-const IMAGE_INLINE_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\?[^)]*)?)\)/g;
 function renderInlineMd(html) {
-  if (typeof html !== "string") return html;
-  return html.replace(
-    IMAGE_INLINE_REGEX,
-    '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin-top:8px">',
-  );
+  return window.MarkdownImage?.renderInlineMd(html) ?? html;
 }
 
 const params = new URLSearchParams(location.search);
@@ -247,7 +246,7 @@ function renderQuestion(idx) {
   qNoEl.textContent = `Soal ${idx + 1}`;
   let html = renderInlineMd(q.content);
   if (q.image_url)
-    html += `<img src="${q.image_url}" style="max-width:100%;margin-top:12px;border-radius:8px">`;
+    html += `<img src="${q.image_url}" referrerpolicy="no-referrer" style="max-width:100%;margin-top:12px;border-radius:8px">`;
   qContentEl.innerHTML = html;
   const sel = answers[q.id] || "";
   optionsEl.innerHTML = Object.entries(q.options)

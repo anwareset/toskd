@@ -4,6 +4,7 @@
 import "dotenv/config";
 import express from "express";
 import { execFileSync } from "node:child_process";
+import { lookup } from "node:dns/promises";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import supabase from "./db.js";
@@ -1239,6 +1240,132 @@ app.post("/api/upload-image", async (req, res) => {
   } catch (error) {
     console.error("Error uploading image:", error);
     res.status(500).json({ error: "Failed to upload image" });
+  }
+});
+
+// ============================================
+// IMAGE REHOST PROXY (public/js/image-uploader.js)
+// ============================================
+// POST /api/fetch-image — server-side download proxy for the markdown-image
+// rehost pipeline. The client tries a direct `fetch(url, { referrerPolicy:
+// "no-referrer" })` first (passes most Referer-based hotlink checks); when
+// that is blocked (no CORS headers, strict anti-hotlink rules), the client
+// falls back here. Node's fetch sends NO Referer header and is not subject
+// to CORS, so this reliably retrieves images that browsers cannot.
+//
+// Returns `{ image: "data:<mime>;base64,..." }` — the client stages the
+// bytes in IndexedDB and uploads them via /api/upload-image (keeps the
+// local-storage-first flow the user specified).
+//
+// Security:
+//   - requireAdmin (only authenticated CMS sessions can use the proxy).
+//   - http(s) scheme only.
+//   - SSRF guard: the hostname must resolve to a PUBLIC IP (loopback,
+//     private, link-local and CGNAT ranges rejected) so the proxy can't be
+//     abused to probe internal networks.
+//   - Response must be an image Content-Type, non-empty, ≤ 8MB.
+const FETCH_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+const FETCH_IMAGE_TIMEOUT_MS = 15000;
+
+// Private/reserved IPv4 + IPv6 ranges the proxy must never target.
+function isPrivateIp(ip) {
+  if (!ip) return true;
+  if (ip.includes(":")) {
+    const v = ip.toLowerCase();
+    // ::1 loopback, fc/fd unique-local, fe8-feB link-local, fec multicast.
+    return (
+      v === "::1" ||
+      v.startsWith("fc") ||
+      v.startsWith("fd") ||
+      /^fe[89ab]/.test(v) ||
+      /^fec/.test(v)
+    );
+  }
+  const parts = ip.split(".");
+  if (parts.length !== 4) return true;
+  const [a, b] = parts.map(Number);
+  if (parts.some((p) => Number.isNaN(Number(p)))) return true;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
+}
+
+async function isPublicHostname(hostname) {
+  try {
+    const { address } = await lookup(hostname);
+    return !isPrivateIp(address);
+  } catch {
+    return false; // unresolvable → block
+  }
+}
+
+app.post("/api/fetch-image", requireAdmin, async (req, res) => {
+  try {
+    const { url } = req.body || {};
+    if (typeof url !== "string" || !/^https?:\/\//i.test(url)) {
+      return res.status(400).json({ error: "url must be an http(s) URL" });
+    }
+
+    let hostname;
+    try {
+      hostname = new URL(url).hostname;
+    } catch {
+      return res.status(400).json({ error: "url is malformed" });
+    }
+    if (!(await isPublicHostname(hostname))) {
+      return res.status(400).json({ error: "url host is not public" });
+    }
+
+    // NOTE: known TOCTOU — we validate the IP via lookup() above but then
+    // fetch by hostname, so a DNS-rebinding race is theoretically possible.
+    // Accepted trade-off: this endpoint is requireAdmin-guarded (only
+    // authenticated CMS sessions), so the blast radius is the admin's own
+    // browser.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_IMAGE_TIMEOUT_MS);
+    let upstream;
+    try {
+      upstream = await fetch(url, {
+        redirect: "follow",
+        signal: controller.signal,
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; TOSKD/1.0)" },
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!upstream.ok) {
+      return res.status(502).json({ error: `upstream HTTP ${upstream.status}` });
+    }
+    const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
+    // Some CDNs serve images as application/octet-stream — accept those when
+    // the URL path itself ends in a known image extension.
+    const pathHasImageExt = /\.(png|jpe?g|gif|webp|svg|bmp)(\?.*)?$/i.test(
+      new URL(url).pathname,
+    );
+    const looksLikeImage =
+      contentType.startsWith("image/") ||
+      (contentType.includes("octet-stream") && pathHasImageExt);
+    if (!looksLikeImage) {
+      return res.status(400).json({ error: "upstream is not an image" });
+    }
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    if (buf.length === 0 || buf.length > FETCH_IMAGE_MAX_BYTES) {
+      return res.status(400).json({ error: "image is empty or too large" });
+    }
+    const mime = contentType.split(";")[0].trim();
+    res.json({
+      image: `data:${mime};base64,${buf.toString("base64")}`,
+    });
+  } catch (error) {
+    // AbortController timeout surfaces as AbortError.
+    console.error("Error in fetch-image:", error?.name, error?.message || error);
+    res.status(502).json({ error: "failed to fetch image" });
   }
 });
 

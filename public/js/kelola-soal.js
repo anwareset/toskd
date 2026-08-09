@@ -266,9 +266,11 @@ const toolbarOptions = {
 // Idempotency: __imagePasteBound flag on the quill instance prevents
 // duplicate matchers if initQuillEditors() is repeatedly invoked.
 // ============================================================================
-// Same regex shape as tests/test-image-url-paste.mjs IMAGE_MD_REGEX
-// (mirrored). Captures: 1 = alt text, 2 = url ending in image-ext.
-const IMAGE_MD_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\?[^)]*)?)\)/g;
+// Round-17 (2026-08-09): IMAGE_MD_REGEX now lives in
+// public/js/markdown-image.js — the shared single source of truth for the
+// markdown ![]() image pattern (also used by exam.js / review.js /
+// image-uploader.js and mirrored in tests/test-image-url-paste.mjs).
+// bindPasteImageHandler reads it from the window API below.
 
 function bindPasteImageHandler(quill) {
   if (quill.__imagePasteBound) return;
@@ -283,11 +285,14 @@ function bindPasteImageHandler(quill) {
       // Walk markdown regex; preserve inter-match text as text-ops,
       // substitute matches with image embeds. Multiple matches per
       // paste all handled.
+      const mdRe = window.MarkdownImage?.IMAGE_MD_REGEX;
+      if (!mdRe) return delta; // shared module not loaded → plain passthrough
+      mdRe.lastIndex = 0; // shared /g instance — reset before exec
       let lastIndex = 0;
       let match;
       let hasMd = false;
       const newDelta = new Delta();
-      while ((match = IMAGE_MD_REGEX.exec(text)) !== null) {
+      while ((match = mdRe.exec(text)) !== null) {
         hasMd = true;
         if (match.index > lastIndex) {
           newDelta.insert(text.substring(lastIndex, match.index));
@@ -305,19 +310,112 @@ function bindPasteImageHandler(quill) {
   });
 }
 
-// Round-12 (2026-07-19): renderInlineMd — mirror of Round-10 inline
-// markdown ![]() → <img> helper di exam.js + review.js, brought into
-// kelola-soal.js for Edit Soal Preview tab. HTML-input variant (no esc)
-// because renderPreview builds HTML strings (q.content is Quill innerHTML,
-// already pre-escaped). Applies at 7 sites in renderPreview(): q.content,
-// options A-E, q.explanation.
+// Round-12 (2026-07-19) + Round-17 (2026-08-09): renderInlineMd — thin
+// local wrapper over the shared helper in public/js/markdown-image.js
+// (single source of truth, also used by exam.js + review.js). HTML-input
+// variant (no esc — input is already-pre-escaped Quill innerHTML). The
+// resolveUrl mapper makes it relocation-aware: if the markdown URL was
+// rehosted to Vercel Blob by the image-uploader pipeline, the <img src>
+// points at the Blob copy so the preview shows the rehosted image, not the
+// original (possibly hotlink-blocked) server. Applies at 7 sites in
+// renderPreview(): q.content, options A-E, q.explanation.
 function renderInlineMd(html) {
-  if (typeof html !== "string") return html;
-  return html.replace(
-    IMAGE_MD_REGEX,
-    '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin-top:8px">',
+  return (
+    window.MarkdownImage?.renderInlineMd(html, {
+      resolveUrl: (url) => window.ImageUploader?.getBlobUrl(url),
+    }) ?? html
   );
 }
+
+// ============================================================================
+// IMAGE REHOST PIPELINE (2026-08-09) — public/js/image-uploader.js wiring
+// ============================================================================
+// User request: every markdown image `![alt](https://URL.COM/X.png)` entered
+// in the Add/Edit Soal modal or the Bulk Add editor is downloaded to local
+// storage (IndexedDB), uploaded to Vercel Blob, removed from local storage
+// once uploaded, and the Vercel Blob URL is what gets saved + displayed in
+// the preview, exam.html and review.html (anti-hotlink strategy).
+//
+// Design decisions:
+//   - The Quill editors are NEVER rewritten while the admin types (that would
+//     fight the caret/undo state). Instead the hidden <textarea> snapshots
+//     are updated in the background with Blob URLs, the Preview tab renders
+//     through the relocation-aware renderInlineMd/renderInlinePreview, and
+//     form submit awaits processText() so the SAVED payload carries Blob
+//     URLs. This keeps the editing surface stable and the data correct.
+//   - Scans are debounced (700ms) so typing is never blocked by network I/O;
+//     processText() is cheap when no image URLs are present.
+// ============================================================================
+let imageScanTimer = null;
+function scheduleImageScan() {
+  clearTimeout(imageScanTimer);
+  imageScanTimer = setTimeout(() => {
+    void scanSingleModalImages();
+  }, 700);
+}
+
+// Scan the 7 hidden textareas of the single-question modal, rehost any new
+// external image URLs (markdown + <img src> forms), and update the textareas
+// to the Blob URLs. Re-renders the Preview tab if it is open.
+async function scanSingleModalImages() {
+  const imageUploader = window.ImageUploader;
+  if (!imageUploader) return;
+  const fieldIds = [
+    "q-content-text",
+    "q-explanation",
+    "opt-a",
+    "opt-b",
+    "opt-c",
+    "opt-d",
+    "opt-e",
+  ];
+  const before = fieldIds.map((id) => document.getElementById(id)?.value || "");
+  const after = await Promise.all(before.map((t) => imageUploader.processText(t)));
+  let changed = false;
+  fieldIds.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el && el.value !== after[i]) {
+      el.value = after[i];
+      changed = true;
+    }
+  });
+  if (
+    changed &&
+    document.querySelector("#q-modal .tab-btn.active[data-tab='tab-preview']")
+  ) {
+    renderPreview();
+  }
+}
+
+// Number of external image URLs in `text` that could not be rehosted (still
+// reference the original server). Used to surface a warning on save.
+function countImageFailures(text) {
+  const imageUploader = window.ImageUploader;
+  if (!imageUploader || typeof text !== "string") return 0;
+  return imageUploader
+    .scanImageUrls(text)
+    .filter((u) => !imageUploader.getBlobUrl(u)).length;
+}
+
+let bulkImageScanTimer = null;
+function scheduleBulkImageScan() {
+  clearTimeout(bulkImageScanTimer);
+  bulkImageScanTimer = setTimeout(() => {
+    void scanBulkEditorImages();
+  }, 700);
+}
+
+// Bulk editor is plain text — the editor text is left untouched; re-parsing
+// re-renders the Preview with relocation-aware URLs (renderInlinePreview
+// consults window.ImageUploader.getBlobUrl at render time).
+async function scanBulkEditorImages() {
+  const imageUploader = window.ImageUploader;
+  if (!imageUploader || !window.bulkPasteEditor) return;
+  const text = window.bulkPasteEditor.getText();
+  const processed = await imageUploader.processText(text);
+  if (processed !== text) parseBulkInput();
+}
+
 function initQuillEditors() {
   if (quillInitialized || !window.Quill) return;
 
@@ -344,6 +442,7 @@ function initQuillEditors() {
     contentEditor.on("text-change", () => {
       document.getElementById("q-content-text").value =
         contentEditor.root.innerHTML;
+      scheduleImageScan(); // rehost markdown images → Vercel Blob
     });
 
     // Explanation editor
@@ -362,6 +461,7 @@ function initQuillEditors() {
     explanationEditor.on("text-change", () => {
       document.getElementById("q-explanation").value =
         explanationEditor.root.innerHTML;
+      scheduleImageScan(); // rehost markdown images → Vercel Blob
     });
 
     // Option editors (A-E)
@@ -391,6 +491,7 @@ function initQuillEditors() {
       optionEditors[k].on("text-change", () => {
         document.getElementById(textareaId).value =
           optionEditors[k].root.innerHTML;
+        scheduleImageScan(); // rehost markdown images → Vercel Blob
       });
     });
 
@@ -1031,12 +1132,33 @@ form.onsubmit = async (e) => {
     return;
   }
 
+  // Round-16 (2026-08-09): image rehost — await any in-flight markdown /
+  // <img> image uploads referenced by this soal so the SAVED content carries
+  // Vercel Blob URLs (not the original, possibly hotlink-blocked servers).
+  // Images that fail to upload keep their original URL and a warning is
+  // appended to the success notification.
+  const imageUploader = window.ImageUploader;
+  const [finalContent, finalExplanation] = await Promise.all([
+    imageUploader ? imageUploader.processText(content) : Promise.resolve(content),
+    imageUploader ? imageUploader.processText(explanation) : Promise.resolve(explanation),
+  ]);
+  const finalOptions = {};
+  let imageFailCount = 0;
+  for (const k of ["A", "B", "C", "D", "E"]) {
+    finalOptions[k] = imageUploader
+      ? await imageUploader.processText(options[k] || "")
+      : options[k];
+    imageFailCount += countImageFailures(finalOptions[k]);
+  }
+  imageFailCount +=
+    countImageFailures(finalContent) + countImageFailures(finalExplanation);
+
   const payload = {
-    content,
+    content: finalContent,
     question_type,
-    options,
+    options: finalOptions,
     correct_answer,
-    explanation,
+    explanation: finalExplanation,
     // No image fields needed - images are inline in content/explanation
     image: null,
     image_url: null,
@@ -1078,10 +1200,13 @@ form.onsubmit = async (e) => {
     if (!res.ok) throw new Error();
     modal.close();
     // Different message for add vs edit: id is truthy when editing.
+    const imageWarning = imageFailCount
+      ? ` · ${imageFailCount} gambar gagal diunggah (URL asli tetap dipakai)`
+      : "";
     if (id) {
-      showNotification("✓ Soal Diperbarui", "Soal berhasil diperbarui.");
+      showNotification("✓ Soal Diperbarui", `Soal berhasil diperbarui.${imageWarning}`);
     } else {
-      showNotification("✓ Soal Disimpan", "Soal berhasil disimpan.");
+      showNotification("✓ Soal Disimpan", `Soal berhasil disimpan.${imageWarning}`);
     }
     init();
   } catch (err) {
@@ -1470,6 +1595,7 @@ function initBulkQuillEditor() {
 
     window.bulkPasteEditor.on("text-change", () => {
       parseBulkInput();
+      scheduleBulkImageScan(); // rehost markdown images → Vercel Blob
     });
 
     console.log("Bulk Quill editor initialized");
@@ -1574,39 +1700,22 @@ function updateBulkSummary(parsed, valid, invalid, newFormatCount) {
   }
 }
 
-// IMAGE_INLINE_REGEX — markdown ![]() image syntax, mirrors the
-// pattern in bindPasteImageHandler (tests/test-image-url-paste.mjs
-// IMAGE_MD_REGEX). Used by renderInlinePreview for bulk-preview rendering
-// (NOT for paste interception — Round-9f keeps bulk paste plain-text).
-const IMAGE_INLINE_REGEX = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\?[^)]*)?)\)/g;
-
-// renderInlinePreview(rawText) — for bulk Preview tab. Converts markdown
-// ![]() syntax to inline <img> tags while HTML-escaping non-match text.
-// Idempotent — empty input returns empty string; no match returns just
-// esc(rawText). Used at 3 sites in renderBulkPreview (premise li,
-// question p, plain question div).
+// renderInlinePreview(rawText) — for the bulk Preview tab. Round-17: thin
+// local wrapper over the shared helper in public/js/markdown-image.js
+// (single source of truth): converts markdown ![]() to inline
+// <img class="bulk-md-image"> while HTML-escaping non-match text.
+// Idempotent — empty input returns ""; no match returns just esc(rawText).
+// resolveUrl maps rehosted Vercel Blob URLs so the preview shows the Blob
+// copy (anti-hotlink). Used at 4 sites in renderBulkPreview (premise li,
+// question p, plain question div, options A-E).
+// Degraded mode: if the shared module failed to load, fall back to
+// escaped raw text (never blank) so the bulk preview still shows content.
 function renderInlinePreview(rawText) {
-  if (!rawText) return "";
-  // Defensive lastIndex reset — IMAGE_INLINE_REGEX is /g-flagged,
-  // lastIndex persists across calls. Without reset, the second call's
-  // match would resume from where the first left off.
-  IMAGE_INLINE_REGEX.lastIndex = 0;
-  const parts = [];
-  let lastIndex = 0;
-  let match;
-  while ((match = IMAGE_INLINE_REGEX.exec(rawText)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(esc(rawText.substring(lastIndex, match.index)));
-    }
-    parts.push(
-      `<img src="${esc(match[2])}" alt="${esc(match[1])}" class="bulk-md-image">`,
-    );
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < rawText.length) {
-    parts.push(esc(rawText.substring(lastIndex)));
-  }
-  return parts.join("");
+  const fn = window.MarkdownImage?.renderInlinePreview;
+  if (!fn) return esc(rawText ?? "");
+  return fn(rawText, {
+    resolveUrl: (url) => window.ImageUploader?.getBlobUrl(url),
+  });
 }
 
 // Render Preview tab. Read-only list. Each row: #num + status badge +
@@ -1687,7 +1796,10 @@ function renderBulkPreview(parsedBlocks, validCount, invalidCount) {
               ? "bulk-option-line bulk-option-correct"
               : "bulk-option-line";
             const text = b.options[k] || "(kosong)";
-            return `<div class="${cls}"><span class="bulk-option-key">${k}.</span> ${esc(text)}</div>`;
+            // Round-16: render markdown ![]() inside option text as an inline
+            // <img> (relocation-aware), mirroring exam.html/review.html which
+            // already renderInlineMd option labels.
+            return `<div class="${cls}"><span class="bulk-option-key">${k}.</span> ${renderInlinePreview(text)}</div>`;
           })
           .join("");
       }
@@ -1829,25 +1941,53 @@ document.getElementById("q-bulk-form").onsubmit = async (e) => {
   const originalLabel = saveBtn.textContent;
   saveBtn.textContent = "Menyimpan...";
 
-  const payload = {
-    questions: validBlocks.map((b) => ({
-      content: b.content,
-      // New parser stores options as {A, B, C, D, E} object with the
-      // A./B./etc. prefix already stripped (v1 bug fix). correct_answer
-      // is the uppercased single letter.
-      options: b.options,
-      correct_answer: b.correct_answer,
-      explanation: b.explanation,
-      question_type:
-        document.getElementById("bulk-q-question-type")?.value ||
-        b.question_type,
-      // TKP weighted-scoring (spec §5.1 / §9.2): bulk-parser attaches
-      // option_scores to TKP blocks via tkpWeightsFromKey(key). Forward it
-      // to the server so bulk-inserted TKP soal persist with weights.
-      // Binary blocks leave it null so the server stores NULL.
-      option_scores: b.option_scores ?? null,
-    })),
-  };
+  // Round-16 (2026-08-09): image rehost — transform every valid block so the
+  // saved content/options/explanation carry Vercel Blob URLs instead of the
+  // original image servers. Blocks without images resolve instantly.
+  const imageUploader = window.ImageUploader;
+  let bulkImageFailCount = 0;
+  const questions = await Promise.all(
+    validBlocks.map(async (b) => {
+      const content = imageUploader
+        ? await imageUploader.processText(b.content)
+        : b.content;
+      const explanation = imageUploader
+        ? await imageUploader.processText(b.explanation || "")
+        : b.explanation;
+      const options = {};
+      for (const k of ["A", "B", "C", "D", "E"]) {
+        options[k] = imageUploader
+          ? await imageUploader.processText(b.options[k] || "")
+          : b.options[k];
+      }
+      bulkImageFailCount +=
+        countImageFailures(content) +
+        countImageFailures(explanation) +
+        ["A", "B", "C", "D", "E"].reduce(
+          (n, k) => n + countImageFailures(options[k]),
+          0,
+        );
+      return {
+        content,
+        // New parser stores options as {A, B, C, D, E} object with the
+        // A./B./etc. prefix already stripped (v1 bug fix). correct_answer
+        // is the uppercased single letter.
+        options,
+        correct_answer: b.correct_answer,
+        explanation,
+        question_type:
+          document.getElementById("bulk-q-question-type")?.value ||
+          b.question_type,
+        // TKP weighted-scoring (spec §5.1 / §9.2): bulk-parser attaches
+        // option_scores to TKP blocks via tkpWeightsFromKey(key). Forward it
+        // to the server so bulk-inserted TKP soal persist with weights.
+        // Binary blocks leave it null so the server stores NULL.
+        option_scores: b.option_scores ?? null,
+      };
+    }),
+  );
+
+  const payload = { questions };
 
   try {
     const res = await wrapFetch("/api/questions/bulk", {
@@ -1860,7 +2000,13 @@ document.getElementById("q-bulk-form").onsubmit = async (e) => {
     bulkModal.close();
     if (window.bulkPasteEditor) window.bulkPasteEditor.setText("");
     window.lastBulkParse = [];
-    showNotification("✓ Soal Ditambahkan", `${data.inserted ?? validBlocks.length} soal berhasil ditambahkan`);
+    const bulkImageWarning = bulkImageFailCount
+      ? ` · ${bulkImageFailCount} gambar gagal diunggah (URL asli tetap dipakai)`
+      : "";
+    showNotification(
+      "✓ Soal Ditambahkan",
+      `${data.inserted ?? validBlocks.length} soal berhasil ditambahkan${bulkImageWarning}`,
+    );
     init(); // refresh table to show new rows
   } catch (err) {
     if (err.message === "wrapFetch:SESSION_EXPIRED" || err.message.startsWith("wrapFetch:SERVER_ERROR_")) return;
@@ -2278,5 +2424,34 @@ if (typeof document !== "undefined") {
     initTkpListeners();
     initBulkHelpModeToggle();
   }
+}
+
+// ============================================================================
+// IMAGE REHOST: live preview refresh (Round-16, 2026-08-09)
+// ============================================================================
+// When a rehost completes (background scan, bulk scan, or save-time await),
+// refresh whichever modal is open so Vercel Blob images appear immediately
+// in the Preview tabs. Guarded against loops: the re-scan only emits another
+// event when a URL *transitions* to done, and a scan with zero new URLs never
+// emits — so this listener chain always terminates.
+const imageUploaderApi = window.ImageUploader;
+if (imageUploaderApi?.onRehosted) {
+  imageUploaderApi.onRehosted(() => {
+    try {
+      if (typeof bulkModal !== "undefined" && bulkModal?.open && window.lastBulkParse) {
+        const parsed = window.lastBulkParse;
+        renderBulkPreview(
+          parsed,
+          parsed.filter((b) => b.status === "valid").length,
+          parsed.filter((b) => b.status === "invalid").length,
+        );
+      }
+      if (typeof modal !== "undefined" && modal?.open) {
+        void scanSingleModalImages();
+      }
+    } catch (err) {
+      console.warn("[image-rehost] preview refresh error:", err);
+    }
+  });
 }
 

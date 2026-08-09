@@ -70,17 +70,24 @@ toskd/
 │       ├── kelola-soal.js        # Kelola bank soal: CRUD + Quill.js editor (full toolbar) + image upload ke Vercel Blob + TKP Bobot dropdown (1-5, dedupe otomatis) + bulk-add modal dengan TKP format help
 │       ├── paket-soal.js         # Kelola paket soal: CRUD + subtes chip picker 1-3 + per-subtest threshold inputs + live running total + sortable/pagination table + Subtes column (chip-styled)
 │       ├── paket-detail.js       # Relasi soal ↔ paket: drag-and-drop reorder + tentative selection + subtest-filtered bank list (only questions matching pack.subtests shown) + partial-failure add-to-pack
-│       └── bulk-parser.js        # ESM parser untuk bulk-add soal format v2 (premise list + lead-in + options A–E + key + TKP `Bobot:` line parsing) + previewHtmlForCell helper
+│       ├── bulk-parser.js        # ESM parser untuk bulk-add soal format v2 (premise list + lead-in + options A–E + key + TKP `Bobot:` line parsing) + previewHtmlForCell helper
+│       ├── image-uploader.js     # Pipeline rehost gambar anti-hotlink: scan ![alt](url)/<img src> → download (no-referrer + fallback /api/fetch-image) → IndexedDB staging → upload Vercel Blob → cleanup (window.ImageUploader)
+│       └── markdown-image.js     # Modul BERSAMA render markdown-img: IMAGE_MD_REGEX + renderInlineMd/renderInlinePreview (single source of truth, dipakai exam.js/review.js/kelola-soal.js; muat sbg <script type="module"> sebelum classic scripts)
 ├── src/
-│   ├── server.js                 # API Express.js (Vercel Serverless Function) - TKP weighted scoring (scoreForQuestion + validateOptionScores) + normalizePackInput + validateQuestionMatchesPack
+│   ├── server.js                 # API Express.js (Vercel Serverless Function) - TKP weighted scoring (scoreForQuestion + validateOptionScores) + normalizePackInput + validateQuestionMatchesPack + POST /api/fetch-image (proxy download anti-hotlink: requireAdmin + SSRF guard)
 │   └── db.js                     # Supabase client connection
+├── scripts/
+│   └── migrate-images.mjs        # CLI migrasi massal gambar soal → Vercel Blob (pnpm migrate:images; dry-run default, --apply untuk eksekusi)
 ├── tests/                        # Unit tests (Node built-in test runner; run via `pnpm test`)
 │   ├── test-bulk-parser.mjs                       # Unit tests untuk public/js/bulk-parser.js (parser + previewHtmlForCell)
 │   ├── test-bulk-patterns-catalog.mjs             # Catalog regression suite untuk bulk-input patterns (parser integration)
-│   ├── test-image-url-paste.mjs                   # IMAGE_URL_REGEX / IMAGE_MD_REGEX paste contract (kelola-soal.js bindPasteImageHandler)
+│   ├── test-image-url-paste.mjs                   # IMAGE_URL_REGEX paste contract; IMAGE_MD_REGEX di-import dari markdown-image.js (modul bersama)
 │   ├── test-health.mjs                            # GET /health readiness probe (mock PostgREST: 200 ready / 503 unavailable / version fallback)
 │   ├── test-tkp-bobot.mjs                         # Unit tests untuk TKP Bobot validation (option_scores invariants: himpunan {1..5})
-│   └── test-tkp-scoring.mjs                       # Integration tests untuk TKP weighted scoring (scoreForQuestion + computePackScore)
+│   ├── test-tkp-scoring.mjs                       # Integration tests untuk TKP weighted scoring (scoreForQuestion + computePackScore)
+│   ├── test-image-rehost.mjs                      # Pure helpers scan/replace (image-uploader.js: scanImageUrls/applyUrlReplacements/isRehostedUrl)
+│   ├── test-migrate-images.mjs                    # URL collection + transformasi field (scripts/migrate-images.mjs)
+│   └── test-markdown-render.mjs                   # renderInlineMd/renderInlinePreview/IMAGE_MD_REGEX (markdown-image.js)
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)
 ├── Dockerfile                    # Multi-stage Docker build (node:22-alpine, non-root, tini init, HEALTHCHECK)
 ├── .dockerignore                 # Exclude node_modules, .env, specs/, tests/ dari image

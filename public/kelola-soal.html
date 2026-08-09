@@ -1143,6 +1143,16 @@ Jawaban C paling mencerminkan pentingnya gotong royong karena menjelaskan peran 
             </footer>
         </div>
         <script type="module" src="/js/bulk-parser.js"></script>
+        <!-- Shared markdown-image helpers (single source of truth for
+             IMAGE_MD_REGEX / renderInlineMd / renderInlinePreview). Loaded
+             explicitly (and also as a dependency of image-uploader.js) so
+             window.MarkdownImage is guaranteed present — kelola-soal.js
+             must NOT depend on the import side-effect alone. -->
+        <script type="module" src="/js/markdown-image.js"></script>
+        <!-- Image rehost pipeline (markdown ![]() → Vercel Blob). Must load
+             BEFORE kelola-soal.js (module scripts are deferred, run in
+             document order) so window.ImageUploader is present at runtime. -->
+        <script type="module" src="/js/image-uploader.js"></script>
         <script defer src="/js/kelola-soal.js"></script>
     </body>
 </html>
