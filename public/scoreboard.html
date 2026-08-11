@@ -14,10 +14,27 @@
             <div class="container" style="flex: 1">
                 <div class="header">
                     <h1 class="app-title">🏆 Scoreboard</h1>
-                    <button class="btn-back" onclick="location.href = '/'">
-                        <span class="btn-back-icon" aria-hidden="true"></span>
-                        <span class="btn-back-label">Kembali</span>
-                    </button>
+                    <div
+                        class="header-actions"
+                        style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap"
+                    >
+                        <!-- Admin-only: disembunyikan default; wireAdminReset()
+                             di scoreboard.js menampilkannya hanya jika
+                             GET /api/admin/me mengembalikan sesi admin.
+                             Style mengikuti .global-header-logout-btn (pill danger). -->
+                        <button
+                            id="reset-scoreboard-btn"
+                            class="global-header-logout-btn"
+                            type="button"
+                            style="display: none"
+                        >
+                            Reset Scoreboard
+                        </button>
+                        <button class="btn-back" onclick="location.href = '/'">
+                            <span class="btn-back-icon" aria-hidden="true"></span>
+                            <span class="btn-back-label">Kembali</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div id="loading" class="loading-overlay">
@@ -215,6 +232,90 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- ==================== RESET SCOREBOARD CONFIRM MODAL ====================
+                     Admin-only. Tombol pemicunya (#reset-scoreboard-btn) hanya tampil
+                     saat /api/admin/me resolve (lihat wireAdminReset di scoreboard.js).
+                     Konfirmasi memanggil DELETE /api/scoreboard (requireAdmin) yang
+                     menghapus semua baris exam_results — scoreboard kosong + counter
+                     "Dikerjakan N×" kembali ke 0. Markup mengikuti pola
+                     dialog.modal delete-pack di paket-soal.html. -->
+                <dialog
+                    id="reset-scoreboard-modal"
+                    class="modal"
+                    style="max-width: 480px"
+                >
+                    <div class="modal-content">
+                        <h3>♻️ Konfirmasi Reset Scoreboard</h3>
+
+                        <p style="margin-top: 4px">
+                            Semua hasil ujian peserta akan dihapus permanen:
+                            scoreboard menjadi kosong dan counter
+                            <strong>"Dikerjakan N×"</strong> di paket-soal /
+                            select-pack kembali ke 0.
+                        </p>
+
+                        <p
+                            id="reset-scoreboard-count"
+                            style="font-weight: 600; margin-top: 10px"
+                        ></p>
+
+                        <div class="modal-buttons">
+                            <button
+                                class="btn-secondary"
+                                id="reset-scoreboard-cancel-btn"
+                                type="button"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                class="btn-danger"
+                                id="reset-scoreboard-confirm-btn"
+                                type="button"
+                            >
+                                Ya, Reset
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
+
+                <!-- ==================== NOTIFICATION MODAL ====================
+                     Feedback sukses reset (per user request 2026-08-11). Single OK
+                     button — informational only, no confirmation. Mirror of the
+                     same pattern in public/kelola-soal.html & public/paket-detail.html.
+                     JS di public/js/scoreboard.js :: showNotification(title, message). -->
+                <dialog
+                    id="notification-modal"
+                    class="modal"
+                    style="max-width: 480px"
+                >
+                    <div class="modal-content">
+                        <h3 id="notification-title">ℹ️ Info</h3>
+                        <div
+                            style="
+                                padding: 8px 0 16px;
+                                font-size: 0.95rem;
+                                line-height: 1.6;
+                            "
+                        >
+                            <p
+                                id="notification-message"
+                                style="margin: 0"
+                            >
+                                — placeholder —
+                            </p>
+                        </div>
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-primary"
+                                id="notification-ok-btn"
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
             </div>
             <footer class="footer">
                 Untuk latihan SKD · Made with ♥️ in

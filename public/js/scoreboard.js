@@ -88,6 +88,12 @@ async function init() {
   bindNav("bottom");
   bindSortHeaders();
 
+  wireAdminReset();
+  // Admin check dijalankan terpisah dari tombol reset (2026-08-11) supaya
+  // link participant → review.html tidak bergantung pada keberadaan markup
+  // tombol reset — dua fitur admin-only yang independen.
+  checkAdmin();
+
   reapplyView();
 }
 
@@ -171,9 +177,13 @@ function renderTable(rankById) {
       // Participant name deep-links to the pembahasan review page.
       // Defensive fallback (r.id missing) preserves the existing tolerant
       // behavior of the previous implementation.
-      const nameCell = r.id
-        ? `<a class="participant-link" href="/review.html?id=${encodeURIComponent(r.id)}" title="Lihat pembahasan untuk ${esc(r.participant_name)}">${esc(r.participant_name)}</a>`
-        : esc(r.participant_name);
+      // Deep-link ke review.html hanya untuk admin (2026-08-11): peserta
+  // public melihat nama sebagai teks polos — hasil orang lain tidak boleh
+  // diakses (server-side juga enforce 403 di /api/exam/:id/results).
+  const nameCell =
+    r.id && isAdmin
+      ? `<a class="participant-link" href="/review.html?id=${encodeURIComponent(r.id)}" title="Lihat pembahasan untuk ${esc(r.participant_name)}">${esc(r.participant_name)}</a>`
+      : esc(r.participant_name);
       // Spec: kelola-soal-mobile-table-spec §6.2 — sticky-left on the No
       // column only (scoreboard has no Aksi column → no sticky-right).
       return `<tr><td class="sticky-col-left">${globalIdx}</td><td>${nameCell}</td><td>${esc(r.question_packs?.name || "-")}</td><td>${r.score}</td><td class="${sc}">${r.status}</td><td>${d}</td></tr>`;
@@ -317,6 +327,131 @@ function bindSortHeaders() {
       currentPage = 1; // Round 2: reset on sort change
       reapplyView();
     });
+}
+
+// ====== Admin-only: Reset Scoreboard ======
+// Button (#reset-scoreboard-btn) is hidden in markup; shown only when the
+// session cookie authenticates as admin (GET /api/admin/me — same pattern
+// as theme.js wireAuth). Confirm via the dialog.modal pattern (mirror of
+// paket-soal delete-pack modal), then DELETE /api/scoreboard (requireAdmin)
+// clears all exam_results — resetting BOTH the scoreboard AND the live
+// "Dikerjakan N×" completion_count on paket-soal/select-pack.
+const resetScoreboardBtn = document.getElementById("reset-scoreboard-btn");
+const resetScoreboardModal = document.getElementById("reset-scoreboard-modal");
+const resetScoreboardConfirmBtn = document.getElementById(
+  "reset-scoreboard-confirm-btn",
+);
+const resetScoreboardCancelBtn = document.getElementById(
+  "reset-scoreboard-cancel-btn",
+);
+const resetScoreboardCountEl = document.getElementById(
+  "reset-scoreboard-count",
+);
+let isResetInFlight = false;
+// Admin-only UI state (2026-08-11): di-set oleh checkAdmin() setelah
+// GET /api/admin/me resolve. Dipakai untuk (a) menampilkan tombol
+// Reset Scoreboard dan (b) merender link participant → review.html
+// HANYA untuk admin — peserta public melihat nama sebagai teks polos
+// (server juga enforce via 403 di /api/exam/:id/results).
+let isAdmin = false;
+
+// ====== Notification modal (info-only, single OK button) ======
+// Replaces native alert() for reset success feedback (per user request
+// 2026-08-11). Mirror of the same pattern in public/js/kelola-soal.js &
+// public/js/paket-detail.js. Markup di public/scoreboard.html.
+const scoreboardNotificationModal = document.getElementById("notification-modal");
+const scoreboardNotificationTitleEl = document.getElementById("notification-title");
+const scoreboardNotificationMessageEl = document.getElementById("notification-message");
+const scoreboardNotificationOkBtn = document.getElementById("notification-ok-btn");
+if (scoreboardNotificationOkBtn) {
+  scoreboardNotificationOkBtn.addEventListener("click", () => {
+    if (scoreboardNotificationModal) scoreboardNotificationModal.close();
+  });
+}
+function showNotification(title, message) {
+  if (!scoreboardNotificationModal) {
+    // Fallback if modal markup didn't load.
+    alert(message);
+    return;
+  }
+  if (scoreboardNotificationTitleEl) scoreboardNotificationTitleEl.textContent = title;
+  if (scoreboardNotificationMessageEl) scoreboardNotificationMessageEl.textContent = message;
+  scoreboardNotificationModal.showModal();
+}
+
+// ====== Admin check (shared by Reset button + participant links) ======
+// GET /api/admin/me with the session cookie. 401/network → isAdmin stays
+// false: reset button hidden + participant names render as plain text
+// (no deep-link to review.html). Re-renders once resolved so links appear
+// even if renderTable already ran before the async fetch completed.
+async function checkAdmin() {
+  try {
+    const res = await fetch("/api/admin/me", { credentials: "same-origin" });
+    if (!res.ok) return; // logged out
+    const data = await res.json();
+    if (!data?.username) return;
+    isAdmin = true;
+    if (resetScoreboardBtn) resetScoreboardBtn.style.display = "";
+    reapplyView();
+  } catch (err) {
+    console.warn("[scoreboard] auth check failed:", err);
+  }
+}
+
+function wireAdminReset() {
+  if (!resetScoreboardBtn) return;
+
+  resetScoreboardBtn.addEventListener("click", () => {
+    resetScoreboardCountEl.textContent = allResults.length
+      ? `${allResults.length} hasil ujian akan dihapus permanen.`
+      : "Tidak ada hasil ujian yang tercatat saat ini.";
+    resetScoreboardModal?.showModal();
+  });
+
+  resetScoreboardCancelBtn?.addEventListener("click", () => {
+    resetScoreboardModal?.close();
+  });
+
+  resetScoreboardConfirmBtn?.addEventListener("click", async () => {
+    if (isResetInFlight) return;
+    isResetInFlight = true;
+    resetScoreboardConfirmBtn.disabled = true;
+    resetScoreboardConfirmBtn.textContent = "Mereset…";
+    try {
+      const r = await fetch("/api/scoreboard", {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      if (r.status === 401) {
+        // Session expired mid-use → hide the admin button + close modal.
+        resetScoreboardBtn.style.display = "none";
+        resetScoreboardModal?.close();
+        return;
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      allResults = [];
+      filteredResults = [];
+      resetScoreboardModal?.close();
+      // Re-render: empty-state "Belum ada data hasil ujian." appears.
+      reapplyView();
+      showNotification(
+        "✓ Reset Berhasil",
+        `${data.deleted} hasil ujian telah dihapus. Scoreboard kosong dan counter "Dikerjakan N×" kembali ke 0.`,
+      );
+      console.log(`[scoreboard] reset done, deleted=${data.deleted ?? 0}`);
+    } catch (err) {
+      console.error("[scoreboard] reset failed:", err);
+      // Tutup modal konfirmasi lalu tampilkan error via modal notifikasi
+      // (bukan pesan inline) — konsisten dengan pola kelola-soal/paket-detail.
+      resetScoreboardModal?.close();
+      showNotification("❌ Gagal Mereset", "Gagal mereset. Coba lagi.");
+    } finally {
+      isResetInFlight = false;
+      resetScoreboardConfirmBtn.disabled = false;
+      resetScoreboardConfirmBtn.textContent = "Ya, Reset";
+    }
+  });
 }
 
 init();

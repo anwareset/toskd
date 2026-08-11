@@ -123,9 +123,68 @@ function computeBreakdowns() {
   return { counts, earned };
 }
 
+// Overlay akses ditolak (per user request 2026-08-11): saat endpoint
+// /api/exam/:id/results mengembalikan 403 (bukan admin & bukan pemilik),
+// tampilkan modal ramah + countdown 5 detik lalu redirect ke beranda —
+// mirror dari showAlreadyDoneOverlay() di exam.js (pola "Ujian Telah
+// Selesai" saat participant mencoba kembali ke halaman ujian).
+// CSS: #access-denied-overlay dibagi dgn #exam-done-overlay (styles.css);
+// kartu & timer reuse kelas .exam-done-card / .exam-done-icon / .exam-done-timer.
+function showAccessDeniedOverlay() {
+  const overlay = document.createElement("div");
+  overlay.id = "access-denied-overlay";
+  overlay.innerHTML = `
+    <div class="exam-done-card">
+      <div class="exam-done-icon">🔒</div>
+      <h2>Akses Ditolak</h2>
+      <p>Anda tidak berhak melihat hasil ujian ini, atau sesi akses Anda telah berakhir.</p>
+      <button class="btn-primary" id="access-denied-home-btn">🏠 Kembali ke Beranda</button>
+      <p class="exam-done-timer">Anda akan diarahkan otomatis dalam <span id="access-denied-countdown">5</span> detik…</p>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // Tombol manual "Kembali ke Beranda".
+  document.getElementById("access-denied-home-btn").onclick = () => {
+    clearInterval(interval);
+    location.href = "/";
+  };
+
+  // Auto-redirect countdown (5 detik) — mirror exam.js. Guard countdownEl
+  // defensif: kalau elemen tidak ada, redirect tetap berjalan (tanpa angka).
+  let sec = 5;
+  const countdownEl = document.getElementById("access-denied-countdown");
+  const interval = setInterval(() => {
+    sec--;
+    if (sec <= 0) {
+      clearInterval(interval);
+      location.href = "/";
+    } else if (countdownEl) {
+      countdownEl.textContent = sec;
+    }
+  }, 1000);
+}
+
 async function init() {
   try {
     const r = await fetch(`/api/exam/${resultId}/results`);
+    if (!r.ok) {
+      // Access-controlled endpoint (2026-08-11): hanya admin atau pemilik
+      // hasil (participant cookie) yang boleh melihat. 403 → tampilkan
+      // pesan akses ditolak alih-alih error generik.
+      if (r.status === 403) {
+        // Bisa jadi (a) bukan admin & bukan pemilik hasil ini, atau
+        // (b) pemilik tapi cookie akses sudah kadaluarsa — server tidak
+        // bisa membedakan keduanya, jadi pesan dibuat netral.
+        // Tampilkan overlay modal + auto-redirect ke beranda (mirror
+        // showAlreadyDoneOverlay di exam.js).
+        loadingEl.style.display = "none";
+        showAccessDeniedOverlay();
+      } else {
+        throw new Error(`HTTP ${r.status}`);
+      }
+      return;
+    }
     result = await r.json();
     const q = await fetch(`/api/packs/${result.pack_id}/questions`);
     questions = (await q.json()) || [];

@@ -40,6 +40,12 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
 
 const COOKIE_NAME = "toskd_admin_sess";
 const COOKIE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Participant cookie (2026-08-11): diset saat /api/exam/submit sukses,
+// terikat ke result_id hasil ujian tersebut. Dipakai GET /api/exam/:id/results
+// untuk memastikan peserta PUBLIC hanya bisa melihat hasilnya sendiri.
+const PARTICIPANT_COOKIE_NAME = "toskd_participant_sess";
+const PARTICIPANT_COOKIE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 const SLIDING_REFRESH_THRESHOLD_MS = 12 * 60 * 60 * 1000; // refresh if < 12h remaining
 const BCRYPT_COST = 10;
 const MAX_USERNAME_LEN = 64;
@@ -121,6 +127,35 @@ function setSessionCookie(req, res, payload) {
   res.setHeader(
     "Set-Cookie",
     `${COOKIE_NAME}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${COOKIE_MAX_AGE_MS / 1000}${shouldUseSecureCookie(req) ? "; Secure" : ""}`,
+  );
+}
+
+// --- Participant session helpers (2026-08-11) ---
+// Read + verify the participant cookie (JWT HS256, same secret). Returns
+// decoded payload or null. NOTE: cookie name berbeda dari admin cookie,
+// jadi token peserta TIDAK pernah bisa dibaca sebagai sesi admin —
+// requireAdmin hanya membaca toskd_admin_sess.
+function readParticipantSession(req) {
+  const cookies = req.headers.cookie || "";
+  const match = cookies.match(
+    new RegExp(`(?:^|;\\s*)${PARTICIPANT_COOKIE_NAME}=([^;]+)`),
+  );
+  if (!match) return null;
+  try {
+    return jwt.verify(match[1], JWT_SECRET, { algorithms: ["HS256"] });
+  } catch (err) {
+    return null; // invalid or expired
+  }
+}
+
+// Set the participant cookie bound to a single exam result id. Same
+// cookie attributes as the admin session (HttpOnly, SameSite=Strict).
+function setParticipantCookie(req, res, payload) {
+  if (res.headersSent) return;
+  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "24h" });
+  res.setHeader(
+    "Set-Cookie",
+    `${PARTICIPANT_COOKIE_NAME}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${PARTICIPANT_COOKIE_MAX_AGE_MS / 1000}${shouldUseSecureCookie(req) ? "; Secure" : ""}`,
   );
 }
 
@@ -1016,6 +1051,14 @@ app.post("/api/exam/submit", async (req, res) => {
       .limit(1);
     if (dupCheckErr) throw dupCheckErr;
     if (existing && existing.length > 0) {
+      // Refresh participant cookie ke hasil yang sudah ada (2026-08-11):
+      // kalau cookie asli sudah kadaluarsa, redirect ke review miliknya
+      // sendiri setelah retry tetap diizinkan (bukan 403).
+      setParticipantCookie(req, res, {
+        kind: "participant",
+        result_id: existing[0].id,
+        participant_name,
+      });
       return res.status(409).json({
         error: "Anda sudah menyelesaikan ujian ini sebelumnya.",
         existing_id: existing[0].id,
@@ -1098,6 +1141,15 @@ app.post("/api/exam/submit", async (req, res) => {
       .insert({ pack_id, participant_name, score, status, answers })
       .select();
     if (error) throw error;
+    // Set participant cookie (2026-08-11): pemilik hasil ini. Dengan ini
+    // peserta yang baru selesai ujian bisa membuka /review.html?id=...
+    // miliknya sendiri, sementara hasil orang lain hanya untuk admin.
+    // Cookie terikat ke result_id spesifik (least privilege) + HttpOnly.
+    setParticipantCookie(req, res, {
+      kind: "participant",
+      result_id: data[0].id,
+      participant_name,
+    });
     res.status(201).json(data[0]);
   } catch (error) {
     console.error("Error submitting exam:", error);
@@ -1105,8 +1157,24 @@ app.post("/api/exam/submit", async (req, res) => {
   }
 });
 
-// Get exam results
+// Get exam results — access-controlled (2026-08-11):
+//   • Admin session (toskd_admin_sess) → boleh melihat hasil siapa pun
+//     (termasuk link participant dari scoreboard.html).
+//   • Participant cookie (toskd_participant_sess, diset saat submit) yang
+//     result_id-nya cocok → peserta hanya bisa melihat hasilnya sendiri.
+//   • Selain itu → 403 Forbidden. Melindungi /review.html?id=XXX dari
+//     akses publik via scoreboard atau URL yang disalin.
 app.get("/api/exam/:id/results", async (req, res) => {
+  const admin = readSession(req);
+  const participant = readParticipantSession(req);
+  const requestedId = Number(req.params.id);
+  const isOwner =
+    !!participant &&
+    participant.kind === "participant" &&
+    Number(participant.result_id) === requestedId;
+  if (!admin && !isOwner) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   try {
     const { data, error } = await supabase
       .from("exam_results")
@@ -1506,6 +1574,27 @@ app.get("/api/scoreboard-all", async (req, res) => {
   } catch (error) {
     console.error("Error fetching scoreboard:", error);
     res.status(500).json({ error: "Failed to fetch scoreboard" });
+  }
+});
+
+// Reset scoreboard (admin only) — DELETE all exam_results rows.
+// Menghapus seluruh hasil ujian: scoreboard.html jadi kosong, dan counter
+// live "Dikerjakan N×" di paket-soal.html / select-pack.html (completion_count,
+// dihitung dari exam_results di GET /api/packs) kembali ke 0.
+app.delete("/api/scoreboard", requireAdmin, async (req, res) => {
+  try {
+    // PostgREST/Supabase menolak DELETE tanpa WHERE (error 21000), jadi
+    // pakai filter .neq() yang cocok dengan SEMUA baris (id identity selalu > 0).
+    const { data, error } = await supabase
+      .from("exam_results")
+      .delete()
+      .neq("id", -1)
+      .select("id");
+    if (error) throw error;
+    res.json({ success: true, deleted: data?.length || 0 });
+  } catch (error) {
+    console.error("Error resetting scoreboard:", error);
+    res.status(500).json({ error: "Gagal mereset scoreboard" });
   }
 });
 

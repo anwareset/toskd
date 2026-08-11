@@ -1985,7 +1985,8 @@ tbody tr:hover .sticky-col-right {
 /* ==========================================================
  * 15. Exam done overlay
  * ========================================================== */
-#exam-done-overlay {
+#exam-done-overlay,
+#access-denied-overlay {
     position: fixed;
     inset: 0;
     z-index: 999;
