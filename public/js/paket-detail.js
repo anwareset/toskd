@@ -483,7 +483,7 @@ function renderBankList() {
         <span class="option-label">
           <strong>[${esc(q.question_type.toUpperCase())}]</strong> ${window.bulkParser.previewHtmlForCell(q.content)}
         </span>
-        <time class="bank-timestamp" datetime="${esc(q.created_at || "")}" data-tooltip="${esc(formatIndonesianFull(q.created_at))}" aria-label="Ditambahkan ${esc(formatIndonesianRelative(q.created_at))}">🕐 ${esc(formatIndonesianRelative(q.created_at))}</time>
+        <time class="bank-timestamp" datetime="${esc(q.created_at || "")}" title="${esc(formatIndonesianFull(q.created_at))}" aria-label="Ditambahkan ${esc(formatIndonesianRelative(q.created_at))}">🕐 ${esc(formatIndonesianRelative(q.created_at))}</time>
         ${renderUsageChip(q)}
       </label>
     `,
@@ -1219,10 +1219,6 @@ function setupDragAndDrop() {
     item.addEventListener("drop", handleDrop);
     item.addEventListener("dragend", handleDragEnd);
   });
-  // Mobile: HTML5 drag tidak berjalan di layar sentuh — pasang Pointer
-  // Events (touch drag) sebagai jalur kedua. No-op di perangkat tanpa
-  // sentuhan sehingga drag desktop tidak berubah.
-  setupTouchDragAndDrop();
 }
 
 function handleDragStart(e) {
@@ -1247,302 +1243,18 @@ function handleDrop(e) {
   if (addBtn.disabled) return;
   if (e.stopPropagation) e.stopPropagation();
   if (dragSourceEl !== this) {
-    reorderQuestion(
-      parseInt(dragSourceEl.dataset.index),
-      parseInt(this.dataset.index),
-    );
+    const srcIdx = parseInt(dragSourceEl.dataset.index);
+    const destIdx = parseInt(this.dataset.index);
+
+    // Reorder packQuestions array
+    const temp = packQuestions[srcIdx];
+    packQuestions.splice(srcIdx, 1);
+    packQuestions.splice(destIdx, 0, temp);
+
+    renderLists();
+    saveBtn.disabled = false;
   }
   return false;
-}
-
-// Shared reorder helpers — memindahkan soal dari srcIdx ke destIdx di
-// array packQuestions DAN memindahkan node DOM-nya (live reorder),
-// lalu men-sync ulang atribut data-index semua item agar lookup
-// berikutnya tetap benar. Dipakai oleh drag desktop (handleDrop),
-// drag sentuh live (pointermove) dan finalisasi drop (pointerup).
-function reorderQuestion(srcIdx, destIdx) {
-  if (
-    !Number.isInteger(srcIdx) ||
-    !Number.isInteger(destIdx) ||
-    srcIdx < 0 ||
-    destIdx < 0 ||
-    srcIdx >= packQuestions.length ||
-    destIdx >= packQuestions.length ||
-    srcIdx === destIdx
-  ) {
-    return;
-  }
-  const temp = packQuestions[srcIdx];
-  packQuestions.splice(srcIdx, 1);
-  packQuestions.splice(destIdx, 0, temp);
-
-  // Pindahkan node DOM agar posisi visual ikut berubah seketika
-  // (live reorder — ini yang membuat drop terasa natural di mobile).
-  const items = packList.querySelectorAll(".pack-question-item");
-  if (items.length === packQuestions.length) {
-    const srcNode = items[srcIdx];
-    const destNode = items[destIdx];
-    if (srcNode && destNode) {
-      if (srcIdx < destIdx) {
-        destNode.after(srcNode);
-      } else {
-        destNode.before(srcNode);
-      }
-      // Sync ulang data-index (urutan DOM kini = urutan array).
-      packList
-        .querySelectorAll(".pack-question-item")
-        .forEach((el, i) => el.setAttribute("data-index", String(i)));
-    }
-  }
-  return true;
-}
-
-function reorderQuestionFinalize() {
-  // Re-render daftar dari array (sudah berurutan) + aktifkan tombol
-  // "Simpan Urutan Soal". Dipanggil saat drop selesai (desktop & touch)
-  // dan di akhir drag touch — tidak dipanggil saat live reorder.
-  renderLists();
-  saveBtn.disabled = false;
-}
-
-// ---- Touch drag & drop (mobile) ----
-// HTML5 drag events (dragstart/dragover/drop) TIDAK berjalan di layar
-// sentuh. Untuk perangkat touch kita pakai Pointer Events dengan
-// LIVE REORDER (gaya SortableJS):
-//   pointerdown → mulai pantau (belum drag: masih tap biasa)
-//   pointermove → setelah melewati ambang gerak (~8px) baru "drag";
-//                 item yang diseret mengikuti jari (transform + class
-//                 .touch-dragging) dan begitu jari melewati tengah item
-//                 lain, item langsung pindah ke posisi itu (live reorder
-//                 via reorderQuestion). Auto-scroll saat jari mendekati
-//                 tepi daftar supaya item di luar layar terjangkau.
-//   pointerup   → finalisasi: render ulang daftar dari array yang sudah
-//                 berurutan + aktifkan tombol "Simpan Urutan Soal".
-// Ambang gerak memastikan tap biasa (checkbox, tombol Hapus, klik item)
-// tetap berfungsi normal; drag yang benar-benar terjadi dibatalkan
-// klik lanjutannya lewat e.preventDefault() di pointerup.
-// Hanya dipasang saat perangkat mendukung sentuh (touch pointer), jadi
-// drag desktop (mouse) tidak berubah sama sekali.
-let touchDragState = null;
-const TOUCH_DRAG_THRESHOLD_PX = 8;
-
-function isTouchDragDevice() {
-  return (
-    (window.PointerEvent &&
-      window.matchMedia &&
-      window.matchMedia("(pointer: coarse)").matches) ||
-    "ontouchstart" in window ||
-    navigator.maxTouchPoints > 0
-  );
-}
-
-function setupTouchDragAndDrop() {
-  if (!isTouchDragDevice()) return;
-  const items = packList.querySelectorAll(".pack-question-item");
-  items.forEach((item) => {
-    item.addEventListener("pointerdown", onPackItemPointerDown);
-    item.addEventListener("pointermove", onPackItemPointerMove);
-    item.addEventListener("pointerup", onPackItemPointerUp);
-    item.addEventListener("pointercancel", onPackItemPointerUp);
-  });
-}
-
-function onPackItemPointerDown(e) {
-  if (addBtn.disabled) return;
-  // Jangan mulai drag bila sentuhan dimulai dari kontrol interaktif
-  // (checkbox pilih, tombol Hapus) — tap di sana harus tetap berfungsi.
-  if (e.target.closest("input, button, a, select")) return;
-  const item = e.currentTarget;
-  const rect = item.getBoundingClientRect();
-  touchDragState = {
-    source: item,
-    startX: e.clientX,
-    startY: e.clientY,
-    // Jarak jari terhadap posisi item saat drag dimulai — konstan
-    // sepanjang drag, sehingga ghost selalu mengikuti jari dengan
-    // offset yang sama persis.
-    grabX: e.clientX - rect.left,
-    grabY: e.clientY - rect.top,
-    dragging: false,
-    suppressClick: false,
-    finalized: false,
-  };
-}
-
-function onPackItemPointerMove(e) {
-  if (!touchDragState || touchDragState.source !== e.currentTarget) return;
-  const s = touchDragState;
-
-  if (!s.dragging) {
-    const dx = e.clientX - s.startX;
-    const dy = e.clientY - s.startY;
-    // Belum melewati ambang gerak → masih tap; biarkan scroll sentuh
-    // normal terjadi.
-    if (Math.hypot(dx, dy) < TOUCH_DRAG_THRESHOLD_PX) return;
-    s.dragging = true;
-    s.suppressClick = true;
-    s.source.classList.add("touch-dragging");
-    if (s.source.setPointerCapture) {
-      try {
-        s.source.setPointerCapture(e.pointerId);
-      } catch (err) {
-        // abaikan
-      }
-    }
-  }
-
-  // Auto-scroll daftar saat jari mendekati tepi atas/bawah (list bisa
-  // lebih panjang dari layar; tanpa ini item di luar viewport tidak
-  // bisa dijangkau).
-  const listRect = packList.getBoundingClientRect();
-  const EDGE = 44;
-  if (e.clientY < listRect.top + EDGE) {
-    packList.scrollTop -= 12;
-  } else if (e.clientY > listRect.bottom - EDGE) {
-    packList.scrollTop += 12;
-  }
-
-  // Ghost mengikuti jari — transform SELALU relatif terhadap posisi
-  // layout item yang TIDAK berubah selama drag (item tidak dipindah
-  // node-nya). Hasilnya: tidak ada lompatan, tidak ada stuck.
-  const r = s.source.getBoundingClientRect();
-  s.source.style.transform = `translate(${e.clientX - r.left - s.grabX}px, ${e.clientY - r.top - s.grabY}px)`;
-  // Simpan posisi jari terakhir untuk animasi drop.
-  s.lastClientX = e.clientX;
-  s.lastClientY = e.clientY;
-
-  // Hitung posisi jatuh (TANPA memindahkan node): cari item yang
-  // berada di bawah jari, lalu tandai sebagai target.
-  s.source.style.visibility = "hidden";
-  let target = null;
-  try {
-    target = document.elementFromPoint(e.clientX, e.clientY);
-  } catch (err) {
-    target = null;
-  }
-  s.source.style.visibility = "";
-
-  const items = packList.querySelectorAll(".pack-question-item");
-  items.forEach((it) => it.classList.remove("drop-target"));
-  const targetItem = target ? target.closest(".pack-question-item") : null;
-  if (!targetItem || targetItem === s.source) return;
-
-  const rect = targetItem.getBoundingClientRect();
-  const before = e.clientY < rect.top + rect.height / 2;
-  targetItem.classList.add("drop-target");
-  targetItem.dataset.dropSide = before ? "before" : "after";
-}
-
-function onPackItemPointerUp(e) {
-  const s = touchDragState;
-  touchDragState = null;
-  if (!s || s.source !== e.currentTarget) return;
-
-  s.source.classList.remove("touch-dragging");
-  s.source.style.visibility = "";
-
-  if (s.suppressClick && e.cancelable) e.preventDefault();
-  if (!s.dragging || addBtn.disabled) {
-    s.source.style.transform = "";
-    return;
-  }
-
-  // Cari target terakhir yang ditandai selama drag.
-  const targetItem = s.source.parentElement.querySelector(
-    ".pack-question-item.drop-target",
-  );
-  packList
-    .querySelectorAll(".pack-question-item")
-    .forEach((it) => it.classList.remove("drop-target"));
-
-  if (!targetItem) {
-    s.source.style.transform = "";
-    return;
-  }
-
-  // Hitung indeks tujuan berdasar sisi jatuh (sebelum/sesudah target).
-  const srcIdx = parseInt(s.source.dataset.index, 10);
-  const targetIdx = parseInt(targetItem.dataset.index, 10);
-  if (!Number.isInteger(srcIdx) || !Number.isInteger(targetIdx)) {
-    s.source.style.transform = "";
-    return;
-  }
-  const before = targetItem.dataset.dropSide === "before";
-  let destIdx;
-  if (before) {
-    destIdx = srcIdx < targetIdx ? targetIdx - 1 : targetIdx;
-  } else {
-    destIdx = srcIdx < targetIdx ? targetIdx : targetIdx + 1;
-  }
-  if (destIdx === srcIdx) {
-    s.source.style.transform = "";
-    return;
-  }
-
-  // Ukur posisi item saat ini + delta drag terakhir — dipakai untuk
-  // menghitung offset awal animasi drop nanti.
-  const id = s.source.dataset.id;
-  const srcRect = s.source.getBoundingClientRect();
-  const dragDeltaX =
-    (s.lastClientX ?? s.startX) - srcRect.left - s.grabX;
-  const dragDeltaY =
-    (s.lastClientY ?? s.startY) - srcRect.top - s.grabY;
-
-  // Reorder array + render ulang.
-  reorderQuestion(srcIdx, destIdx);
-
-  // Animasi drop: item baru (hasil render) dimulai dari posisi ghost
-  // lama, lalu meluncur ke posisi aslinya di layout.
-  applyDropAnim(id, srcRect, dragDeltaX, dragDeltaY);
-}
-
-// Setelah render ulang (node item baru), animasikan item dari posisi
-// ghost ke posisi aslinya di layout. Tanpa animasi ini, item yang
-// dirender ulang langsung muncul di posisi final — tampak "nyentak".
-function applyDropAnim(id, srcRect, dragDeltaX, dragDeltaY) {
-  let item = null;
-  if (id) {
-    if (window.CSS && typeof CSS.escape === "function") {
-      item = packList.querySelector(
-        `.pack-question-item[data-id="${CSS.escape(id)}"]`,
-      );
-    } else {
-      packList
-        .querySelectorAll(".pack-question-item")
-        .forEach((el) => {
-          if (String(el.dataset.id) === String(id)) item = el;
-        });
-    }
-  }
-  if (!item) {
-    saveBtn.disabled = false;
-    return;
-  }
-
-  // Mulai dari posisi ghost: posisi visual awal = (posisi item lama +
-  // delta drag), lalu transisi ke posisi aslinya di layout.
-  item.classList.add("drop-anim");
-  const rect = item.getBoundingClientRect();
-  const offsetX = srcRect.left + dragDeltaX - rect.left;
-  const offsetY = srcRect.top + dragDeltaY - rect.top;
-  item.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
-
-  // Paksa satu frame agar offset awal terbaca, baru transisi ke 0.
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      item.style.transform = "";
-    });
-  });
-
-  let done = false;
-  const finalize = () => {
-    if (done) return;
-    done = true;
-    item.classList.remove("drop-anim");
-    saveBtn.disabled = false;
-  };
-  item.addEventListener("transitionend", finalize, { once: true });
-  window.setTimeout(finalize, 250);
 }
 
 function handleDragEnd() {
