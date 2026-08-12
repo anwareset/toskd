@@ -227,12 +227,18 @@
                             </div>
                         </div>
 
+                        <!-- Label panjang + pendek: di mobile (.btn-label-short)
+                             tombol memendek supaya tidak memenuhi layar; label
+                             panjang tetap di desktop. JS updateAddButtonLabel()
+                             me-render ulang kedua span ini dengan hitungan
+                             terpilih. -->
                         <button
                             class="btn-primary"
                             id="add-to-pack-btn"
                             style="margin-top: 16px; width: 100%"
                         >
-                            Masukkan Soal Terpilih ke Paket
+                            <span class="btn-label-long">Masukkan Soal Terpilih ke Paket</span
+                            ><span class="btn-label-short">Masukkan ke Paket</span>
                         </button>
                     </div>
 
@@ -326,15 +332,20 @@
                              bulk-remove-confirm-modal populated from
                              packSelectedIds Set + packQuestions array (mirror
                              single-delete-confirm-modal pattern). -->
+                        <!-- Label panjang + pendek (lihat komentar tombol add).
+                             Span hitungan (#bulk-remove-pack-count) tetap satu
+                             dan berada DI LUAR label, jadi updatePackSelectionUI()
+                             tidak perlu berubah untuk dua varian label. -->
                         <button
                             class="btn-danger"
                             id="bulk-remove-pack-btn"
                             style="margin-top: 16px; width: 100%"
                             disabled
                         >
-                            🗑 Hapus Terpilih
-                            <span id="bulk-remove-pack-count">0</span>
-                            Soal
+                            🗑 <span class="btn-label-long">Hapus Terpilih</span
+                            ><span class="btn-label-short">Hapus</span>
+                            <span id="bulk-remove-pack-count">0</span
+                            ><span class="btn-label-long"> Soal</span>
                         </button>
                         <button
                             class="btn-success"
@@ -342,7 +353,8 @@
                             style="margin-top: 8px; width: 100%"
                             disabled
                         >
-                            Simpan Urutan Soal
+                            <span class="btn-label-long">Simpan Urutan Soal</span
+                            ><span class="btn-label-short">Simpan Urutan</span>
                         </button>
                     </div>
                 </div>

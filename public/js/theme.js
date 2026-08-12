@@ -277,29 +277,44 @@
     document.body.appendChild(backdrop);
 
     function lockBodyScroll() {
-      // Save current scroll position. Use position:fixed to lock
-      // body in place — the standard iOS Safari workaround since
-      // overflow:hidden on body is unreliable there.
-      const scrollY = window.scrollY;
-      document.body.dataset.scrollLock = String(scrollY);
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.left = "0";
-      document.body.style.right = "0";
-      document.body.style.width = "100%";
+      // Already locked (rapid close→re-open before the close fade-out
+      // finished): keep the existing lock.
+      if (document.body.dataset.scrollLock !== undefined) return;
+      // Lock scroll via overflow:hidden on BOTH <html> and <body>.
+      // Unlike the old position:fixed + top:-scrollY technique, this
+      // keeps the body in flow, so window.scrollY is never reset by the
+      // browser and no scrollTo() is needed on unlock — the page does
+      // NOT visibly nudge when the drawer opens/closes (the "little
+      // vertical scroll" bug). overflow:hidden on <html> (not just
+      // body) is what makes this reliable on iOS Safari.
+      document.body.dataset.scrollLock = "1";
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
+      // .global-header di-pin position:fixed saat drawer terbuka (CSS)
+      // sehingga keluar dari flow — kompensasi body padding-top dengan
+      // tinggi header aktual + margin-bottom supaya konten di bawahnya
+      // TIDAK bergeser naik (layout jump) saat drawer dibuka. Diukur
+      // saat lock: getBoundingClientRect().height = tinggi border-box
+      // (61px di mobile), + margin-bottom (14px mobile / 0 landing)
+      // yang ikut hilang dari flow saat header jadi fixed. Body tetap
+      // in-flow, jadi padding-top ini murni menggantikan ruang header.
+      const gh = document.querySelector(".global-header");
+      if (gh) {
+        const h =
+          gh.getBoundingClientRect().height +
+          parseFloat(getComputedStyle(gh).marginBottom || "0");
+        document.body.style.paddingTop = `${h}px`;
+      }
       backdrop.classList.add("is-active");
     }
 
     function unlockBodyScroll() {
-      // Restore body styles + scroll back to captured position.
-      const scrollY = parseInt(document.body.dataset.scrollLock || "0", 10);
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.left = "";
-      document.body.style.right = "";
-      document.body.style.width = "";
+      if (document.body.dataset.scrollLock === undefined) return;
       delete document.body.dataset.scrollLock;
-      window.scrollTo(0, scrollY);
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+      document.body.style.paddingTop = "";
+      // window.scrollY never changed — nothing to restore.
       backdrop.classList.remove("is-active");
     }
 
@@ -335,20 +350,39 @@
     updateScrollCompact(); // set correct initial state on first paint
 
     // (d) Drawer open/close + focus management
+    // Pending unlock timer from a close that's still fading out. The
+    // body scroll unlock is DELAYED until the drawer's fade-out (0.28s
+    // CSS transition) finishes, so the page behind doesn't become
+    // scrollable / lose its blur while the drawer is still animating
+    // away — that instant hand-back is what made closing feel abrupt.
+    let closeUnlockTimer = null;
     function closeDrawer() {
       if (!drawer.classList.contains("is-open")) return;
       drawer.classList.remove("is-open");
       hamburgerBtn.setAttribute("aria-expanded", "false");
-      // Round 5: drop the body class so page scroll + blur return to normal
-      document.body.classList.remove("is-drawer-open");
-      // Round 6: iOS-safe scroll unlock + deactivate backdrop
-      unlockBodyScroll();
-      hamburgerBtn.focus();
+      // Round 5+6: drop the body class (page scroll + blur return) and
+      // unlock iOS-safe scroll AFTER the fade-out, not synchronously.
+      if (closeUnlockTimer) clearTimeout(closeUnlockTimer);
+      closeUnlockTimer = setTimeout(() => {
+        closeUnlockTimer = null;
+        // Rapid toggle: drawer was re-opened before the fade-out
+        // finished — keep the body locked, don't hand scroll back.
+        if (drawer.classList.contains("is-open")) return;
+        document.body.classList.remove("is-drawer-open");
+        unlockBodyScroll();
+        hamburgerBtn.focus();
+      }, 300);
     }
     hamburgerBtn.addEventListener("click", () => {
       if (drawer.classList.contains("is-open")) {
         closeDrawer();
         return;
+      }
+      // Cancel any pending close-unlock so a rapid re-open keeps the
+      // body locked (lockBodyScroll also guards against re-locking).
+      if (closeUnlockTimer) {
+        clearTimeout(closeUnlockTimer);
+        closeUnlockTimer = null;
       }
       drawer.classList.add("is-open");
       // Round 5: page-scroll-lock + page-blur class toggle on

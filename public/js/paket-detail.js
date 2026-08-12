@@ -476,18 +476,22 @@ function renderBankList() {
       '<p style="color:var(--text-muted);padding:12px">Tidak ada soal yang cocok.</p>';
   } else {
     bankList.innerHTML = pageData
-      .map(
-        (q) => `
+      .map((q) => {
+        const ts = formatIndonesianFull(q.created_at);
+        return `
       <label class="option-item" style="cursor:pointer;background:var(--surface);margin-bottom:8px">
         <input type="checkbox" name="add-q" value="${q.id}"${tentativeSelections.has(parseInt(q.id, 10)) ? " checked" : ""}>
         <span class="option-label">
           <strong>[${esc(q.question_type.toUpperCase())}]</strong> ${window.bulkParser.previewHtmlForCell(q.content)}
         </span>
-        <time class="bank-timestamp" datetime="${esc(q.created_at || "")}" title="${esc(formatIndonesianFull(q.created_at))}" aria-label="Ditambahkan ${esc(formatIndonesianRelative(q.created_at))}">🕐 ${esc(formatIndonesianRelative(q.created_at))}</time>
+        <span class="bank-timestamp-wrap">
+          <time class="bank-timestamp" datetime="${esc(q.created_at || "")}" aria-label="Ditambahkan ${esc(formatIndonesianRelative(q.created_at))}${ts ? `. ${ts}` : ""}">🕐 ${esc(formatIndonesianRelative(q.created_at))}</time>
+          ${ts ? `<span class="bank-timestamp-tooltip" role="tooltip"><strong>Ditambahkan</strong>${esc(ts)}</span>` : ""}
+        </span>
         ${renderUsageChip(q)}
       </label>
-    `,
-      )
+    `;
+      })
       .join("");
     typesetMath(bankList);
     updateAddButtonLabel();
@@ -697,10 +701,21 @@ function updateAddButtonLabel() {
   // reflects the user's TOTAL checked count across ALL pages / filter
   // states \u2014 not just checkboxes currently rendered.
   const n = tentativeSelections.size;
-  addBtn.textContent =
+  const longLabel =
     n === 0
       ? "Masukkan Soal Terpilih ke Paket"
       : `Masukkan ${n} Soal Terpilih ke Paket`;
+  const shortLabel =
+    n === 0 ? "Masukkan ke Paket" : `Masukkan ${n} Soal`;
+  // innerHTML (bukan textContent) supaya dua varian label
+  // (.btn-label-long / .btn-label-short) tetap tersedia; CSS media query
+  // memilih varian mana yang tampil di desktop vs mobile.
+  // Catatan: TIDAK pakai aria-hidden pada span pendek — varian yang
+  // tidak tampil sudah keluar dari accessibility tree via display:none,
+  // jadi accessible name tombol selalu berasal dari label yang terlihat.
+  addBtn.innerHTML =
+    `<span class="btn-label-long">${longLabel}</span>` +
+    `<span class="btn-label-short">${shortLabel}</span>`;
 }
 
 // Delegates a single change listener so check/uncheck between renders is
@@ -1208,7 +1223,11 @@ if (removeQConfirmBtn) {
   });
 }
 
-// Drag and Drop
+// ==== Drag & Drop (mengatur urutan nomor soal) ====
+// Desktop: HTML5 drag events. Mobile/touch: Pointer Events live-reorder
+// (HTML5 drag TIDAK berjalan di layar sentuh). Keduanya memakai helper
+// reorderQuestion() yang sama sehingga array packQuestions selalu sinkron
+// dengan urutan visual daftar.
 let dragSourceEl = null;
 
 function setupDragAndDrop() {
@@ -1218,6 +1237,73 @@ function setupDragAndDrop() {
     item.addEventListener("dragover", handleDragOver);
     item.addEventListener("drop", handleDrop);
     item.addEventListener("dragend", handleDragEnd);
+  });
+  // Mobile: jalur kedua via Pointer Events (no-op di perangkat tanpa
+  // sentuhan sehingga drag desktop tidak berubah).
+  setupTouchDragAndDrop();
+}
+
+// reorderQuestion — pindahkan soal dari srcIdx ke destIdx di array
+// packQuestions DAN pindahkan node DOM-nya (live reorder) + sync ulang
+// atribut data-index semua item. Dipakai oleh drag desktop (handleDrop)
+// dan drag sentuh (pointerup). Mengembalikan false bila argumen tidak
+// valid / tidak terjadi perpindahan.
+function reorderQuestion(srcIdx, destIdx) {
+  if (
+    !Number.isInteger(srcIdx) ||
+    !Number.isInteger(destIdx) ||
+    srcIdx < 0 ||
+    destIdx < 0 ||
+    srcIdx >= packQuestions.length ||
+    destIdx >= packQuestions.length ||
+    srcIdx === destIdx
+  ) {
+    return false;
+  }
+  const temp = packQuestions[srcIdx];
+  packQuestions.splice(srcIdx, 1);
+  packQuestions.splice(destIdx, 0, temp);
+
+  // Pindahkan node DOM agar posisi visual ikut berubah seketika.
+  const items = packList.querySelectorAll(".pack-question-item");
+  if (items.length === packQuestions.length) {
+    const srcNode = items[srcIdx];
+    const destNode = items[destIdx];
+    if (srcNode && destNode) {
+      if (srcIdx < destIdx) {
+        destNode.after(srcNode);
+      } else {
+        destNode.before(srcNode);
+      }
+      // Sync ulang data-index (urutan DOM kini = urutan array) supaya
+      // lookup index berikutnya (drag kedua, drop berikutnya) tetap benar.
+      packList
+        .querySelectorAll(".pack-question-item")
+        .forEach((el, i) => el.setAttribute("data-index", String(i)));
+    }
+  }
+  return true;
+}
+
+// reorderQuestionFinalize — re-render daftar dari array (sudah berurutan)
+// supaya label "Soal N", checkbox state, dan tombol Simpan ikut ter-update,
+// lalu aktifkan tombol "Simpan Urutan Soal". WAJIB dipanggil setelah drop
+// selesai (desktop & touch): tanpa renderLists() di sini, label nomor soal
+// akan basi (tidak mengikuti urutan baru) — inilah bug yang diperbaiki dari
+// rilis sebelumnya (reorderQuestionFinalize pernah didefinisikan tapi tidak
+// pernah dipanggil).
+function reorderQuestionFinalize() {
+  renderLists();
+  saveBtn.disabled = false;
+}
+
+// Bersihkan indikator drop-target di semua item (dipakai drag desktop +
+// touch) setelah drop selesai / drag dibatalkan. Atribut data-drop-side
+// ikut dihapus supaya tidak ada nilai basi dari drag sebelumnya.
+function clearDropTargets() {
+  packList.querySelectorAll(".pack-question-item").forEach((el) => {
+    el.classList.remove("drop-target");
+    delete el.dataset.dropSide;
   });
 }
 
@@ -1229,36 +1315,356 @@ function handleDragStart(e) {
   }
   this.classList.add("dragging");
   dragSourceEl = this;
+  // Nonaktifkan transisi item selama drag berlangsung (lihat CSS
+  // #pack-questions-list.drag-active) — transisi dasar item inilah yang
+  // membuat highlight drop-target terlihat stutter saat bergerak cepat.
+  packList.classList.add("drag-active");
   e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", String(this.dataset.id));
   e.dataTransfer.setData("text/html", this.innerHTML);
 }
 
 function handleDragOver(e) {
+  if (addBtn.disabled) return false;
   if (e.preventDefault) e.preventDefault();
+  // dropEffect "move" wajib — tanpa ini browser menunjukkan kursor
+  // "tidak boleh drop" walau drop sebenarnya diterima.
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  // Indikator posisi jatuh (garis aksen atas/bawah) di item yang sedang
+  // dilintasi, konsisten dengan indikator drag sentuh.
+  clearDropTargets();
+  if (dragSourceEl && dragSourceEl !== this) {
+    const rect = this.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    this.classList.add("drop-target");
+    this.dataset.dropSide = before ? "before" : "after";
+  }
   return false;
 }
 
 function handleDrop(e) {
   // Spec §4.6 — defensive guard against drop events firing after lock.
-  if (addBtn.disabled) return;
+  if (addBtn.disabled) return false;
   if (e.stopPropagation) e.stopPropagation();
-  if (dragSourceEl !== this) {
-    const srcIdx = parseInt(dragSourceEl.dataset.index);
-    const destIdx = parseInt(this.dataset.index);
-
-    // Reorder packQuestions array
-    const temp = packQuestions[srcIdx];
-    packQuestions.splice(srcIdx, 1);
-    packQuestions.splice(destIdx, 0, temp);
-
-    renderLists();
-    saveBtn.disabled = false;
+  if (dragSourceEl && dragSourceEl !== this) {
+    reorderQuestion(
+      parseInt(dragSourceEl.dataset.index, 10),
+      parseInt(this.dataset.index, 10),
+    );
+    reorderQuestionFinalize();
   }
   return false;
 }
 
 function handleDragEnd() {
   this.classList.remove("dragging");
+  packList.classList.remove("drag-active");
+  clearDropTargets();
+  dragSourceEl = null;
+}
+
+// ---- Touch drag & drop (mobile) ----
+// HTML5 drag events TIDAK berjalan di layar sentuh. Untuk perangkat touch
+// dipakai Pointer Events dengan pola "tandai lalu lepas":
+//   pointerdown → mulai pantau (belum drag; masih tap biasa)
+//   pointermove → setelah melewati ambang gerak (~8px) baru "drag"; item
+//                 yang diseret mengikuti jari (transform + .touch-dragging)
+//                 dan item di bawah jari ditandai garis aksen atas/bawah
+//                 (drop indicator). Auto-scroll saat jari mendekati tepi
+//                 daftar supaya item di luar viewport terjangkau.
+//   pointerup   → reorderQuestion() + reorderQuestionFinalize() (render
+//                 ulang supaya label "Soal N" ikut ter-update) lalu animasi
+//                 drop meluncur dari posisi ghost ke posisi final.
+// Ambang gerak memastikan tap biasa (checkbox, tombol Hapus, klik item)
+// tetap berfungsi normal; drag yang terjadi dibatalkan klik lanjutannya
+// lewat preventDefault() di pointerup.
+let touchDragState = null;
+const TOUCH_DRAG_THRESHOLD_PX = 6;
+
+function isTouchDragDevice() {
+  return (
+    (window.PointerEvent &&
+      window.matchMedia &&
+      window.matchMedia("(pointer: coarse)").matches) ||
+    "ontouchstart" in window ||
+    navigator.maxTouchPoints > 0
+  );
+}
+
+function setupTouchDragAndDrop() {
+  if (!isTouchDragDevice()) return;
+  const items = packList.querySelectorAll(".pack-question-item");
+  items.forEach((item) => {
+    item.addEventListener("pointerdown", onPackItemPointerDown);
+    item.addEventListener("pointermove", onPackItemPointerMove);
+    item.addEventListener("pointerup", onPackItemPointerUp);
+    item.addEventListener("pointercancel", onPackItemPointerCancel);
+  });
+}
+
+function onPackItemPointerDown(e) {
+  if (addBtn.disabled) return;
+  // Jangan mulai drag bila sentuhan dimulai dari kontrol interaktif
+  // (checkbox pilih, tombol Hapus) — tap di sana harus tetap berfungsi.
+  if (e.target.closest("input, button, a, select")) return;
+  const item = e.currentTarget;
+  const rect = item.getBoundingClientRect();
+  touchDragState = {
+    source: item,
+    startX: e.clientX,
+    startY: e.clientY,
+    // Jarak jari terhadap posisi item saat drag dimulai — konstan
+    // sepanjang drag, sehingga ghost selalu mengikuti jari dengan
+    // offset yang sama persis.
+    grabX: e.clientX - rect.left,
+    grabY: e.clientY - rect.top,
+    dragging: false,
+    suppressClick: false,
+    lastClientX: e.clientX,
+    lastClientY: e.clientY,
+    // Layout yang dibutuhkan saat drag di-cache SEKALI di sini
+    // (listRect; sourceRect + itemRects diisi saat drag benar-benar
+    // mulai) supaya pointermove tidak memaksa reflow per event —
+    // inilah sumber stutter di versi sebelumnya. Item TIDAK bergerak
+    // selama drag (tidak ada live reorder), jadi cache tetap valid;
+    // auto-scroll hanya menggeser koordinat konten via scrollDelta.
+    listRect: packList.getBoundingClientRect(),
+    startScrollTop: packList.scrollTop,
+    sourceRect: null,
+    itemRects: null,
+    markedEl: null,
+    markedSide: null,
+  };
+}
+
+function onPackItemPointerMove(e) {
+  if (!touchDragState || touchDragState.source !== e.currentTarget) return;
+  const s = touchDragState;
+
+  if (!s.dragging) {
+    const dx = e.clientX - s.startX;
+    const dy = e.clientY - s.startY;
+    // Belum melewati ambang gerak → masih tap; biarkan scroll sentuh
+    // normal terjadi.
+    if (Math.hypot(dx, dy) < TOUCH_DRAG_THRESHOLD_PX) return;
+    s.dragging = true;
+    s.suppressClick = true;
+    s.source.classList.add("touch-dragging");
+    // Nonaktifkan transisi item selama drag (lihat CSS drag-active).
+    packList.classList.add("drag-active");
+    // Ukur posisi source + SEMUA item SEKALI. Karena tidak ada live
+    // reorder, posisi relatif item terhadap daftar tidak berubah —
+    // hit-test berikutnya murni aritmetika, tanpa reflow.
+    s.sourceRect = s.source.getBoundingClientRect();
+    s.itemRects = Array.from(
+      packList.querySelectorAll(".pack-question-item"),
+      (el) => {
+        const r = el.getBoundingClientRect();
+        return { el, top: r.top, bottom: r.bottom };
+      },
+    );
+    if (s.source.setPointerCapture) {
+      try {
+        s.source.setPointerCapture(e.pointerId);
+      } catch (err) {
+        // abaikan — pointer capture gagal bukan kondisi fatal
+      }
+    }
+  }
+
+  // Auto-scroll daftar saat jari mendekati tepi atas/bawah (list bisa
+  // lebih panjang dari viewport; tanpa ini item di luar layar tidak
+  // bisa dijangkau saat drag). listRect di-cache dari pointerdown.
+  const EDGE = 44;
+  if (e.clientY < s.listRect.top + EDGE) {
+    packList.scrollTop -= 10;
+  } else if (e.clientY > s.listRect.bottom - EDGE) {
+    packList.scrollTop += 10;
+  }
+  const scrollDelta = packList.scrollTop - s.startScrollTop;
+
+  // Ghost mengikuti jari — posisi layout source dihitung dari cache
+  // (sourceRect) minus scrollDelta, TANPA getBoundingClientRect per
+  // event. Scroll vertikal tidak menggeser posisi horizontal, jadi
+  // hanya srcTop yang dikurangi delta. Transform murni visual
+  // (kompositor-only berkat will-change: transform pada
+  // .touch-dragging).
+  const srcLeft = s.sourceRect.left;
+  const srcTop = s.sourceRect.top - scrollDelta;
+  s.source.style.transform = `translate(${e.clientX - srcLeft - s.grabX}px, ${e.clientY - srcTop - s.grabY}px)`;
+  s.lastClientX = e.clientX;
+  s.lastClientY = e.clientY;
+
+  // Hit-test posisi jatuh via cache itemRects + scrollDelta (tanpa
+  // elementFromPoint / tanpa reflow): item di bawah jari ditandai,
+  // atas/bawah sesuai separuh item. Item SUMBER di-skip dari hit-test
+  // (padanan perilaku visibility:hidden + elementFromPoint di versi
+  // lama) supaya item yang berada di posisi layout sumber tetap bisa
+  // dijadikan target.
+  const relY = e.clientY + scrollDelta;
+  let targetItem = null;
+  let before = false;
+  for (const it of s.itemRects) {
+    if (it.el === s.source) continue;
+    if (relY >= it.top && relY < it.bottom) {
+      targetItem = it.el;
+      before = relY < it.top + (it.bottom - it.top) / 2;
+      break;
+    }
+  }
+  if (!targetItem) {
+    // Tidak di atas item lain — bersihkan mark bila ada.
+    if (s.markedEl) {
+      s.markedEl.classList.remove("drop-target");
+      delete s.markedEl.dataset.dropSide;
+      s.markedEl = null;
+      s.markedSide = null;
+    }
+    return;
+  }
+  const side = before ? "before" : "after";
+  // Tulis DOM hanya saat target/sisi BERUBAH (bukan tiap pointermove)
+  // — mengurangi write + paint selama drag.
+  if (s.markedEl !== targetItem || s.markedSide !== side) {
+    if (s.markedEl) {
+      s.markedEl.classList.remove("drop-target");
+      delete s.markedEl.dataset.dropSide;
+    }
+    targetItem.classList.add("drop-target");
+    targetItem.dataset.dropSide = side;
+    s.markedEl = targetItem;
+    s.markedSide = side;
+  }
+}
+
+// pointercancel — gestur dibatalkan sistem (mis. gerakan back-swipe,
+// scroll takeover). Bersihkan state TANPA melakukan reorder (beda dari
+// pointerup yang meng-commit hasil drag).
+function onPackItemPointerCancel(e) {
+  const s = touchDragState;
+  touchDragState = null;
+  if (!s || s.source !== e.currentTarget) return;
+  s.source.classList.remove("touch-dragging");
+  s.source.style.transform = "";
+  packList.classList.remove("drag-active");
+  clearDropTargets();
+}
+
+function onPackItemPointerUp(e) {
+  const s = touchDragState;
+  touchDragState = null;
+  if (!s || s.source !== e.currentTarget) {
+    // pointerup jatuh di luar source (mis. setPointerCapture gagal) —
+    // bersihkan state drag yang mungkin tersisa supaya class
+    // drag-active tidak bocor (transisi item tidak boleh mati permanen).
+    if (s) {
+      s.source.classList.remove("touch-dragging");
+      s.source.style.transform = "";
+      packList.classList.remove("drag-active");
+      clearDropTargets();
+    }
+    return;
+  }
+
+  s.source.classList.remove("touch-dragging");
+  // Drag selesai — kembalikan transisi item (dinonaktifkan selama drag
+  // via #pack-questions-list.drag-active) SEBELUM animasi drop jalan.
+  packList.classList.remove("drag-active");
+
+  if (s.suppressClick && e.cancelable) e.preventDefault();
+  if (!s.dragging || addBtn.disabled) {
+    s.source.style.transform = "";
+    return;
+  }
+
+  // Target terakhir yang ditandai (di-track incremental, tanpa query).
+  const targetItem = s.markedEl;
+  clearDropTargets();
+
+  if (!targetItem) {
+    s.source.style.transform = "";
+    return;
+  }
+
+  // Hitung indeks tujuan berdasar sisi jatuh (sebelum/sesudah target).
+  const srcIdx = parseInt(s.source.dataset.index, 10);
+  const targetIdx = parseInt(targetItem.dataset.index, 10);
+  if (!Number.isInteger(srcIdx) || !Number.isInteger(targetIdx)) {
+    s.source.style.transform = "";
+    return;
+  }
+  const before = targetItem.dataset.dropSide === "before";
+  let destIdx;
+  if (before) {
+    destIdx = srcIdx < targetIdx ? targetIdx - 1 : targetIdx;
+  } else {
+    destIdx = srcIdx < targetIdx ? targetIdx : targetIdx + 1;
+  }
+  if (destIdx === srcIdx) {
+    s.source.style.transform = "";
+    return;
+  }
+
+  // Ukur posisi item saat ini + delta drag terakhir — dipakai untuk
+  // menghitung offset awal animasi drop nanti.
+  const id = s.source.dataset.id;
+  const srcRect = s.source.getBoundingClientRect();
+  const dragDeltaX = s.lastClientX - srcRect.left - s.grabX;
+  const dragDeltaY = s.lastClientY - srcRect.top - s.grabY;
+
+  // Reorder array + RENDER ULANG (fix bug rilis sebelumnya: tanpa
+  // reorderQuestionFinalize() label "Soal N" tidak pernah ter-update
+  // setelah drag sentuh). Animasi drop menyusul setelah render.
+  reorderQuestion(srcIdx, destIdx);
+  reorderQuestionFinalize();
+
+  applyDropAnim(id, srcRect, dragDeltaX, dragDeltaY);
+}
+
+// Animasi drop: item hasil render (posisi final di layout) dimulai dari
+// posisi ghost lama, lalu meluncur ke posisi aslinya. Tanpa animasi ini
+// item yang dirender ulang langsung muncul di posisi final — tampak
+// "nyentak".
+function applyDropAnim(id, srcRect, dragDeltaX, dragDeltaY) {
+  let item = null;
+  if (id) {
+    if (window.CSS && typeof CSS.escape === "function") {
+      item = packList.querySelector(
+        `.pack-question-item[data-id="${CSS.escape(id)}"]`,
+      );
+    } else {
+      packList
+        .querySelectorAll(".pack-question-item")
+        .forEach((el) => {
+          if (String(el.dataset.id) === String(id)) item = el;
+        });
+    }
+  }
+  if (!item) return;
+
+  // Mulai dari posisi ghost: posisi visual awal = (posisi item lama +
+  // delta drag), lalu transisi ke posisi aslinya di layout.
+  item.classList.add("drop-anim");
+  const rect = item.getBoundingClientRect();
+  const offsetX = srcRect.left + dragDeltaX - rect.left;
+  const offsetY = srcRect.top + dragDeltaY - rect.top;
+  item.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+
+  // Paksa satu frame agar offset awal terbaca, baru transisi ke 0.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      item.style.transform = "";
+    });
+  });
+
+  let done = false;
+  const finalize = () => {
+    if (done) return;
+    done = true;
+    item.classList.remove("drop-anim");
+  };
+  item.addEventListener("transitionend", finalize, { once: true });
+  window.setTimeout(finalize, 250);
 }
 
 saveBtn.onclick = async () => {

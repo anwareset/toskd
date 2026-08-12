@@ -173,6 +173,22 @@ body:has(.exam-header) .global-header {
 }
 
 body.is-drawer-open .global-header {
+    /* Body tetap in-flow dengan overflow:hidden (lockBodyScroll di
+       theme.js) sehingga scrollY tidak berubah — tidak ada nudge
+       vertical saat buka/tutup. TAPI overflow:hidden pada <html>
+       membuat sticky header mati (container jadi overflow:hidden →
+       sticky tidak lagi menempel): setelah di-scroll, header kembali
+       ke posisi flow-nya (y=0) yang berada DI ATAS viewport → header
+       lenyap jadi ruang kosong blur. Fix: pin header fixed ke puncak
+       viewport selama drawer terbuka. Layout jump dicegah via
+       padding-top kompensasi di media query mobile (rule ini hanya
+       aktif saat drawer terbuka, dan drawer hanya bisa dibuka di
+       mobile — hamburger hidden ≥768px). */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
     border-bottom-color: var(--border-strong);
     box-shadow: var(--shadow-sm);
 }
@@ -373,7 +389,6 @@ body.is-drawer-open .global-header {
 }
 
 .global-nav-drawer {
-    display: none;
     position: fixed;
     top: 57px;
     left: 0;
@@ -386,22 +401,34 @@ body.is-drawer-open .global-header {
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     box-shadow: var(--shadow-lg);
     padding: 12px 16px 20px;
+    /* Transisi DUA ARAH (buka & tutup) via opacity/transform, bukan
+       display:none + animation yang hanya jalan saat dibuka — saat
+       is-open dihapus, drawer dulu lenyap instan tanpa animasi.
+       visibility di-delay 0.28s supaya saat menutup drawer tetap
+       terlihat selama fade-out, lalu baru hidden (keluar dari
+       accessibility tree + hit-test). pointer-events mati saat hidden
+       agar tidak menghalangi interaksi halaman. */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-12px);
+    pointer-events: none;
+    transition:
+        opacity 0.28s var(--ease-out),
+        transform 0.28s var(--ease-out),
+        visibility 0s linear 0.28s;
 }
 
 .global-nav-drawer.is-open {
-    display: block;
-    animation: drawerIn 0.26s var(--ease-out);
-}
-
-@keyframes drawerIn {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+    /* visibility tanpa delay saat membuka: drawer langsung tampil,
+       lalu opacity/transform bertransisi masuk. */
+    transition:
+        opacity 0.28s var(--ease-out),
+        transform 0.28s var(--ease-out),
+        visibility 0s;
 }
 
 .global-nav-drawer .drawer-widgets {
@@ -478,6 +505,13 @@ body.is-drawer-open > *:not(.global-header):not(.global-nav-drawer):not(.global-
 }
 
 @media (max-width: 767px) {
+    /* Saat drawer terbuka, .global-header di-pin position:fixed (lihat
+       rule body.is-drawer-open .global-header) sehingga keluar dari
+       flow — tanpa kompensasi konten di bawahnya bergeser naik (layout
+       jump). Kompensasi body padding-top dihitung oleh lockBodyScroll()
+       di theme.js (tinggi header + margin-bottom aktual, akurat per
+       halaman). Body tetap in-flow dan scrollY tidak berubah, jadi
+       padding-top ini murni menggantikan ruang header. */
     .global-header {
         display: flex;
         flex-direction: row;
@@ -513,76 +547,127 @@ body.is-drawer-open > *:not(.global-header):not(.global-nav-drawer):not(.global-
 /* ==========================================================
  * 4. Buttons
  * ========================================================== */
+/* ==========================================================
+ * Komponen tombol pill (Rev. 2026-08-12): semua varian tombol
+ * memakai satu komponen yang sama dengan tombol "Kembali"/"Reset"
+ * di scoreboard (.btn-back) — pill 999px, tinggi 36px, label 0.9rem.
+ * Class dipertahankan (JS men-refer btn-primary/btn-secondary),
+ * jadi cukup satu base rule + modifier warna di bawah.
+ * ========================================================== */
 .btn-primary,
 .btn-secondary,
 .btn-danger,
 .btn-success,
 .btn-back,
 .btn-main {
-    border: none;
-    border-radius: var(--radius);
+    border: 1px solid transparent;
+    border-radius: 999px;
     cursor: pointer;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 600;
-    padding: 10px 18px;
+    padding: 6px 14px;
+    min-height: 36px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 8px;
     text-decoration: none;
     line-height: 1.4;
     transition: background 0.16s ease, color 0.16s ease,
         border-color 0.16s ease, box-shadow 0.16s ease,
-        transform 0.1s ease;
+        transform 0.16s var(--ease-out);
 }
 
 .btn-primary {
     background: var(--primary);
     color: var(--on-primary);
+    border-color: var(--primary);
     box-shadow: var(--shadow-xs);
 }
 
 .btn-primary:hover {
     background: var(--primary-hover);
+    border-color: var(--primary-hover);
     transform: translateY(-1px);
     box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:active {
-    transform: translateY(0);
+    transform: translateY(0) scale(0.97);
+}
+
+.btn-primary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--ring), var(--shadow-sm);
 }
 
 .btn-secondary {
     background: var(--surface);
     color: var(--text);
-    border: 1px solid var(--border-strong);
+    border-color: var(--border);
+    box-shadow: var(--shadow-xs);
 }
 
 .btn-secondary:hover {
     background: var(--surface-hover);
     border-color: var(--border-strong);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-secondary:active {
+    transform: translateY(0) scale(0.97);
+}
+
+.btn-secondary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--ring), var(--shadow-sm);
 }
 
 .btn-danger {
     background: var(--danger);
     color: var(--on-primary);
+    border-color: var(--danger);
+    box-shadow: var(--shadow-xs);
 }
 
 .btn-danger:hover {
     background: var(--danger-hover);
+    border-color: var(--danger-hover);
     transform: translateY(-1px);
     box-shadow: var(--shadow-sm);
+}
+
+.btn-danger:active {
+    transform: translateY(0) scale(0.97);
+}
+
+.btn-danger:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
 .btn-success {
     background: var(--success);
     color: var(--on-primary);
+    border-color: var(--success);
+    box-shadow: var(--shadow-xs);
 }
 
 .btn-success:hover {
     background: var(--success-hover);
+    border-color: var(--success-hover);
     transform: translateY(-1px);
     box-shadow: var(--shadow-sm);
+}
+
+.btn-success:active {
+    transform: translateY(0) scale(0.97);
+}
+
+.btn-success:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 40%, transparent);
 }
 
 .btn-back {
@@ -656,6 +741,30 @@ body.is-drawer-open > *:not(.global-header):not(.global-nav-drawer):not(.global-
 .btn-back:focus-visible {
     outline: none;
     box-shadow: 0 0 0 3px var(--ring), var(--shadow-sm);
+}
+
+/* Reset Scoreboard (scoreboard.html): reuse .btn-back sizing (pill 36px)
+   dengan warna danger. Modifier terpisah supaya .global-header-logout-btn
+   (dipakai tombol Logout global) tidak ikut berubah. */
+.btn-back.btn-back-danger {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: var(--on-primary);
+    box-shadow: none;
+    padding: 6px 14px;
+    min-height: 36px; /* selaras tinggi .btn-back (ikon 22px + padding + border) */
+}
+
+.btn-back.btn-back-danger:hover {
+    background: var(--danger-hover);
+    border-color: var(--danger-hover);
+    color: var(--on-primary);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-back.btn-back-danger:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
 .btn-main {
@@ -1536,6 +1645,11 @@ tbody tr:hover .sticky-col-right {
 
 .option-label {
     flex: 1;
+    /* min-width: 0 wajib untuk item flex dengan white-space:nowrap —
+       tanpa ini flex-basis tidak bisa menyusut di bawah lebar konten
+       (min-width:auto) sehingga baris meluber ke kanan / memicu scroll
+       horizontal, terutama di mobile. */
+    min-width: 0;
     font-size: 0.95rem;
     color: var(--text);
     white-space: nowrap;
@@ -1802,6 +1916,15 @@ tbody tr:hover .sticky-col-right {
     gap: 10px;
     transition: border-color 0.15s ease, background 0.15s ease,
         box-shadow 0.15s ease;
+    /* Wajib untuk drag sentuh (Pointer Events di paket-detail.js): tanpa
+       ini browser mengambil alih gestur (scroll/pan) dan membatalkan
+       drag sebelum sempat mulai. Scroll tetap bisa lewat area luar item. */
+    touch-action: none;
+    /* Cegah seleksi teks / menu callout iOS saat jari menahan untuk
+       drag — item adalah preview, bukan teks yang perlu diseleksi. */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 
 .pack-question-item:hover {
@@ -1812,6 +1935,56 @@ tbody tr:hover .sticky-col-right {
 
 .pack-question-item.dragging {
     opacity: 0.4;
+}
+
+/* Selama drag aktif (desktop maupun touch), matikan SEMUA transisi item
+   (border/background/shadow) — transisi dasar 0.15s inilah yang membuat
+   highlight drop-target dan ghost terlihat stutter/lag saat jari
+   bergerak cepat. Class dipasang/dilepas oleh paket-detail.js
+   (handleDragStart/handleDragEnd + pointer down/up). */
+#pack-questions-list.drag-active .pack-question-item {
+    transition: none;
+}
+
+/* Touch drag (mobile) — Pointer Events di paket-detail.js. Item yang
+   diseret diikuti jari (transform) + sedikit transparan; item target di
+   bawah jari ditandai garis aksen atas/bawah sesuai posisi jatuh. */
+.pack-question-item.touch-dragging {
+    opacity: 0.45;
+    position: relative;
+    z-index: 30;
+    background: var(--surface);
+    border-color: var(--primary);
+    box-shadow: var(--shadow-md);
+    /* Matikan SEMUA transisi selama drag — transisi dasar
+       (border/background/shadow) yang aktif saat kelas berubah inilah
+       yang membuat item terlihat "stuck"/melayang saat diseret. */
+    transition: none !important;
+    will-change: transform;
+}
+
+/* Drop settle — saat jari dilepas, item meluncur mulus kembali ke
+   posisi aslinya di layout (transform → 0) lalu nomor soal di-sync. */
+.pack-question-item.drop-anim {
+    transition:
+        transform 0.18s ease-out,
+        opacity 0.18s ease-out;
+}
+
+/* Drop indicator — item target di bawah jari/kursor ditandai garis
+   aksen atas/bawah sesuai sisi jatuh. */
+.pack-question-item.drop-target {
+    border-top: 3px solid var(--primary);
+    border-top-left-radius: var(--radius-md);
+    border-top-right-radius: var(--radius-md);
+    background: var(--primary-light);
+}
+
+.pack-question-item.drop-target[data-drop-side="after"] {
+    border-top: none;
+    border-bottom: 3px solid var(--primary);
+    border-bottom-left-radius: var(--radius-md);
+    border-bottom-right-radius: var(--radius-md);
 }
 
 .pack-question-item::before {
@@ -1837,6 +2010,9 @@ tbody tr:hover .sticky-col-right {
 
 .pack-question-item .q-preview {
     flex: 1;
+    /* min-width: 0 — lihat catatan .option-label: tanpa ini preview
+       soal yang panjang memaksa baris meluber keluar layar di mobile. */
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1845,14 +2021,12 @@ tbody tr:hover .sticky-col-right {
 }
 
 .bank-timestamp {
-    flex-shrink: 0;
     font-size: 0.76rem;
     color: var(--text-muted);
     background: var(--surface-header);
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 2px 8px;
-    margin-left: 8px;
     white-space: nowrap;
     cursor: help;
     font-weight: 500;
@@ -3726,7 +3900,8 @@ tbody tr:hover .sticky-col-right {
  * hover/focus → tooltip CSS daftar paket. Lihat
  * paket-detail-usage-chip-spec.md.
  */
-.bank-usage-wrap {
+.bank-usage-wrap,
+.bank-timestamp-wrap {
     position: relative;
     flex-shrink: 0;
     margin-left: 8px;
@@ -3763,7 +3938,11 @@ tbody tr:hover .sticky-col-right {
 }
 
 /* Tooltip daftar paket — muncul saat hover/focus chip */
-.bank-usage-tooltip {
+/* Tooltip dipakai oleh chip "Dipakai" DAN chip tanggal/waktu
+   (.bank-timestamp-tooltip) — style yang sama persis (per user request:
+   tooltip chip tanggal memakai style tooltip chip "Dipakai"). */
+.bank-usage-tooltip,
+.bank-timestamp-tooltip {
     position: absolute;
     top: calc(100% + 6px);
     right: 0;
@@ -3786,7 +3965,8 @@ tbody tr:hover .sticky-col-right {
     pointer-events: none;
 }
 
-.bank-usage-tooltip strong {
+.bank-usage-tooltip strong,
+.bank-timestamp-tooltip strong {
     display: block;
     margin-bottom: 6px;
     color: var(--text);
@@ -3804,8 +3984,234 @@ tbody tr:hover .sticky-col-right {
 }
 
 .bank-usage-wrap:hover .bank-usage-tooltip,
-.bank-usage-wrap:focus-within .bank-usage-tooltip {
+.bank-usage-wrap:focus-within .bank-usage-tooltip,
+.bank-timestamp-wrap:hover .bank-timestamp-tooltip,
+.bank-timestamp-wrap:focus-within .bank-timestamp-tooltip {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
+}
+
+/* ==========================================================
+ * 27. Paket-detail mobile polish
+ * ==========================================================
+ * Mobile (≤767px):
+ * 1. Tombol aksi (Masukkan Soal / Hapus / Simpan Urutan) memendek —
+ *    label panjang disembunyikan, label pendek (.btn-label-short)
+ *    ditampilkan (markup dua varian di paket-detail.html).
+ * 2. KOLOM STRETCH SELEBAR LAYAR (root-cause fix): .pack-detail-layout
+ *    memakai align-items:flex-start; saat flex-direction:column
+ *    (≤1200px) tiap kolom tidak melebar ke lebar container — kolom
+ *    memakai lebar kontennya sendiri (shrink-to-fit), sehingga konten
+ *    item yang lebar (preview + timestamp + chip / drag-handle + nomor
+ *    + preview) bisa mendorong kolom lebih lebar dari viewport dan
+ *    tombol di bawah daftar ikut terpotong di kanan.
+ *    Fix: align-items:stretch + width:100% + min-width:0 pada kolom,
+ *    dan wadah daftar jadi scroll-box horizontal independen — konten
+ *    lebar scroll DI DALAM daftar, halaman tetap selebar viewport.
+ * 3. Question list (option-item bank) wrap: checkbox + preview satu
+ *    baris, lalu chip timestamp & "Dipakai" ke baris sendiri.
+ * 4. Pagination bar bank pakai flex-wrap + center (mirror pola
+ *    #pack-pagination di select-pack) agar tidak overflow layar sempit.
+ * 5. Daftar paket jadi scroll box (max-height) agar auto-scroll saat
+ *    drag sentuh berfungsi dan item di luar viewport terjangkau.
+ */
+/* Label pendek tombol aksi — default disembunyikan di desktop */
+.btn-label-short {
+    display: none;
+}
+
+@media (max-width: 767px) {
+    .btn-label-long {
+        display: none;
+    }
+    .btn-label-short {
+        display: inline;
+    }
+    #add-to-pack-btn,
+    #bulk-remove-pack-btn,
+    #save-order-btn {
+        padding: 12px 14px;
+        font-size: 0.92rem;
+        white-space: nowrap;
+        box-sizing: border-box;
+        height: auto;
+    }
+
+    /* Heading & header — ruang napas konsisten di mobile */
+    .app-title {
+        font-size: 1.25rem;
+    }
+    .header {
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+    /* Wrapper aksi (kelola-soal/paket-soal punya <div> berisi tombol,
+       scoreboard punya .header-actions) ikut full-width supaya tombol
+       di dalamnya tidak shrink-to-fit di samping judul. Jadikan kolom
+       flex + gap: tanpa ini tombol yang bertumpuk (width:100%) di div
+       block biasa menempel tanpa jarak vertikal — terlihat berdempetan.
+       (paket-detail: div berisi judul+subtitle ikut dapat gap 10px,
+       subtitle tidak lagi menempel di judul.) */
+    .header > div {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    /* SEMUA tombol aksi di .header full-width + teks di tengah: tanpa
+       ini .btn-primary tetap sempit di samping judul sementara tombol
+       lain full-width — layout tidak konsisten. .header-actions punya
+       inline display:flex; tombol child-nya (Kembali, Reset Scoreboard)
+       dengan width:100% turun ke baris sendiri via flex-wrap. */
+    .header .btn-primary,
+    .header .btn-secondary,
+    .header .btn-back,
+    .header .global-header-logout-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    .pack-detail-layout {
+        gap: 28px;
+        /* Kolom stretch selebar container (fix shrink-to-fit): base
+           .pack-detail-layout memakai align-items:flex-start — saat
+           flex-direction:column (≤1200px) kolom memakai lebar
+           kontennya sendiri sehingga bisa melebar melampaui viewport. */
+        align-items: stretch;
+    }
+    .pack-detail-layout > div > h3 {
+        font-size: 1.02rem;
+        line-height: 1.35;
+    }
+    .pack-detail-layout > div {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    #bank-controls-top,
+    #bank-controls-bottom {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    /* Daftar: scroll horizontal DI DALAM wadah, bukan melebar-kan halaman */
+    .bank-list-container,
+    #pack-questions-list {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .bank-list-container {
+        max-height: 420px;
+        padding: 8px;
+    }
+    #pack-questions-list {
+        max-height: 55vh;
+        overflow-y: auto;
+    }
+    .bank-list-container .option-item,
+    #pack-questions-list .pack-question-item {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    /* Question list (bank) — item wrap: checkbox + preview satu baris,
+       lalu chip timestamp & "Dipakai" ke baris sendiri */
+    .option-item {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 8px 12px;
+        padding: 12px;
+    }
+    .option-item > input[type="checkbox"],
+    .option-item > input[type="radio"] {
+        width: 22px;
+        height: 22px;
+        margin-top: 2px;
+        flex-shrink: 0;
+    }
+    .option-item .option-label {
+        flex: 1 1 calc(100% - 40px);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .option-item .bank-timestamp-wrap,
+    .option-item .bank-usage-wrap {
+        margin-left: 0;
+        flex-basis: auto;
+    }
+    /* Tooltip chip "Dipakai" & chip tanggal: di mobile chip berada di
+       sisi KIRI baris kedua, jadi jangkar tooltip ke kiri (right:auto).
+       Tanpa ini, versi tersembunyi (visibility:hidden) tetap masuk
+       perhitungan scrollable overflow dan memicu phantom horizontal
+       scroll pada .bank-list-container yang overflow-x:auto. */
+    .bank-usage-wrap .bank-usage-tooltip,
+    .bank-timestamp-wrap .bank-timestamp-tooltip {
+        right: auto;
+        left: 0;
+    }
+
+    /* Pack list — item lebih rapat + preview lebih kecil */
+    .pack-question-item {
+        padding: 10px 12px;
+        gap: 8px;
+    }
+    .pack-question-item .q-preview {
+        font-size: 0.8rem;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Pagination bank — flex wrap + center (mirror #pack-pagination).
+       Cluster kanan (Sebelumnya | Halaman | Selanjutnya) diubah dari
+       grid 1fr auto 1fr jadi flex-wrap supaya tidak meluber di layar
+       sempit. */
+    .pagination-bar--precise .pagination-bar-right {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        min-width: 0;
+    }
+    .pagination-bar--precise .pagination-bar-right > :first-child,
+    .pagination-bar--precise .pagination-bar-right > :nth-child(2),
+    .pagination-bar--precise .pagination-bar-right > :last-child {
+        justify-self: auto;
+    }
+    /* Baris search: full-width, input di tengah (override rule lama
+       #bank-controls-top dengan ID selector — specificity sama, urutan
+       menang karena section ini di akhir file) */
+    #bank-controls-top .pagination-bar-center {
+        order: 0;
+        flex: 1 1 100%;
+        max-width: none;
+        justify-content: center;
+        min-width: 0;
+    }
+    .pagination-bar--precise .pagination-bar-center .pagination-search {
+        width: 100%;
+        max-width: 360px;
+    }
+}
+
+@media (max-width: 480px) {
+    .pack-list-selection-toolbar {
+        gap: 10px;
+    }
+    .pack-list-selection-helper {
+        font-size: 0.8rem;
+    }
+    .pagination-label,
+    .pagination-text {
+        font-size: 0.8rem;
+    }
 }

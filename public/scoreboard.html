@@ -21,14 +21,15 @@
                         <!-- Admin-only: disembunyikan default; wireAdminReset()
                              di scoreboard.js menampilkannya hanya jika
                              GET /api/admin/me mengembalikan sesi admin.
-                             Style mengikuti .global-header-logout-btn (pill danger). -->
+                             Style: .btn-back + .btn-back-danger (pill danger,
+                             ukuran sama dengan tombol Kembali). -->
                         <button
                             id="reset-scoreboard-btn"
-                            class="global-header-logout-btn"
+                            class="btn-back btn-back-danger"
                             type="button"
                             style="display: none"
                         >
-                            Reset Scoreboard
+                            <span class="btn-back-label">Reset</span>
                         </button>
                         <button class="btn-back" onclick="location.href = '/'">
                             <span class="btn-back-icon" aria-hidden="true"></span>
