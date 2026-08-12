@@ -918,7 +918,17 @@ addBtn.onclick = async () => {
   let alertMessage = null;
   try {
     for (let i = 0; i < checked.length; i++) {
-      const qNum = packQuestions.length + 1;
+      // Bug-fix 2026-08-12: qNum harus NAIK per iterasi. Dulu konstan
+      // (packQuestions.length + 1) sehingga semua soal dalam satu batch
+      // POST dengan question_number yang SAMA → urutan tampilan paket
+      // menjadi acak dan berubah-ubah setelah add/delete (tie-break
+      // PostgREST untuk nomor duplikat tidak stabil). `checked` sudah
+      // dalam urutan centang checkbox (Set insertion order), jadi +i di
+      // sini memetakan posisi centang → nomor soal di paket.
+      // Catatan: server kini juga menormalkan question_number via max+1
+      // (POST /api/packs/:id/questions) — nilai ini defense-in-depth
+      // agar kontrak klien-server tetap benar.
+      const qNum = packQuestions.length + i + 1;
       await wrapFetch(`/api/packs/${packId}/questions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -974,7 +974,7 @@ async function validateQuestionMatchesPack(packId, questionId) {
 // Add questions to a pack
 app.post("/api/packs/:id/questions", async (req, res) => {
   try {
-    const { question_id, question_number } = req.body;
+    const { question_id } = req.body;
     // Server-side subtest match (defense-in-depth vs client-side filter
     // in paket-detail.js renderBankList). Catches curl + future endpoints.
     const valid = await validateQuestionMatchesPack(
@@ -984,12 +984,54 @@ app.post("/api/packs/:id/questions", async (req, res) => {
     if (!valid.ok) {
       return res.status(400).json({ error: valid.reason });
     }
-    const { data, error } = await supabase
-      .from("pack_questions")
-      .insert({ pack_id: req.params.id, question_id, question_number })
-      .select();
-    if (error) throw error;
-    res.status(201).json(data);
+    // question_number SELALU ditentukan server: max(existing) + 1
+    // (semantik append). Alasan (bug-fix 2026-08-12): klien lama mengirim
+    // angka yang sama untuk seluruh batch (loop tidak pernah increment),
+    // membuat banyak baris ber-question_number duplikat → urutan tampilan
+    // jadi acak/tidak stabil di paket-detail/exam/review. Max+1 di sini
+    // menjamin nomor unik sesuai urutan kedatangan request (= urutan
+    // centang checkbox), sekaligus aman setelah penghapusan menyisakan
+    // gap (mis. nomor 1,2,4,5 → soal baru dapat 6, tidak bentrok).
+    // question_number dari klien DIABAIKAN; renumbering eksplisit
+    // ditangani oleh PUT /api/packs/:id/questions.
+    //
+    // Race window antar tab admin (2026-08-12): max+1 bersifat
+    // read-then-insert yang tidak atomik — dua POST konkuren bisa membaca
+    // max yang sama lalu insert nomor yang sama. Ditutup dengan
+    // UNIQUE(pack_id, question_number) di schema (migration-004) + retry
+    // di sini: insert yang kalah race menerima error 23505 (unique
+    // violation), lalu kita baca ulang max (fresh) dan insert ulang dengan
+    // nomor berikutnya (bounded). Error selain 23505 fail-fast.
+    const MAX_NUMBER_ATTEMPTS = 3;
+    let inserted = null;
+    let insertError = null;
+    for (let attempt = 0; attempt < MAX_NUMBER_ATTEMPTS; attempt++) {
+      const { data: maxRows, error: maxErr } = await supabase
+        .from("pack_questions")
+        .select("question_number")
+        .eq("pack_id", req.params.id)
+        .order("question_number", { ascending: false })
+        .limit(1);
+      if (maxErr) throw maxErr;
+      const nextNumber = (maxRows?.[0]?.question_number ?? 0) + 1;
+      const insertRes = await supabase
+        .from("pack_questions")
+        .insert({
+          pack_id: req.params.id,
+          question_id,
+          question_number: nextNumber,
+        })
+        .select();
+      if (!insertRes.error) {
+        inserted = insertRes.data;
+        insertError = null;
+        break;
+      }
+      insertError = insertRes.error;
+      if (insertRes.error.code !== "23505") break;
+    }
+    if (insertError) throw insertError;
+    res.status(201).json(inserted);
   } catch (error) {
     console.error("Error adding question to pack:", error);
     res.status(500).json({ error: "Failed to add question to pack" });
@@ -999,11 +1041,18 @@ app.post("/api/packs/:id/questions", async (req, res) => {
 // Get questions for a specific pack
 app.get("/api/packs/:id/questions", async (req, res) => {
   try {
+    // Deterministic tiebreak (bug-fix 2026-08-12): question_number bisa
+    // duplikat untuk data lama (sebelum POST memakai max+1 server-side),
+    // dan PostgREST tidak menjamin urutan antar baris bernomor sama —
+    // urutan tampilan jadi berubah-ubah setiap add/delete/reload. Tambahan
+    // order id ASC membuat baris bernomor sama tampil stabil (urutan
+    // insertion), tanpa mengubah urutan nomor unik yang sudah benar.
     const { data, error } = await supabase
       .from("pack_questions")
       .select("*, questions(*)")
       .eq("pack_id", req.params.id)
-      .order("question_number", { ascending: true });
+      .order("question_number", { ascending: true })
+      .order("id", { ascending: true });
     if (error) throw error;
     res.json(data.map((item) => item.questions));
   } catch (error) {

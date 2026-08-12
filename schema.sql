@@ -32,7 +32,13 @@ CREATE TABLE IF NOT EXISTS pack_questions (
     pack_id BIGINT REFERENCES question_packs(id) ON DELETE CASCADE NOT NULL,
     question_id BIGINT REFERENCES questions(id) ON DELETE CASCADE NOT NULL,
     question_number INTEGER NOT NULL,
-    UNIQUE(pack_id, question_id)
+    UNIQUE(pack_id, question_id),
+    -- Race-safe (2026-08-12): satu paket TIDAK boleh punya 2 soal bernomor
+    -- sama. Menutup race window max+1 antar tab admin — insert duplikat
+    -- ditolak DB (error 23505) dan server retry dgn nomor baru. Untuk
+    -- existing install: jalankan migration-004 DULU (renumber paket yang
+    -- sudah terlanjur ber-question_number duplikat), lalu constraint ini.
+    UNIQUE(pack_id, question_number)
 );
 
 -- 4. Tabel Hasil Ujian (exam_results)
@@ -74,6 +80,11 @@ CREATE INDEX IF NOT EXISTS idx_admins_username ON admins(username);
 --   kolom content dan explanation.
 -- - Kolom question_type sekarang selalu bernilai 'text' karena tidak ada lagi
 --   pemisahan tipe soal (semua menggunakan rich text editor).
+-- - Constraint UNIQUE(pack_id, question_number) pada pack_questions (2026-08-12):
+--   menutup race window antar tab admin — insert duplikat ditolak DB (error
+--   23505) dan server retry dgn nomor baru (lihat specs/pack-question-order-spec.md).
+--   Untuk existing install, jalankan migration-004 DULU (renumber paket lama yang
+--   sudah terlanjur ber-question_number duplikat) sebelum constraint aktif.
 --- Untuk migrasi data lama yang sudah memiliki gambar di image_url/explanation_image_url,
 -- gambar akan tetap ditampilkan karena tag <img> akan dibaca dari kolom content
 -- atau dari image_url/explanation_image_url.
@@ -115,3 +126,50 @@ ALTER TABLE question_packs
   ADD COLUMN IF NOT EXISTS subtests TEXT[] NOT NULL DEFAULT ARRAY['TWK','TIU','TKP'],
   ADD COLUMN IF NOT EXISTS subtest_thresholds JSONB NOT NULL DEFAULT
     '{"TWK":65,"TIU":80,"TKP":166}'::jsonb;
+
+-- ============================================
+-- ROW LEVEL SECURITY (2026-08-12, align dengan prod)
+-- ============================================
+-- Prod mengaktifkan RLS di 5 tabel + deny policies di admins. Tanpa RLS,
+-- default privileges Supabase (GRANT ALL ke anon/authenticated) membuat tabel
+-- terbaca publik via PostgREST (anon key publik) — termasuk bank jawaban dan
+-- password hash admin. App memakai service_role (bypass RLS) → perilaku app
+-- TIDAK berubah; ini murni postur keamanan (lihat migration-005).
+ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE question_packs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pack_questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exam_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE admins ENABLE ROW LEVEL SECURITY;
+
+-- Deny policies admins (idempotent via DO block — CREATE POLICY tidak punya
+-- IF NOT EXISTS)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies
+                 WHERE schemaname = 'public' AND tablename = 'admins'
+                   AND policyname = 'deny_anon_admins') THEN
+    CREATE POLICY deny_anon_admins ON admins
+      TO anon USING (false) WITH CHECK (false);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies
+                 WHERE schemaname = 'public' AND tablename = 'admins'
+                   AND policyname = 'deny_authenticated_admins') THEN
+    CREATE POLICY deny_authenticated_admins ON admins
+      TO authenticated USING (false) WITH CHECK (false);
+  END IF;
+END $$;
+
+-- ============================================
+-- GRANT API ROLES (2026-08-12, align dengan hosted/prod)
+-- ============================================
+-- Hosted Supabase memberi default privileges penuh ke anon/authenticated/
+-- service_role; stack lokal TIDAK (hanya TRUNCATE/REFERENCES/TRIGGER). Tanpa
+-- grant ini, app yang dipointing ke lokal gagal dengan 42501 permission denied
+-- (lihat migration-006). Idempotent. RLS (blok di atas) tetap pengaman:
+-- anon/authenticated diblokir RLS, service_role bypass.
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;

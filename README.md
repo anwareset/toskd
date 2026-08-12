@@ -69,12 +69,12 @@ toskd/
 │       ├── login.js              # Login admin form handler (POST /api/admin/login, redirect ke ?next=, auto-fill username dari cookie session)
 │       ├── kelola-soal.js        # Kelola bank soal: CRUD + Quill.js editor (full toolbar) + image upload ke Vercel Blob + TKP Bobot dropdown (1-5, dedupe otomatis) + bulk-add modal dengan TKP format help
 │       ├── paket-soal.js         # Kelola paket soal: CRUD + subtes chip picker 1-3 + per-subtest threshold inputs + live running total + sortable/pagination table + Subtes column (chip-styled)
-│       ├── paket-detail.js       # Relasi soal ↔ paket: drag-and-drop reorder + tentative selection + subtest-filtered bank list (only questions matching pack.subtests shown) + partial-failure add-to-pack
+│       ├── paket-detail.js       # Relasi soal ↔ paket: drag-and-drop reorder + tentative selection + subtest-filtered bank list (only questions matching pack.subtests shown) + partial-failure add-to-pack + urutan add sesuai urutan centang checkbox (question_number naik per iterasi)
 │       ├── bulk-parser.js        # ESM parser untuk bulk-add soal format v2 (premise list + lead-in + options A–E + key + TKP `Bobot:` line parsing) + previewHtmlForCell helper
 │       ├── image-uploader.js     # Pipeline rehost gambar anti-hotlink: scan ![alt](url)/<img src> → download (no-referrer + fallback /api/fetch-image) → IndexedDB staging → upload Vercel Blob → cleanup (window.ImageUploader)
 │       └── markdown-image.js     # Modul BERSAMA render markdown-img: IMAGE_MD_REGEX + renderInlineMd/renderInlinePreview (single source of truth, dipakai exam.js/review.js/kelola-soal.js; muat sbg <script type="module"> sebelum classic scripts)
 ├── src/
-│   ├── server.js                 # API Express.js (Vercel Serverless Function) - TKP weighted scoring (scoreForQuestion + validateOptionScores) + normalizePackInput + validateQuestionMatchesPack + POST /api/fetch-image (proxy download anti-hotlink: requireAdmin + SSRF guard) + DELETE /api/scoreboard (reset, requireAdmin) + access control review: cookie peserta toskd_participant_sess + gate GET /api/exam/:id/results (admin ATAU pemilik, selain → 403)
+│   ├── server.js                 # API Express.js (Vercel Serverless Function) - TKP weighted scoring (scoreForQuestion + validateOptionScores) + normalizePackInput + validateQuestionMatchesPack + POST /api/fetch-image (proxy download anti-hotlink: requireAdmin + SSRF guard) + DELETE /api/scoreboard (reset, requireAdmin) + access control review: cookie peserta toskd_participant_sess + gate GET /api/exam/:id/results (admin ATAU pemilik, selain → 403) + urutan soal paket: POST /api/packs/:id/questions assign question_number = max(existing)+1 server-side (ignore client number, gap-safe) + GET /api/packs/:id/questions tiebreak .order('id') deterministik
 │   └── db.js                     # Supabase client connection
 ├── scripts/
 │   └── migrate-images.mjs        # CLI migrasi massal gambar soal → Vercel Blob (pnpm migrate:images; dry-run default, --apply untuk eksekusi)
@@ -87,7 +87,8 @@ toskd/
 │   ├── test-tkp-scoring.mjs                       # Integration tests untuk TKP weighted scoring (scoreForQuestion + computePackScore)
 │   ├── test-image-rehost.mjs                      # Pure helpers scan/replace (image-uploader.js: scanImageUrls/applyUrlReplacements/isRehostedUrl)
 │   ├── test-migrate-images.mjs                    # URL collection + transformasi field (scripts/migrate-images.mjs)
-│   └── test-markdown-render.mjs                   # renderInlineMd/renderInlinePreview/IMAGE_MD_REGEX (markdown-image.js)
+│   ├── test-markdown-render.mjs                   # renderInlineMd/renderInlinePreview/IMAGE_MD_REGEX (markdown-image.js)
+│   └── test-pack-question-order.mjs               # Urutan soal paket: POST max+1 server-side + client number diabaikan + tiebreak GET deterministik (mock PostgREST stateful)
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)
 ├── Dockerfile                    # Multi-stage Docker build (node:22-alpine, non-root, tini init, HEALTHCHECK)
 ├── .dockerignore                 # Exclude node_modules, .env, specs/, tests/ dari image
@@ -151,6 +152,7 @@ SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...          # service_role key
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxxxxxxxxxxx
 JWT_SECRET=<random-32+-chars>                                    # Generate: openssl rand -hex 32
 COOKIE_SECURE=true                                              # Opsional: variabel ini mengatur keamanan cookie login, sistem otomatis mendeteksi apakah situs diakses lewat `https://` (koneksi aman) atau `http://` (koneksi biasa).
+NODE_ENV=production						# Opsional: untuk bootstrap admin
 BOOTSTRAP_ADMIN_USERNAME=admin                                  # Opsional: untuk bootstrap admin pertama
 BOOTSTRAP_ADMIN_PASSWORD=<strong-password>                      # Opsional: akan di-hash bcrypt lalu di-insert
 ```
