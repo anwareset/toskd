@@ -219,9 +219,69 @@ if (searchClear) {
   });
 }
 
+// Rincian paket + aturan/persiapan ujian di modal nama peserta (2026-08-12):
+// memberitahu peserta bahwa menekan "Mulai Ujian" benar-benar memulai ujian
+// (timer langsung berjalan) dan apa saja yang perlu disiapkan. Dipanggil tiap
+// kali selectPack(id) membuka modal — konten selalu sesuai paket terpilih.
+function renderPackDetail(p) {
+  const panel = document.getElementById("pack-detail");
+  if (!panel) return;
+  const subtests =
+    Array.isArray(p.subtests) && p.subtests.length
+      ? p.subtests
+      : ["TWK", "TIU", "TKP"];
+  const thresholds =
+    p.subtest_thresholds && typeof p.subtest_thresholds === "object"
+      ? p.subtest_thresholds
+      : {};
+  const chips = subtests
+    .map(
+      (s) =>
+        `<span class="chip__label chip__label--display">${esc(String(s).toUpperCase())}</span>`,
+    )
+    .join(" ");
+  // Ambang kelulusan per subtes (dari subtest_thresholds JSONB) sebagai
+  // daftar inline "TWK 65 · TIU 80 · TKP 166" — hanya subtes dalam paket.
+  const pgParts = subtests
+    .map((s) => {
+      const t = thresholds[s];
+      const n = Number(t);
+      return t != null && Number.isFinite(n)
+        ? `${esc(String(s).toUpperCase())} ${n}`
+        : null;
+    })
+    .filter(Boolean)
+    .join(" · ");
+  panel.innerHTML = `
+    <div class="exam-prep-pack">
+      <div class="exam-prep-title">${esc(p.name)}</div>
+      <div class="exam-prep-stats">
+        <div class="exam-prep-stat"><strong>${p.count ?? "–"}</strong><span>Soal</span></div>
+        <div class="exam-prep-stat"><strong>${p.duration_minutes ?? "–"}</strong><span>Menit</span></div>
+      </div>
+      <div class="exam-prep-line"><span class="exam-prep-label">Subtes:</span> ${chips}</div>
+      ${
+        pgParts
+          ? `<div class="exam-prep-line"><span class="exam-prep-label">Ambang kelulusan:</span> <span class="exam-prep-pg">${pgParts}</span></div>`
+          : ""
+      }
+    </div>
+    <div class="exam-prep-rules">
+      <div class="exam-prep-rules-title">⚠️ Persiapan & aturan ujian</div>
+      <ul>
+        <li>⏱️ <strong>Timer langsung berjalan</strong> begitu kamu menekan "Mulai Ujian".</li>
+        <li>⏰ Jawabanmu <strong>otomatis dikumpulkan</strong> saat waktu habis.</li>
+        <li>✏️ Jawaban bisa diubah kapan saja sebelum dikumpulkan. Gunakan tombol <strong>Akhiri Ujian</strong> jika ingin mengakhiri sesi ujian lebih awal.</li>
+        <li>🚫 Hindari <em>refresh</em> atau menutup tab; jika terpaksa, timer dan jawabanmu akan dilanjutkan otomatis saat halaman dibuka kembali.</li>
+        <li>📶 Pastikan koneksi internet stabil dan perangkat terisi daya.</li>
+      </ul>
+    </div>`;
+}
+
 function selectPack(id) {
   const p = packsList.find((x) => x.id === id);
-  if (p && (p.count < 1 || p.count > 110)) {
+  if (!p) return; // defensive: paket tidak ditemukan (harusnya tidak terjadi)
+  if (p.count < 1 || p.count > 110) {
     alert(
       `Paket ini memiliki ${p.count} soal. Untuk memulai ujian, paket harus memiliki antara 1 sampai 110 soal.`,
     );
@@ -229,6 +289,7 @@ function selectPack(id) {
   }
   selectedPackId = id;
   nameInput.value = "";
+  renderPackDetail(p); // isi rincian paket + aturan ujian sebelum modal terbuka
   modal.showModal();
 }
 document.getElementById("cancel-btn").onclick = () => modal.close();

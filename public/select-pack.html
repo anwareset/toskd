@@ -101,6 +101,12 @@
                             class="input-field"
                             placeholder="contoh: Prabowo Subianto"
                         />
+                        <!-- Rincian paket + aturan ujian: diisi dinamis oleh
+                             renderPackDetail() di select-pack.js saat
+                             selectPack(id) dipanggil. Memberi tahu peserta
+                             bahwa menekan "Mulai Ujian" benar-benar memulai
+                             ujian (timer langsung berjalan). -->
+                        <div id="pack-detail" class="exam-prep"></div>
                         <div class="modal-buttons">
                             <button class="btn-secondary" id="cancel-btn">
                                 Batal

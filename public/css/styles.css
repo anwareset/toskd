@@ -1088,6 +1088,104 @@ dialog.modal[open].modal-closing::backdrop {
 }
 
 /* ==========================================================
+ * Exam-prep panel — modal nama peserta select-pack.html
+ * Rincian paket (soal/menit/subtes/ambang kelulusan) + daftar
+ * aturan & persiapan ujian. Chip subtes reuse .chip__label--display.
+ * ========================================================== */
+.exam-prep {
+    margin: 16px 0 18px; /* jarak dari input participant-name = gap p↔input (12+4px) */
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    overflow: hidden;
+}
+
+.exam-prep-pack {
+    padding: 14px 16px;
+    border-bottom: 1px dashed var(--border);
+}
+
+.exam-prep-title {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 10px;
+}
+
+.exam-prep-stats {
+    display: flex;
+    gap: 28px;
+    margin-bottom: 10px;
+}
+
+.exam-prep-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.exam-prep-stat strong {
+    font-size: 1.35rem;
+    line-height: 1.1;
+    color: var(--primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.exam-prep-stat span {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.exam-prep-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.exam-prep-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.exam-prep-pg {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.exam-prep-rules {
+    padding: 12px 16px;
+}
+
+.exam-prep-rules-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.exam-prep-rules ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 7px;
+}
+
+.exam-prep-rules li {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--text);
+}
+
+/* ==========================================================
  * 8. Tables
  * ========================================================== */
 .table-scroll-wrapper {
