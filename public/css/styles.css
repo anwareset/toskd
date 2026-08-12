@@ -800,7 +800,7 @@ button:disabled {
 .btn-lg {
     padding: 14px 28px;
     font-size: 1.02rem;
-    border-radius: var(--radius-md);
+    border-radius: 999px; /* pill — konsisten dengan komponen tombol (Rev. 2026-08-12) */
 }
 
 /* White-on-indigo buttons for the landing CTA band */
@@ -2305,7 +2305,7 @@ tbody tr:hover .sticky-col-right {
 
 .pagination-btn {
     padding: 6px 14px;
-    border-radius: var(--radius-sm);
+    border-radius: 999px; /* pill — konsisten dengan komponen tombol (Rev. 2026-08-12) */
     font-size: 0.85rem;
     height: 36px;
     display: inline-flex;
