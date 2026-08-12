@@ -500,6 +500,41 @@
                         </div>
                     </div>
                 </dialog>
+
+                <!-- ==================== USAGE MODAL ====================
+                     Menampilkan daftar paket soal LAIN yang memakai soal ini.
+                     Dibuka dari chip "Dipakai" di option-item bank list
+                     (paket-detail-usage-chip-spec.md). Reuse komponen
+                     dialog.modal — pattern notification-modal (single OK).
+                     JS di public/js/paket-detail.js :: openUsageModal(). -->
+                <dialog
+                    id="usage-modal"
+                    class="modal"
+                    style="max-width: 480px"
+                >
+                    <div class="modal-content">
+                        <h3 id="usage-modal-title">📦 Dipakai di Paket Soal</h3>
+                        <div
+                            id="usage-modal-body"
+                            style="
+                                padding: 8px 0 16px;
+                                font-size: 0.95rem;
+                                line-height: 1.6;
+                            "
+                        >
+                            — placeholder —
+                        </div>
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-primary"
+                                id="usage-modal-ok-btn"
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
             </div>
             <footer class="footer">
                 Untuk latihan SKD · Made with ♥️ in

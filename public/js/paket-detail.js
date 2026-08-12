@@ -200,6 +200,97 @@ function showNotification(title, message) {
   notificationModal.showModal();
 }
 
+// ==== Usage modal (chip "Dipakai" di option-item bank list) ====
+// Menampilkan daftar paket soal LAIN yang memakai sebuah soal. Reuse
+// komponen dialog.modal — pattern notification-modal (single OK).
+// JS: openUsageModal() di bawah. See paket-detail-usage-chip-spec.md.
+const usageModal = document.getElementById("usage-modal");
+const usageModalTitle = document.getElementById("usage-modal-title");
+const usageModalBody = document.getElementById("usage-modal-body");
+const usageModalOkBtn = document.getElementById("usage-modal-ok-btn");
+if (usageModalOkBtn) {
+  usageModalOkBtn.addEventListener("click", () => {
+    if (usageModal) usageModal.close();
+  });
+}
+
+// questionUsage — cache Map<id, { used, packs }> dari POST
+// /api/questions/bulk-usage (satu round-trip per chunk, endpoint cap 1000
+// ids/request). Usage TIDAK berubah selama halaman terbuka: bank list
+// mengecualikan paket saat ini (add/remove hanya menyentuh paket ini),
+// jadi fetch sekali saat init cukup dan tetap akurat.
+const questionUsage = new Map();
+
+// Fetch usage SEMUA soal bank dalam chunk PARALEL (Promise.all). Kegagalan
+// TIDAK menggagalkan halaman — chip "Dipakai" saja yang tidak muncul
+// (caller catch). Pakai fetch polos (bukan wrapFetch) supaya kegagalan
+// non-kritikal tidak memunculkan toast "Server error" yang menyesatkan
+// saat halaman sebenarnya tetap jalan.
+async function fetchQuestionUsage(ids) {
+  const CHUNK = 400;
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    chunks.push(ids.slice(i, i + CHUNK));
+  }
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const res = await fetch("/api/questions/bulk-usage", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: chunk }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const map = await res.json();
+      for (const [idStr, usage] of Object.entries(map)) {
+        questionUsage.set(parseInt(idStr, 10), usage);
+      }
+    }),
+  );
+}
+
+// Chip "Dipakai" untuk soal yang terpakai di paket soal LAIN (mirror
+// .bank-timestamp tapi bisa diklik). Bank list mengecualikan paket saat
+// ini, jadi packs dari usage endpoint = paket lain saja. Klik → modal
+// daftar paket; hover/focus → tooltip daftar paket. Tidak dirender jika
+// soal tidak terpakai di paket lain.
+function renderUsageChip(q) {
+  const usage = questionUsage.get(parseInt(q.id, 10));
+  const packs = usage?.packs || [];
+  if (packs.length === 0) return "";
+  return `
+      <span class="bank-usage-wrap">
+        <button type="button" class="bank-usage-chip" data-q-id="${q.id}"
+          aria-label="Soal dipakai di ${packs.length} paket soal lain. Klik untuk melihat daftar.">
+          Dipakai
+        </button>
+        <span class="bank-usage-tooltip" role="tooltip">
+          <strong>Dipakai di ${packs.length} paket soal:</strong>
+          <ul>${packs.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>
+        </span>
+      </span>`;
+}
+
+// Modal daftar paket yang memakai soal (pattern notification-modal).
+function openUsageModal(packs) {
+  if (!usageModal) return;
+  if (usageModalTitle) usageModalTitle.textContent = "📦 Dipakai di Paket Soal";
+  if (usageModalBody) {
+    if (!packs.length) {
+      usageModalBody.innerHTML =
+        '<p style="margin: 0">Soal ini tidak digunakan di paket soal lain.</p>';
+    } else {
+      usageModalBody.innerHTML =
+        `<p style="margin: 0 0 10px; color: var(--text-muted)">` +
+        `Soal ini dipakai di ${packs.length} paket soal:</p>` +
+        `<ul style="margin: 0 0 0 18px; padding: 0">${packs
+          .map((n) => `<li>${esc(n)}</li>`)
+          .join("")}</ul>`;
+    }
+  }
+  usageModal.showModal();
+}
+
 function esc(s) {
   const d = document.createElement("div");
   d.textContent = s;
@@ -297,6 +388,15 @@ async function init() {
         new Date(a.created_at || 0).getTime(),
     );
 
+    // Fetch usage (paket mana saja yang memakai tiap soal) untuk chip
+    // "Dipakai" di option-item. Gagal di sini TIDAK menggagalkan halaman
+    // — chip saja yang tidak muncul (paket-detail-usage-chip-spec.md).
+    try {
+      await fetchQuestionUsage(allQuestions.map((q) => q.id));
+    } catch (err) {
+      console.error("Fetch question usage failed:", err);
+    }
+
     packTitle.textContent = pack.name;
     const subLabels = (
       Array.isArray(pack.subtests) && pack.subtests.length
@@ -384,6 +484,7 @@ function renderBankList() {
           <strong>[${esc(q.question_type.toUpperCase())}]</strong> ${window.bulkParser.previewHtmlForCell(q.content)}
         </span>
         <time class="bank-timestamp" datetime="${esc(q.created_at || "")}" title="${esc(formatIndonesianFull(q.created_at))}" aria-label="Ditambahkan ${esc(formatIndonesianRelative(q.created_at))}">🕐 ${esc(formatIndonesianRelative(q.created_at))}</time>
+        ${renderUsageChip(q)}
       </label>
     `,
       )
@@ -618,6 +719,19 @@ bankList.addEventListener("change", (e) => {
     updateAddButtonLabel();
     updateBankSelectAllState();
   }
+});
+
+// Chip "Dipakai" → modal daftar paket (delegated: renderBankList rebuilds
+// DOM tiap render, jadi listener parent-level seperti change handler
+// add-q). preventDefault + stopPropagation supaya klik button di dalam
+// <label> tidak ikut meng-toggle checkbox add-q.
+bankList.addEventListener("click", (e) => {
+  const chip = e.target.closest(".bank-usage-chip");
+  if (!chip) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const qId = parseInt(chip.dataset.qId, 10);
+  openUsageModal(questionUsage.get(qId)?.packs || []);
 });
 
 // Same delegation strategy for packList — renderLists() rebuilds the

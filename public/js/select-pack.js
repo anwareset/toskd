@@ -10,6 +10,17 @@ const searchBar = document.getElementById("pack-search-bar");
 const modal = document.getElementById("name-modal");
 const nameInput = document.getElementById("participant-name");
 
+// Pagination (spec: specs/select-pack-pagination-spec.md) — 6 kartu per
+// halaman, bar bawah saja, reuse komponen .pagination-bar yang sama dengan
+// scoreboard/paket-soal (paket-soal-pagination-spec.md §8.4).
+const CARDS_PER_PAGE = 6;
+let currentPage = 1;
+const packPagination = document.getElementById("pack-pagination");
+const packPrevBtn = document.getElementById("pack-prev-btn");
+const packNextBtn = document.getElementById("pack-next-btn");
+const packPageInfo = document.getElementById("pack-page-info");
+const packPaginationRange = document.getElementById("pack-pagination-range");
+
 function esc(s) {
   const d = document.createElement("div");
   d.textContent = s;
@@ -36,9 +47,15 @@ function renderPacks(list, opts = {}) {
       : null;
   if (message) {
     grid.innerHTML = `<p class="grid-empty-state">${esc(message)}</p>`;
+    if (packPagination) packPagination.style.display = "none";
     return;
   }
-  grid.innerHTML = list
+  const totalPages = Math.max(1, Math.ceil(list.length / CARDS_PER_PAGE));
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+  const startIdx = (currentPage - 1) * CARDS_PER_PAGE;
+  const pageData = list.slice(startIdx, startIdx + CARDS_PER_PAGE);
+  grid.innerHTML = pageData
     .map(
       (p) => `
       <div class="card">
@@ -51,6 +68,44 @@ function renderPacks(list, opts = {}) {
       </div>`,
     )
     .join("");
+  renderPaginationBar(list.length, totalPages);
+}
+
+// Render bar pagination bawah (komponen .pagination-bar yang sama dengan
+// scoreboard/paket-soal): info halaman, rentang yang tampil, dan state
+// disabled tombol Sebelumnya/Selanjutnya. Bar selalu ditampilkan selama ada
+// paket (konsisten dengan konvensi paket-soal-pagination-spec.md §7.5);
+// saat list kosong renderPacks sudah menyembunyikannya.
+function renderPaginationBar(total, totalPages) {
+  if (!packPagination) return;
+  const start = (currentPage - 1) * CARDS_PER_PAGE + 1;
+  const end = Math.min(start + CARDS_PER_PAGE - 1, total);
+  if (packPageInfo) {
+    packPageInfo.textContent = `Halaman ${currentPage} dari ${totalPages}`;
+  }
+  if (packPaginationRange) {
+    packPaginationRange.textContent =
+      `Menampilkan ${start}–${end} dari ${total} paket`;
+  }
+  if (packPrevBtn) packPrevBtn.disabled = currentPage <= 1;
+  if (packNextBtn) packNextBtn.disabled = currentPage >= totalPages;
+  packPagination.style.display = "flex";
+}
+
+// Satu sumber kebenaran list yang tampil (search + pagination share
+// pipeline yang sama — perubahan search mereset ke halaman 1).
+function getVisiblePacks() {
+  return filterPacks(packsList, currentSearch);
+}
+
+function gotoPage(delta) {
+  const list = getVisiblePacks();
+  const totalPages = Math.max(1, Math.ceil(list.length / CARDS_PER_PAGE));
+  const next = currentPage + delta;
+  if (next >= 1 && next <= totalPages) {
+    currentPage = next;
+    renderPacks(list);
+  }
 }
 
 function setLoadingStatus(text) {
@@ -131,6 +186,7 @@ async function loadPacks() {
 if (searchInput) {
   searchInput.addEventListener("input", () => {
     currentSearch = searchInput.value;
+    currentPage = 1; // reset rule: ganti search → balik ke halaman 1
     updateClearVisibility();
     // Defensive guard: loadPacks already disables the input during
     // in-flight load, so this branch shouldn't actually fire while
@@ -155,6 +211,7 @@ if (searchClear) {
     if (!searchInput) return;
     searchInput.value = "";
     currentSearch = "";
+    currentPage = 1; // reset rule: bersihkan search → balik ke halaman 1
     updateClearVisibility();
     if (packsList.length === 0) return;
     renderPacks(packsList);
@@ -194,4 +251,6 @@ nameInput.addEventListener(
   "input",
   () => (nameInput.style.borderColor = ""),
 );
+if (packPrevBtn) packPrevBtn.addEventListener("click", () => gotoPage(-1));
+if (packNextBtn) packNextBtn.addEventListener("click", () => gotoPage(1));
 loadPacks();

@@ -24,6 +24,11 @@
 
 html {
     -webkit-text-size-adjust: 100%;
+    /* Hardening anti horizontal-scroll: body sudah overflow-x: clip (di-
+       propagasi ke viewport di browser modern); html ikut di-clip supaya
+       browser lama/quirky juga tidak bisa scroll horizontal (lihat section
+       21 — select-pack-pagination-spec.md). */
+    overflow-x: clip;
 }
 
 body {
@@ -3664,4 +3669,143 @@ tbody tr:hover .sticky-col-right {
     font-size: 0.74rem;
     font-weight: 600;
     white-space: nowrap;
+}
+
+/* ==========================================================
+ * 21. Select-pack pagination mobile polish
+ * ==========================================================
+ * Mobile (≤767px) pada #pack-pagination:
+ * 1. Teks rentang #pack-pagination-range ditaruh di baris sendiri
+ *    (width 100%) dan di-center — selaras dengan #pack-page-info.
+ * 2. Cluster kanan (Sebelumnya | Halaman X dari Y | Selanjutnya) diubah
+ *    dari grid `1fr auto 1fr` (min-content ±330px) menjadi flex WRAPPING
+ *    + centered — di layar ≤360px grid itu meluber ke kanan dan memicu
+ *    horizontal scroll. Sekarang elemen wrap ke baris baru bila sempit.
+ * 3. Layar sangat sempit (≤380px): padding/font tombol dirapatkan.
+ * Desktop tidak terpengaruh: bar tetap space-between satu baris.
+ */
+@media (max-width: 767px) {
+    #pack-pagination .pagination-bar-left {
+        justify-content: center;
+        width: 100%;
+    }
+    #pack-pagination .pagination-bar-right {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 380px) {
+    #pack-pagination .pagination-btn {
+        padding: 6px 10px;
+        font-size: 0.8rem;
+    }
+}
+
+/* ==========================================================
+ * 22. Select-pack spacing (search → grid)
+ * ==========================================================
+ * Jarak vertikal antara #pack-search-bar dan #pack-grid dinaikkan dari
+ * margin .search-bar (12px) menjadi 20px — sama dengan gap antar kartu
+ * di .card-grid (20px). Sebelumnya jarak search→grid lebih kecil dari
+ * jarak antar kartu sehingga nampak timpang (mobile & desktop).
+ */
+#pack-search-bar {
+    margin-bottom: 20px;
+}
+
+/* ==========================================================
+ * 23. Paket-detail: chip "Dipakai" + tooltip (option-item bank list)
+ * ==========================================================
+ * Chip mirror .bank-timestamp tapi bisa diklik — menandai soal yang
+ * terpakai di paket soal LAIN. Klik → usage-modal (daftar paket);
+ * hover/focus → tooltip CSS daftar paket. Lihat
+ * paket-detail-usage-chip-spec.md.
+ */
+.bank-usage-wrap {
+    position: relative;
+    flex-shrink: 0;
+    margin-left: 8px;
+    display: inline-flex;
+}
+
+.bank-usage-chip {
+    flex-shrink: 0;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--primary-light);
+    border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+    border-radius: 6px;
+    padding: 2px 8px;
+    white-space: nowrap;
+    cursor: pointer;
+    font-family: inherit;
+    line-height: 1.5;
+    transition: background 0.15s ease, border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.bank-usage-chip:hover,
+.bank-usage-chip:focus-visible {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--on-primary);
+}
+
+.bank-usage-chip:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* Tooltip daftar paket — muncul saat hover/focus chip */
+.bank-usage-tooltip {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    min-width: 180px;
+    max-width: 280px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 10px 12px;
+    font-size: 0.82rem;
+    color: var(--text);
+    text-align: left;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: opacity 0.15s ease, transform 0.15s ease,
+        visibility 0.15s;
+    pointer-events: none;
+}
+
+.bank-usage-tooltip strong {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text);
+}
+
+.bank-usage-tooltip ul {
+    margin: 0;
+    padding: 0 0 0 16px;
+    list-style: disc;
+}
+
+.bank-usage-tooltip li {
+    margin: 2px 0;
+    line-height: 1.45;
+}
+
+.bank-usage-wrap:hover .bank-usage-tooltip,
+.bank-usage-wrap:focus-within .bank-usage-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
 }
