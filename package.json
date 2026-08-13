@@ -13,11 +13,23 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/instrumentation-express": "^0.69.0",
+    "@opentelemetry/instrumentation-http": "^0.221.0",
+    "@opentelemetry/instrumentation-pino": "^0.67.0",
+    "@opentelemetry/instrumentation-runtime-node": "^0.34.0",
+    "@opentelemetry/instrumentation-undici": "^0.31.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
     "@supabase/supabase-js": "^2.110.0",
     "@vercel/blob": "^2.5.0",
     "bcryptjs": "^2.4.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "pino": "^10.3.1"
+  },
+  "devDependencies": {
+    "pino-pretty": "^13.1.1"
   }
 }

@@ -2,6 +2,12 @@
 // Spec: specs/admin-auth-spec.md (rev 0.1). All admin auth code is
 // grouped under "ADMIN AUTH" headers below for easy audit.
 import "dotenv/config";
+// Observability (specs/golden-signals-otel-spec.md): WAJIB di-import sebelum
+// express/pino dimuat — otel.js mendaftarkan instrumentations yang mem-patch
+// node:http, express, undici, dan pino. ESM mengevaluasi import dalam urutan
+// source (depth-first), jadi blok ini harus tetap PALING ATAS.
+import "./otel.js";
+import "./logger.js";
 import express from "express";
 import { execFileSync } from "node:child_process";
 import { lookup } from "node:dns/promises";
@@ -11,6 +17,14 @@ import supabase from "./db.js";
 import { put } from "@vercel/blob";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { logger, errorField } from "./logger.js";
+import {
+  recordHttpRequest,
+  withSpan,
+  currentTraceContext,
+  activeServerSpan,
+  shutdownTelemetry,
+} from "./otel.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -23,6 +37,65 @@ app.set("trust proxy", 1);
 
 // Middleware
 app.use(express.json({ limit: "10mb" }));
+
+// ============================================
+// OBSERVABILITY (specs/golden-signals-otel-spec.md §4.2/§4.4)
+// ============================================
+// Hanya request bisnis yang di-track: /api/* dan halaman *.html. /health
+// (probe Docker HEALTHCHECK + monitoring eksternal) dan static assets
+// (public/) di-exclude dari metrik + access log (keputusan interview R2 #7).
+function isTrackedRequest(req) {
+  const p = req.path;
+  return p.startsWith("/api/") || p.endsWith(".html");
+}
+
+// Golden-signals: histogram http.server.request.duration (traffic/latency/
+// errors) + access log terstruktur, dicatat saat response selesai ('finish').
+// trace_id/span_id diambil di AWAL middleware (bukan di 'finish'): saat
+// request masuk span HTTP server masih aktif, jadi context deterministik —
+// di event 'finish' span bisa sudah berakhir sehingga instrumentation-pino
+// tidak lagi inject otomatis ke log.
+app.use((req, res, next) => {
+  if (!isTrackedRequest(req)) return next();
+  const start = process.hrtime.bigint();
+  const traceContext = currentTraceContext();
+  // Referensi span server (fallback spec §7 — lihat otel.js activeServerSpan).
+  const serverSpan = activeServerSpan();
+  res.on("finish", () => {
+    const durationSeconds = Number(process.hrtime.bigint() - start) / 1e9;
+    const statusCode = res.statusCode;
+    // Route ternormalisasi (pattern Express, bukan path mentah ber-id) —
+    // mencegah kartinalitas tinggi (R2 #6).
+    const route = req.route?.path ?? "<unmatched>";
+    // Fallback ExpressInstrumentation-vs-Express-5 (spec §7): tulis route
+    // ternormalisasi ke span server + rename dari "GET" jadi
+    // "GET /api/exam/:id/results" (span masih terbuka di 'finish' — ditutup
+    // di 'close').
+    if (serverSpan) {
+      serverSpan.setAttribute("http.route", route);
+      if (route !== "<unmatched>") {
+        serverSpan.updateName(`${req.method} ${route}`);
+      }
+    }
+    recordHttpRequest({
+      method: req.method,
+      route,
+      statusClass: `${Math.floor(statusCode / 100)}xx`,
+      durationSeconds,
+    });
+    logger.info(
+      {
+        ...traceContext,
+        event: "http.request",
+        operation_status: statusCode < 400 ? "success" : "failed",
+        duration_ms: Math.round(durationSeconds * 1000),
+        http: { method: req.method, route, status_code: statusCode },
+      },
+      "HTTP request",
+    );
+  });
+  next();
+});
 
 // ============================================
 // ADMIN AUTH (specs/admin-auth-spec.md §6)
@@ -216,7 +289,10 @@ async function maybeBootstrapAdmin() {
   // look alarming. Lets the next person hitting a bootstrap issue immediately
   // see "skipped (dev mode)" and know how to enable it.
   if (process.env.NODE_ENV?.toLowerCase() !== "production") {
-    console.log("[admin-auth] Bootstrap skipped (dev mode). Set NODE_ENV=production to test.");
+    logger.info(
+      { event: "admin.bootstrap", operation_status: "skipped", reason: "dev-mode" },
+      "Bootstrap skipped (dev mode). Set NODE_ENV=production to test.",
+    );
     return;
   }
   if (bootstrapDoneThisProcess) return;
@@ -229,8 +305,9 @@ async function maybeBootstrapAdmin() {
     if (countError) throw countError;
 
     if (count > 0) {
-      console.warn(
-        "[admin-auth] BOOTSTRAP_ADMIN_* env vars set but admins table not empty. " +
+      logger.warn(
+        { event: "admin.bootstrap", operation_status: "skipped", reason: "admins-table-not-empty" },
+        "BOOTSTRAP_ADMIN_* env vars set but admins table not empty. " +
         "DELETE the env vars from Vercel dashboard NOW to avoid plaintext password leak.",
       );
       bootstrapDoneThisProcess = true;
@@ -251,7 +328,10 @@ async function maybeBootstrapAdmin() {
     if (insertError) {
       // UNIQUE violation = race condition (another instance beat us). Safe to ignore.
       if (insertError.code === "23505") {
-        console.log("[admin-auth] Bootstrap race resolved by UNIQUE constraint.");
+        logger.info(
+          { event: "admin.bootstrap", operation_status: "success", detail: "race-resolved-by-unique" },
+          "Bootstrap race resolved by UNIQUE constraint.",
+        );
         bootstrapDoneThisProcess = true;
         return;
       }
@@ -259,21 +339,30 @@ async function maybeBootstrapAdmin() {
     }
 
     bootstrapDoneThisProcess = true;
-    console.log(
-      `[admin-auth] Bootstrap admin "${BOOTSTRAP_USERNAME}" created. ` +
-      `DELETE BOOTSTRAP_ADMIN_USERNAME and BOOTSTRAP_ADMIN_PASSWORD env vars NOW.`,
+    logger.info(
+      {
+        event: "admin.bootstrap",
+        operation_status: "success",
+        username: BOOTSTRAP_USERNAME,
+      },
+      "Bootstrap admin created. DELETE BOOTSTRAP_ADMIN_USERNAME and BOOTSTRAP_ADMIN_PASSWORD env vars NOW.",
     );
   } catch (err) {
     // Rich error context: Node fetch errors stash the real network reason in
     // `err.cause` (err.message is just "fetch failed"); Supabase PostgREST
     // errors are plain objects with `message`/`code`/`details`. Print both.
-    console.error("[admin-auth] Bootstrap failed:", {
-      message: err?.message,
-      code: err?.code,
-      details: err?.details,
-      cause: err?.cause?.message || err?.cause,
-      stack: err?.stack,
-    });
+    // errorField mempertahankan shape { type, code, message, stack, cause }
+    // (spec §12.2 + cause utk Node fetch errors); details PostgREST tetap
+    // dipertahankan terpisah.
+    logger.error(
+      {
+        event: "admin.bootstrap",
+        operation_status: "failed",
+        error: errorField(err),
+        details: err?.details ?? null,
+      },
+      "Admin bootstrap failed",
+    );
   }
 }
 
@@ -308,22 +397,30 @@ app.post("/api/admin/login", async (req, res) => {
       .eq("username", normalizedUsername)
       .single();
 
-    // Constant-time delay to prevent username enumeration.
+    // Constant-time delay to prevent username enumeration. bcrypt compare
+    // dibungkus span manual admin.login.verify (spec §4.6) — attribute hanya
+    // username, TANPA password.
     if (error || !admin) {
-      await bcrypt.compare(
-        password,
-        "$2a$10$dummy.hash.to.prevent.timing.attacks............",
+      await withSpan("admin.login.verify", { username: normalizedUsername }, () =>
+        bcrypt.compare(
+          password,
+          "$2a$10$dummy.hash.to.prevent.timing.attacks............",
+        ),
       );
-      console.warn(
-        `[admin-auth] failed login for username="${normalizedUsername}" (no such user)`,
+      logger.warn(
+        { event: "auth.login", operation_status: "failed", reason: "no-such-user", username: normalizedUsername },
+        "Failed login (no such user)",
       );
       return res.status(401).json({ error: "invalid credentials" });
     }
 
-    const valid = await bcrypt.compare(password, admin.password_hash);
+    const valid = await withSpan("admin.login.verify", { username: normalizedUsername }, () =>
+      bcrypt.compare(password, admin.password_hash),
+    );
     if (!valid) {
-      console.warn(
-        `[admin-auth] failed login for username="${normalizedUsername}" (bad password)`,
+      logger.warn(
+        { event: "auth.login", operation_status: "failed", reason: "bad-password", username: normalizedUsername },
+        "Failed login (bad password)",
       );
       return res.status(401).json({ error: "invalid credentials" });
     }
@@ -336,17 +433,21 @@ app.post("/api/admin/login", async (req, res) => {
           .update({ last_login_at: new Date().toISOString() })
           .eq("id", admin.id);
       } catch (err) {
-        console.warn("[admin-auth] last_login_at update failed:", err);
+        logger.warn(
+          { event: "auth.login", operation_status: "partial", detail: "last_login_at-update-failed", error: errorField(err) },
+          "last_login_at update failed",
+        );
       }
     })();
 
-    console.log(
-      `[admin-auth] successful login for username="${normalizedUsername}" (id=${admin.id})`,
+    logger.info(
+      { event: "auth.login", operation_status: "success", username: normalizedUsername, admin_id: admin.id },
+      "Successful login",
     );
     setSessionCookie(req, res, { adminId: admin.id, username: admin.username });
     res.json({ ok: true, username: admin.username });
   } catch (err) {
-    console.error("[admin-auth] login error:", err);
+    logger.error({ event: "auth.login", operation_status: "failed", error: errorField(err) }, "Login failed");
     res.status(500).json({ error: "login failed" });
   }
 });
@@ -490,7 +591,7 @@ app.get("/api/questions", async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (error) {
-    console.error("Error fetching questions:", error);
+    logger.error({ event: "question.list", operation_status: "failed", error: errorField(error) }, "Failed to fetch questions");
     res.status(500).json({ error: "Failed to fetch questions" });
   }
 });
@@ -568,11 +669,13 @@ app.post("/api/questions/bulk", async (req, res) => {
 
     // Supabase's `.insert(rows).select()` sends a single PostgREST
     // request; PostgREST wraps the rows in one Postgres transaction so
-    // any single insert failure rolls back the entire batch.
-    const { data, error } = await supabase
-      .from("questions")
-      .insert(rows)
-      .select();
+    // any single insert failure rolls back the entire batch. Insert
+    // dibungkus span manual question.bulk_add (spec §4.6).
+    const { data, error } = await withSpan(
+      "question.bulk_add",
+      { count: rows.length },
+      () => supabase.from("questions").insert(rows).select(),
+    );
 
     if (error) throw error;
 
@@ -583,7 +686,7 @@ app.post("/api/questions/bulk", async (req, res) => {
         ids: data.map((d) => d.id),
       });
   } catch (error) {
-    console.error("Error bulk adding questions:", error);
+    logger.error({ event: "question.bulk_add", operation_status: "failed", error: errorField(error) }, "Failed to bulk add questions");
     res.status(500).json({ error: "Failed to bulk add questions" });
   }
 });
@@ -631,7 +734,7 @@ app.post("/api/questions/bulk-usage", async (req, res) => {
 
     res.json(usageMap);
   } catch (error) {
-    console.error("Error in bulk usage check:", error);
+    logger.error({ event: "question.bulk_usage", operation_status: "failed", error: errorField(error) }, "Failed to check usage");
     res.status(500).json({ error: "Failed to check usage" });
   }
 });
@@ -695,15 +798,21 @@ app.post("/api/questions/bulk-delete", async (req, res) => {
 
     // Spec Section 7 R13: aggregate server-side summary log to avoid
     // per-id error spam when 1000 IDs fail at once.
-    console.error("Bulk delete summary:", {
+    const summary = {
+      event: "question.bulk_delete",
       total: ids.length,
       deleted: deleted.length,
       failed: failed.length,
-    });
+    };
+    if (failed.length > 0) {
+      logger.warn({ ...summary, operation_status: "partial" }, "Bulk delete summary (some failed)");
+    } else {
+      logger.info({ ...summary, operation_status: "success" }, "Bulk delete summary");
+    }
 
     res.json({ deleted, failed });
   } catch (error) {
-    console.error("Bulk delete error:", error);
+    logger.error({ event: "question.bulk_delete", operation_status: "failed", error: errorField(error) }, "Failed to bulk delete questions");
     res.status(500).json({ error: "Failed to bulk delete questions" });
   }
 });
@@ -775,7 +884,7 @@ app.post("/api/questions", async (req, res) => {
     if (error) throw error;
     res.status(201).json(data);
   } catch (error) {
-    console.error("Error adding question:", error);
+    logger.error({ event: "question.create", operation_status: "failed", error: errorField(error) }, "Failed to add question");
     res.status(500).json({ error: "Failed to add question" });
   }
 });
@@ -813,7 +922,7 @@ app.get("/api/packs", async (req, res) => {
     }));
     res.json(data);
   } catch (error) {
-    console.error("Error fetching packs:", error);
+    logger.error({ event: "pack.list", operation_status: "failed", error: errorField(error) }, "Failed to fetch packs");
     res.status(500).json({ error: "Failed to fetch packs" });
   }
 });
@@ -829,7 +938,7 @@ app.get("/api/packs/:id", async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (error) {
-    console.error("Error fetching pack:", error);
+    logger.error({ event: "pack.get", operation_status: "failed", error: errorField(error), pack_id: req.params.id }, "Failed to fetch pack");
     res.status(500).json({ error: "Failed to fetch pack" });
   }
 });
@@ -928,7 +1037,7 @@ app.post("/api/packs", async (req, res) => {
     if (dbError) throw dbError;
     res.status(201).json(data);
   } catch (error) {
-    console.error("Error creating pack:", error);
+    logger.error({ event: "pack.create", operation_status: "failed", error: errorField(error) }, "Failed to create pack");
     res.status(500).json({ error: "Failed to create pack" });
   }
 });
@@ -1033,7 +1142,7 @@ app.post("/api/packs/:id/questions", async (req, res) => {
     if (insertError) throw insertError;
     res.status(201).json(inserted);
   } catch (error) {
-    console.error("Error adding question to pack:", error);
+    logger.error({ event: "pack.question_add", operation_status: "failed", error: errorField(error), pack_id: req.params.id }, "Failed to add question to pack");
     res.status(500).json({ error: "Failed to add question to pack" });
   }
 });
@@ -1056,7 +1165,7 @@ app.get("/api/packs/:id/questions", async (req, res) => {
     if (error) throw error;
     res.json(data.map((item) => item.questions));
   } catch (error) {
-    console.error("Error fetching pack questions:", error);
+    logger.error({ event: "pack.questions_get", operation_status: "failed", error: errorField(error), pack_id: req.params.id }, "Failed to fetch pack questions");
     res.status(500).json({ error: "Failed to fetch pack questions" });
   }
 });
@@ -1065,20 +1174,29 @@ app.get("/api/packs/:id/questions", async (req, res) => {
 app.post("/api/exam/start", async (req, res) => {
   try {
     const { pack_id, participant_name } = req.body;
-    const { data, error } = await supabase
-      .from("exam_results")
-      .insert({
-        pack_id,
-        participant_name,
-        score: 0,
-        status: "In Progress",
-        answers: {},
-      })
-      .select();
+    // Span manual exam.start.create (spec §4.6) — attribute hanya pack_id.
+    const spanAttrs = {};
+    if (pack_id !== undefined) spanAttrs.pack_id = pack_id;
+    const { data, error } = await withSpan("exam.start.create", spanAttrs, () =>
+      supabase
+        .from("exam_results")
+        .insert({
+          pack_id,
+          participant_name,
+          score: 0,
+          status: "In Progress",
+          answers: {},
+        })
+        .select(),
+    );
     if (error) throw error;
+    logger.info(
+      { event: "exam.start", operation_status: "success", pack_id, result_id: data[0]?.id },
+      "Exam started",
+    );
     res.status(201).json(data[0]);
   } catch (error) {
-    console.error("Error starting exam:", error);
+    logger.error({ event: "exam.start", operation_status: "failed", error: errorField(error) }, "Failed to start exam");
     res.status(500).json({ error: "Failed to start exam" });
   }
 });
@@ -1100,6 +1218,10 @@ app.post("/api/exam/submit", async (req, res) => {
       .limit(1);
     if (dupCheckErr) throw dupCheckErr;
     if (existing && existing.length > 0) {
+      logger.warn(
+        { event: "exam.submit", operation_status: "duplicate", pack_id, result_id: existing[0].id },
+        "Duplicate exam submission (409)",
+      );
       // Refresh participant cookie ke hasil yang sudah ada (2026-08-11):
       // kalau cookie asli sudah kadaluarsa, redirect ke review miliknya
       // sendiri setelah retry tetap diizinkan (bukan 403).
@@ -1132,9 +1254,16 @@ app.post("/api/exam/submit", async (req, res) => {
     // is the single source of truth — see helper definition above the
     // API endpoints.
     const questions = packQuestions.map((item) => item.questions);
-    const score = questions.reduce(
-      (sum, q) => sum + scoreForQuestion(q, answers[q.id]),
-      0,
+    // Span manual exam.submit.scoring (spec §4.6) — attribute hanya pack_id,
+    // TANPA jawaban/request body.
+    const score = withSpan(
+      "exam.submit.scoring",
+      { pack_id },
+      () =>
+        questions.reduce(
+          (sum, q) => sum + scoreForQuestion(q, answers[q.id]),
+          0,
+        ),
     );
 
     // Per-subtest passing grade (per user request 2026-07-18 round 2):
@@ -1190,6 +1319,16 @@ app.post("/api/exam/submit", async (req, res) => {
       .insert({ pack_id, participant_name, score, status, answers })
       .select();
     if (error) throw error;
+    logger.info(
+      {
+        event: "exam.submit",
+        operation_status: "success",
+        pack_id,
+        result_id: data[0]?.id,
+        score,
+      },
+      "Exam submitted",
+    );
     // Set participant cookie (2026-08-11): pemilik hasil ini. Dengan ini
     // peserta yang baru selesai ujian bisa membuka /review.html?id=...
     // miliknya sendiri, sementara hasil orang lain hanya untuk admin.
@@ -1201,7 +1340,7 @@ app.post("/api/exam/submit", async (req, res) => {
     });
     res.status(201).json(data[0]);
   } catch (error) {
-    console.error("Error submitting exam:", error);
+    logger.error({ event: "exam.submit", operation_status: "failed", error: errorField(error) }, "Failed to submit exam");
     res.status(500).json({ error: "Failed to submit exam" });
   }
 });
@@ -1222,6 +1361,10 @@ app.get("/api/exam/:id/results", async (req, res) => {
     participant.kind === "participant" &&
     Number(participant.result_id) === requestedId;
   if (!admin && !isOwner) {
+    logger.warn(
+      { event: "exam.results", operation_status: "denied", exam_id: req.params.id },
+      "Exam results access denied (403)",
+    );
     return res.status(403).json({ error: "Forbidden" });
   }
   try {
@@ -1233,7 +1376,7 @@ app.get("/api/exam/:id/results", async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (error) {
-    console.error("Error fetching exam results:", error);
+    logger.error({ event: "exam.results", operation_status: "failed", error: errorField(error), exam_id: req.params.id }, "Failed to fetch exam results");
     res.status(500).json({ error: "Failed to fetch exam results" });
   }
 });
@@ -1250,7 +1393,7 @@ app.get("/api/scoreboard", async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (error) {
-    console.error("Error fetching scoreboard:", error);
+    logger.error({ event: "scoreboard.get", operation_status: "failed", error: errorField(error) }, "Failed to fetch scoreboard");
     res.status(500).json({ error: "Failed to fetch scoreboard" });
   }
 });
@@ -1319,7 +1462,7 @@ app.put("/api/questions/:id", async (req, res) => {
     if (error) throw error;
     res.json(data[0]);
   } catch (error) {
-    console.error("Error updating question:", error);
+    logger.error({ event: "question.update", operation_status: "failed", error: errorField(error), question_id: req.params.id }, "Failed to update question");
     res.status(500).json({ error: "Failed to update question" });
   }
 });
@@ -1337,7 +1480,7 @@ app.get("/api/questions/:id/usage", async (req, res) => {
       .filter(Boolean);
     res.json({ used: packNames.length > 0, packs: packNames });
   } catch (error) {
-    console.error("Error checking question usage:", error);
+    logger.error({ event: "question.usage", operation_status: "failed", error: errorField(error), question_id: req.params.id }, "Failed to check usage");
     res.status(500).json({ error: "Failed to check usage" });
   }
 });
@@ -1355,7 +1498,7 @@ app.post("/api/upload-image", async (req, res) => {
     });
     res.json({ url });
   } catch (error) {
-    console.error("Error uploading image:", error);
+    logger.error({ event: "image.upload", operation_status: "failed", error: errorField(error) }, "Failed to upload image");
     res.status(500).json({ error: "Failed to upload image" });
   }
 });
@@ -1481,7 +1624,7 @@ app.post("/api/fetch-image", requireAdmin, async (req, res) => {
     });
   } catch (error) {
     // AbortController timeout surfaces as AbortError.
-    console.error("Error in fetch-image:", error?.name, error?.message || error);
+    logger.error({ event: "image.fetch_proxy", operation_status: "failed", error: errorField(error) }, "Failed to fetch image via proxy");
     res.status(502).json({ error: "failed to fetch image" });
   }
 });
@@ -1502,7 +1645,7 @@ app.delete("/api/questions/:id", async (req, res) => {
     if (error) throw error;
     res.json({ success: true });
   } catch (error) {
-    console.error("Error deleting question:", error);
+    logger.error({ event: "question.delete", operation_status: "failed", error: errorField(error), question_id: req.params.id }, "Failed to delete question");
     res.status(500).json({ error: "Failed to delete question" });
   }
 });
@@ -1522,7 +1665,7 @@ app.put("/api/packs/:id", async (req, res) => {
     if (dbError) throw dbError;
     res.json(data[0]);
   } catch (error) {
-    console.error("Error updating pack:", error);
+    logger.error({ event: "pack.update", operation_status: "failed", error: errorField(error), pack_id: req.params.id }, "Failed to update pack");
     res.status(500).json({ error: "Failed to update pack" });
   }
 });
@@ -1552,7 +1695,7 @@ app.delete("/api/packs/:id", async (req, res) => {
     if (error) throw error;
     res.json({ success: true });
   } catch (error) {
-    console.error("Error deleting pack:", error);
+    logger.error({ event: "pack.delete", operation_status: "failed", error: errorField(error), pack_id: req.params.id }, "Failed to delete pack");
     res.status(500).json({ error: "Gagal menghapus paket soal" });
   }
 });
@@ -1568,7 +1711,10 @@ app.delete("/api/packs/:packId/questions/:questionId", async (req, res) => {
     if (error) throw error;
     res.json({ success: true });
   } catch (error) {
-    console.error("Error removing question from pack:", error);
+    logger.error(
+      { event: "pack.question_remove", operation_status: "failed", error: errorField(error), pack_id: req.params.packId, question_id: req.params.questionId },
+      "Failed to remove question from pack",
+    );
     res.status(500).json({ error: "Failed to remove question from pack" });
   }
 });
@@ -1597,7 +1743,7 @@ app.put("/api/packs/:id/questions", async (req, res) => {
     }
     res.json({ success: true });
   } catch (error) {
-    console.error("Error updating pack questions order:", error);
+    logger.error({ event: "pack.question_reorder", operation_status: "failed", error: errorField(error), pack_id: req.params.id }, "Failed to update order");
     res.status(500).json({ error: "Failed to update order" });
   }
 });
@@ -1621,7 +1767,7 @@ app.get("/api/scoreboard-all", async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (error) {
-    console.error("Error fetching scoreboard:", error);
+    logger.error({ event: "scoreboard.all", operation_status: "failed", error: errorField(error) }, "Failed to fetch scoreboard");
     res.status(500).json({ error: "Failed to fetch scoreboard" });
   }
 });
@@ -1640,9 +1786,13 @@ app.delete("/api/scoreboard", requireAdmin, async (req, res) => {
       .neq("id", -1)
       .select("id");
     if (error) throw error;
+    logger.info(
+      { event: "scoreboard.reset", operation_status: "success", deleted: data?.length || 0 },
+      "Scoreboard reset",
+    );
     res.json({ success: true, deleted: data?.length || 0 });
   } catch (error) {
-    console.error("Error resetting scoreboard:", error);
+    logger.error({ event: "scoreboard.reset", operation_status: "failed", error: errorField(error) }, "Failed to reset scoreboard");
     res.status(500).json({ error: "Gagal mereset scoreboard" });
   }
 });
@@ -1675,7 +1825,7 @@ app.get("/health", async (req, res) => {
     if (error) throw error;
     res.json({ status: "ready", version: APP_VERSION });
   } catch (err) {
-    console.error("[health] DB check failed:", err?.message || err);
+    logger.error({ event: "health.check", operation_status: "failed", error: errorField(err) }, "Health DB check failed");
     res.status(503).json({
       status: "unavailable",
       version: APP_VERSION,
@@ -1690,7 +1840,7 @@ app.use(express.static(PUBLIC_DIR));
 // Run bootstrap check (async, non-blocking — does not delay startup).
 // On Vercel serverless, this fires once per cold start. Idempotent.
 maybeBootstrapAdmin().catch((err) =>
-  console.error("[admin-auth] bootstrap uncaught error:", err),
+  logger.error({ event: "admin.bootstrap", operation_status: "failed", error: errorField(err) }, "Bootstrap uncaught error"),
 );
 
 // Local dev: listen on PORT. On Vercel this block is skipped because
@@ -1699,7 +1849,7 @@ maybeBootstrapAdmin().catch((err) =>
 if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 3000;
   const server = app.listen(PORT, () => {
-    console.log(`[server] listening on http://localhost:${PORT}`);
+    logger.info({ event: "server.listen", port: PORT, operation_status: "success" }, "Server listening");
   });
 
   // Graceful shutdown. IMPORTANT: without explicit handlers, Node running
@@ -1709,24 +1859,34 @@ if (!process.env.VERCEL) {
   // SIGKILL fallback (or `docker stop --signal KILL`). Registering the
   // handlers makes Ctrl+C and `docker stop` stop the container instantly.
   let shuttingDown = false;
-  function shutdown(signal) {
+  async function shutdown(signal) {
     if (shuttingDown) return; // second signal during grace period: ignore
     shuttingDown = true;
-    console.log(`[server] received ${signal}, shutting down gracefully...`);
-    server.close(() => {
-      console.log("[server] http server closed, exiting");
-      process.exit(0);
-    });
-    // Close idle keep-alive sockets so close() completes immediately
-    // (otherwise browser keep-alive conns wait for the 5s force-exit below
-    // and the container exits code 1 instead of clean 0).
+    logger.info({ event: "server.shutdown", signal, operation_status: "started" }, "Graceful shutdown initiated");
+    // Stop accepting new connections immediately. closeIdleConnections drops
+    // idle keep-alive sockets so close() doesn't wait for browser conns.
+    const httpClosed = new Promise((resolve) => server.close(resolve));
     server.closeIdleConnections?.();
-    // Safety net: if connections stay open, force exit so the container
-    // never hangs past docker's stop timeout.
-    setTimeout(() => {
-      console.error(`[server] ${signal} graceful shutdown timed out, forcing exit`);
+    // Safety net: if connections stay open / flush hangs, force exit so the
+    // container never hangs past docker's stop timeout.
+    const forceExit = setTimeout(() => {
+      logger.error({ event: "server.shutdown", operation_status: "timeout", signal }, "Graceful shutdown timed out, forcing exit");
       process.exit(1);
-    }, 5000).unref();
+    }, 5000);
+    forceExit.unref?.();
+    // Flush pending telemetry (forceFlush) SEBELUM exit — process.exit(0)
+    // di bawah hanya dijalankan setelah flush selesai, supaya in-flight
+    // traces/metrics tidak terpotong di restart (spec §4.1).
+    try {
+      await shutdownTelemetry();
+      logger.info({ event: "telemetry.shutdown", operation_status: "success" }, "Telemetry flushed");
+    } catch (err) {
+      logger.error({ event: "telemetry.shutdown", operation_status: "failed", error: errorField(err) }, "Telemetry flush failed");
+    }
+    // Tunggu koneksi HTTP drain (bounded oleh forceExit 5s di atas).
+    await httpClosed;
+    logger.info({ event: "server.shutdown", operation_status: "success" }, "HTTP server closed, exiting");
+    process.exit(0);
   }
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
