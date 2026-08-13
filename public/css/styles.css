@@ -4313,3 +4313,20 @@ tbody tr:hover .sticky-col-right {
         font-size: 0.8rem;
     }
 }
+
+/* ==========================================================
+ * 28. Landing mobile: center feature & step card content
+ * ==========================================================
+ * Di mobile (≤767px) kartu .landing-features / .step-list ber-stack
+ * satu kolom (grid-template-columns: 1fr — section 23) tapi isinya
+ * tetap rata kiri. Supaya konsisten dengan pola kartu centered di
+ * mobile, isi kartu (ikon/nomor langkah, judul, deskripsi) di-center.
+ * .feature-icon dan .step-num adalah inline-flex (atomic inline box),
+ * jadi ikut ter-center oleh text-align pada kartu induknya.
+ */
+@media (max-width: 767px) {
+    .feature-card,
+    .step-card {
+        text-align: center;
+    }
+}
