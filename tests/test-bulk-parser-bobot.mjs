@@ -1,9 +1,9 @@
-// tests/test-tkp-bobot.mjs
+// tests/test-bulk-parser-bobot.mjs
 // Smoke test for bulk-parser.js Bobot: handling. Also acts as a regression
 // guard for tkp-scoring-spec.md §9.1 (strict-rejection: TKP blocks without
 // `Bobot:` line MUST be invalid).
 //
-// Run: node tests/test-tkp-bobot.mjs
+// Run: node tests/test-bulk-parser-bobot.mjs
 import { parseBlock } from '../public/js/bulk-parser.js';
 import assert from 'node:assert/strict';
 
