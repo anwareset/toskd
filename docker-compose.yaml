@@ -58,6 +58,27 @@ services:
       - VERCEL_CLI_DISABLE_TELEMETRY=${VERCEL_CLI_DISABLE_TELEMETRY}
       - VERCEL_OIDC_TOKEN=${VERCEL_OIDC_TOKEN}
 
+      # ---- Observability: OpenTelemetry + Pino (optional) ----
+      # Telemetry AKTIF hanya jika OTEL_SERVICE_NAME DAN
+      # OTEL_EXPORTER_OTLP_ENDPOINT terisi (guard di src/otel.js). Kosongkan
+      # keduanya utk non-aktif (default). Ekspor via OTLP HTTP ke service
+      # "otel-collector" di net1 (port 4318) → Prometheus & Jaeger → Grafana.
+      # Pendekatan A (env-driven): SDK memilih eksporter dari var di bawah ini
+      # (traces: otlp|zipkin|console|none; metrics: otlp|console|none — default
+      # otlp). Nilai `prometheus` (metrics) DITOLAK: toskd tidak boleh membuka
+      # endpoint scrape sendiri (scrape via collector saja). Nilai tak dikenal
+      # → error jelas di log + signal non-aktif. OTEL_EXPORTER_OTLP_PROTOCOL
+      # (grpc/http/json/http/protobuf) & OTEL_METRIC_EXPORT_INTERVAL dibaca SDK.
+      # Lihat specs/golden-signals-otel-spec.md.
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      - OTEL_METRICS_EXPORTER=${OTEL_METRICS_EXPORTER:-otlp}
+      - OTEL_TRACES_EXPORTER=${OTEL_TRACES_EXPORTER:-otlp}
+      - OTEL_METRIC_EXPORT_INTERVAL=${OTEL_METRIC_EXPORT_INTERVAL:-60000}
+      - OTEL_TRACE_SAMPLE_RATIO=${OTEL_TRACE_SAMPLE_RATIO:-0.1}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
       # ---- Bootstrap admin (HAPUS setelah admin pertama berhasil login) ----
       # - BOOTSTRAP_ADMIN_USERNAME=${BOOTSTRAP_ADMIN_USERNAME}
       # - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD}

@@ -10,7 +10,9 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
 # Cache pnpm store across builds (BuildKit required)
-COPY package.json pnpm-lock.yaml ./
+# pnpm-workspace.yaml ikut di-copy: memuat allowBuilds protobufjs (dibutuhkan
+# pnpm 10+/11; pnpm 9 mengabaikannya dengan aman — single-package workspace).
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod
 

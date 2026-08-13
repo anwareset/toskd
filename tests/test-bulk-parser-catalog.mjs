@@ -1,8 +1,8 @@
-// tests/test-bulk-patterns-catalog.mjs
+// tests/test-bulk-parser-catalog.mjs
 // Catalogs every supported bulk-add pattern by feeding a representative
 // sample through parseBlock + previewHtmlForCell and printing the result.
 // Used as a reference for the "what patterns are supported" question.
-// Run: node tests/test-bulk-patterns-catalog.mjs
+// Run: node tests/test-bulk-parser-catalog.mjs
 import { parseBlock, previewHtmlForCell } from "../public/js/bulk-parser.js";
 
 const RULE = "─".repeat(72);

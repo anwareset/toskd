@@ -1,4 +1,4 @@
-// tests/test-image-rehost.mjs
+// tests/test-image-uploader.mjs
 // Lock-in tests for the pure scan/replace helpers in
 // public/js/image-uploader.js — the markdown-image → Vercel Blob rehost
 // pipeline (Round-16, 2026-08-09).
