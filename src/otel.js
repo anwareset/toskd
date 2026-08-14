@@ -150,7 +150,21 @@ if (otelEnabled) {
       root: new CriticalRouteRatioSampler(ratio),
     }),
     instrumentations: [
-      new HttpInstrumentation(),
+      new HttpInstrumentation({
+        // Temuan deploy 2026-08-14: /health (healthcheck tiap 30s) + static assets
+        // (css/js/svg, termasuk robots/manifest/favicon) membanjiri Jaeger sbg root
+        // span generik "GET" (di-sample 10%). ignoreIncomingRequestHook (v0.221+,
+        // pengganti ignoreIncomingPaths yang dihapus) → return true = span server
+        // TIDAK dibuat (request dibungkus suppressTracing). Whitelist MENGIKUTI
+        // isTrackedRequest di server.js (hanya /api/* + *.html yang di-track) →
+        // paritas metrik/trace/access-log dijamin by construction, termasuk file
+        // static baru tanpa perlu didaftar ulang. Query string dipotong dulu
+        // (req.path middleware sudah tanpa query) — /health?x=1 ikut tertangani.
+        ignoreIncomingRequestHook: (request) => {
+          const path = (request.url ?? "").split("?")[0];
+          return !(path.startsWith("/api/") || path.endsWith(".html"));
+        },
+      }),
       new ExpressInstrumentation(),
       new UndiciInstrumentation(),
       new PinoInstrumentation(),

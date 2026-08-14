@@ -2,7 +2,9 @@
 // Lock-in end-to-end OpenTelemetry export (spec: golden-signals-otel-spec.md):
 //   A. In-process — histogram golden-signals `http.server.request.duration`
 //      ter-ekspor ke OTLP (mock receiver) dengan status_class 2xx & 4xx,
-//      route ternormalisasi muncul di traces, dan `/health` TIDAK masuk metrik.
+//      route ternormalisasi muncul di traces, dan `/health` TIDAK masuk metrik
+//      serta `/health` + static TIDAK di-trace sbg server span
+//      (ignoreIncomingRequestHook).
 //   B. Child process — access log Pino memuat `trace_id`/`span_id` (trace
 //      correlation via @opentelemetry/instrumentation-pino) dan `/health`
 //      TIDAK muncul di access log.
@@ -123,9 +125,13 @@ test("OTLP: golden-signals histogram ter-ekspor (2xx+4xx), route ternormalisasi,
   const r1 = await fetch(`${baseUrl}/api/questions`); // 200 tracked
   const r2 = await fetch(`${baseUrl}/api/exam/999/results`); // 403 tracked
   const r3 = await fetch(`${baseUrl}/health`); // 200 untracked (spec §2 #7)
+  const r4 = await fetch(`${baseUrl}/css/tokens.css`); // static asset untracked (spec §2 #7)
+  const r5 = await fetch(`${baseUrl}/robots.txt`); // 404 — non-api non-html, untracked (whitelist)
   assert.equal(r1.status, 200);
   assert.equal(r2.status, 403);
   assert.equal(r3.status, 200);
+  assert.equal(r4.status, 200);
+  assert.equal(r5.status, 404);
 
   // Content-aware wait: tunggu SAMPAI payload benar-benar memuat histogram
   // golden-signals + route ternormalisasi (bukan sekadar "ada ekspor") —
@@ -159,6 +165,26 @@ test("OTLP: golden-signals histogram ter-ekspor (2xx+4xx), route ternormalisasi,
   assert.ok(
     traces.includes("/api/exam/:id/results"),
     "trace harus memuat route ternormalisasi /api/exam/:id/results",
+  );
+  // /health + static TIDAK di-trace sbg SERVER span — ignoreIncomingRequestHook
+  // whitelist di HttpInstrumentation: hanya /api/* + *.html yang di-track (sama
+  // dgn isTrackedRequest di server.js, by construction). Payload tetap memuat
+  // span CLIENT undici dari fetch() test sendiri (url.full + url.path = 2
+  // kemunculan). Server span bila bocor akan menambah kemunculan ke-3 (url.path
+  // di scope http) → asersi ≤2 mendeteksi kebocoran server span tanpa terganggu
+  // artifact client span test.
+  const countHits = (needle) => (traces.match(new RegExp(needle, "g")) || []).length;
+  assert.ok(
+    countHits("/health") <= 2,
+    `server span /health harus hilang (client span test maks 2) — dapat ${countHits("/health")}`,
+  );
+  assert.ok(
+    countHits("/css/") <= 2,
+    `server span static harus hilang (client span test maks 2) — dapat ${countHits("/css/")}`,
+  );
+  assert.ok(
+    countHits("/robots.txt") <= 2,
+    `server span /robots.txt harus hilang (client span test maks 2) — dapat ${countHits("/robots.txt")}`,
   );
 });
 
