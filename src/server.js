@@ -25,6 +25,7 @@ import {
   activeServerSpan,
   shutdownTelemetry,
 } from "./otel.js";
+import { isTrackedRequest } from "./tracked-request.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -44,10 +45,9 @@ app.use(express.json({ limit: "10mb" }));
 // Hanya request bisnis yang di-track: /api/* dan halaman *.html. /health
 // (probe Docker HEALTHCHECK + monitoring eksternal) dan static assets
 // (public/) di-exclude dari metrik + access log (keputusan interview R2 #7).
-function isTrackedRequest(req) {
-  const p = req.path;
-  return p.startsWith("/api/") || p.endsWith(".html");
-}
+// Predikat diimpor dari modul bersama src/tracked-request.js — single source
+// of truth yang juga dipakai hook trace di otel.js → paritas metrik/trace/
+// access-log dijamin by construction.
 
 // Golden-signals: histogram http.server.request.duration (traffic/latency/
 // errors) + access log terstruktur, dicatat saat response selesai ('finish').
@@ -249,10 +249,19 @@ function requireAdmin(req, res, next) {
       return res.status(204).end();
     }
     // Content negotiation: HTML page → redirect to login, API → 401 JSON.
+    // Keputusan memakai predikat tracking (src/tracked-request.js — single
+    // source of truth, dipakai juga oleh middleware observability metrik/trace/
+    // access-log): hanya request BISNIS yang di-track yang mendapat perlakuan
+    // auth. Path lowercase diteruskan ke predikat (R19 fix) — /Bank-soal.html
+    // tetap terdeteksi sbg halaman HTML, konsisten dgn aturan tracking.
     // R19 fix + Review fix: do NOT use req.accepts("html") — default fetch
     // sends Accept: */* which would falsely match and redirect API calls.
     // Plain .html path check is sufficient (browsers navigate to .html).
-    if (path.endsWith(".html")) {
+    // ⚠️ Coupling: cabang redirect ini terikat aturan tracking (by design).
+    // JANGAN ubah jadi isTrackedRequest(req) — req.path asli (mis. /BANK-SOAL.HTML)
+    // case-sensitive → R19 regresi (401 bukan 302). Menghapus *.html dari
+    // isTrackedPath juga akan memutus redirect login halaman CMS (401).
+    if (isTrackedRequest({ path }) && path.endsWith(".html")) {
       const next_ = encodeURIComponent(req.originalUrl);
       return res.redirect(302, `/login.html?next=${next_}`);
     }

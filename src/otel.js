@@ -37,6 +37,7 @@ import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 import { UndiciInstrumentation } from "@opentelemetry/instrumentation-undici";
 import { PinoInstrumentation } from "@opentelemetry/instrumentation-pino";
 import { RuntimeNodeInstrumentation } from "@opentelemetry/instrumentation-runtime-node";
+import { isTrackedUrl } from "./tracked-request.js";
 
 // ---- Guard ---------------------------------------------------------------
 
@@ -155,15 +156,13 @@ if (otelEnabled) {
         // (css/js/svg, termasuk robots/manifest/favicon) membanjiri Jaeger sbg root
         // span generik "GET" (di-sample 10%). ignoreIncomingRequestHook (v0.221+,
         // pengganti ignoreIncomingPaths yang dihapus) → return true = span server
-        // TIDAK dibuat (request dibungkus suppressTracing). Whitelist MENGIKUTI
-        // isTrackedRequest di server.js (hanya /api/* + *.html yang di-track) →
+        // TIDAK dibuat (request dibungkus suppressTracing). Predikat diimpor dari
+        // modul bersama src/tracked-request.js (isTrackedUrl) — single source of
+        // truth yang juga dipakai middleware metrik/access-log di server.js →
         // paritas metrik/trace/access-log dijamin by construction, termasuk file
-        // static baru tanpa perlu didaftar ulang. Query string dipotong dulu
-        // (req.path middleware sudah tanpa query) — /health?x=1 ikut tertangani.
-        ignoreIncomingRequestHook: (request) => {
-          const path = (request.url ?? "").split("?")[0];
-          return !(path.startsWith("/api/") || path.endsWith(".html"));
-        },
+        // static baru tanpa perlu didaftar ulang. Query string ditangani di dalam
+        // modul (isTrackedUrl memotong query dulu) — /health?x=1 ikut tertangani.
+        ignoreIncomingRequestHook: (request) => !isTrackedUrl(request.url ?? ""),
       }),
       new ExpressInstrumentation(),
       new UndiciInstrumentation(),

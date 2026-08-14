@@ -167,8 +167,9 @@ test("OTLP: golden-signals histogram ter-ekspor (2xx+4xx), route ternormalisasi,
     "trace harus memuat route ternormalisasi /api/exam/:id/results",
   );
   // /health + static TIDAK di-trace sbg SERVER span — ignoreIncomingRequestHook
-  // whitelist di HttpInstrumentation: hanya /api/* + *.html yang di-track (sama
-  // dgn isTrackedRequest di server.js, by construction). Payload tetap memuat
+  // whitelist di HttpInstrumentation: hanya /api/* + *.html yang di-track
+  // (predikat dari src/tracked-request.js — single source of truth, sama dgn
+  // middleware metrik/access-log di server.js, by construction). Payload tetap memuat
   // span CLIENT undici dari fetch() test sendiri (url.full + url.path = 2
   // kemunculan). Server span bila bocor akan menambah kemunculan ke-3 (url.path
   // di scope http) → asersi ≤2 mendeteksi kebocoran server span tanpa terganggu
