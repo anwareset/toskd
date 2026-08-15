@@ -9,6 +9,7 @@ node_modules/
 
 specs/
 tests/
+supabase/
 
 # pnpm cache / local store (dapat ratusan MB jika ada di project)
 .pnpm-store/
