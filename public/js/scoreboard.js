@@ -207,8 +207,21 @@ function renderEmpty() {
   tableEl.style.display = "none";
   tableEl.closest(".table-scroll-wrapper")?.toggleAttribute("inert", true);
   emptyEl.style.display = "block";
-  controlsTopEl.style.display = "none";
-  controlsBottomEl.style.display = "none";
+  if (isTrulyEmpty) {
+    // Belum ada data sama sekali → tidak ada yang bisa dicari/di-paginate:
+    // sembunyikan kedua bar kontrol (termasuk #search-input di bar atas).
+    controlsTopEl.style.display = "none";
+    controlsBottomEl.style.display = "none";
+  } else {
+    // Search menghasilkan nol → PERTAHANKAN bar atas (#controls-top) yang
+    // berisi #search-input supaya user bisa mengedit/menghapus query-nya
+    // (bug-fix 2026-08-15: sebelumnya bar ikut disembunyikan sehingga form
+    // input search menghilang padahal masih ada data). Bar bawah
+    // disembunyikan; trio pagination di-disable + page-info di-reset di
+    // bawah (tidak ada halaman yang bisa dinavigasi).
+    controlsTopEl.style.display = "flex";
+    controlsBottomEl.style.display = "none";
+  }
   // Clear pagination text + disable buttons defensively.
   document.getElementById("page-info-top").textContent = "Halaman 1 dari 1";
   document.getElementById("page-info-bottom").textContent = "Halaman 1 dari 1";

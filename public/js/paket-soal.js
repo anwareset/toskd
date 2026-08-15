@@ -338,8 +338,14 @@ function renderBars(total, totalPages) {
 
   // Show bars iff we have at least one row visible (post-search).
   // Hide bars AND table when total === 0 (empty state owns the screen).
+  // Bug-fix 2026-08-15 (parity dengan scoreboard): saat search menghasilkan
+  // nol (state.packs.length > 0 tapi total === 0), bar ATAS (#controls-top
+  // yang berisi #search-input) HARUS tetap tampil supaya user bisa
+  // mengedit/menghapus query — hanya bar bawah yang disembunyikan.
+  // Truly-empty (tidak ada pack sama sekali) tetap menyembunyikan kedua bar.
   const hasRows = total > 0;
-  controlsTopEl.style.display = hasRows ? "flex" : "none";
+  const isTrulyEmpty = state.packs.length === 0;
+  controlsTopEl.style.display = hasRows || !isTrulyEmpty ? "flex" : "none";
   controlsBottomEl.style.display = hasRows ? "flex" : "none";
 }
 
