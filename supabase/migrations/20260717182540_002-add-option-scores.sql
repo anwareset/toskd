@@ -1,0 +1,57 @@
+-- ============================================================================
+-- Schema Migration 002 — TKP weighted-scoring: ADD COLUMN option_scores
+-- ============================================================================
+-- Spec: tkp-scoring-spec.md §5.1, §6, §9, §10
+--
+-- PURPOSE:
+-- TKP scoring (per spec §5.1/§10) requires the questions table to store
+-- per-option weights `{A:1..5, B:1..5, C:1..5, D:1..5, E:1..5}` as a
+-- permutation of {1,2,3,4,5}. schema.sql already declares the column on
+-- line 13 (`option_scores JSONB`), but `CREATE TABLE IF NOT EXISTS` in
+-- schema.sql is a no-op for tables that already exist — so the column
+-- was never retroactively added to pre-existing deployments.
+--
+-- Symptom of missing column (pre-migration): PostgREST returns
+-- `PGRST204 — Could not find the 'option_scores' column of 'questions'
+-- in the schema cache` whenever a single-question add/edit OR a bulk-add
+-- posts `option_scores` (even as `null` for binary soal — PostgREST
+-- checks the column exists regardless of the value).
+--
+-- This migration is purely additive: it introduces ONE nullable JSONB
+-- column. Existing rows are not touched (NULL is the correct default
+-- for TWK/TIU soal and for TKP soal awaiting bobot input). The JSONB
+-- shape-invariants and per-question_type rules are enforced at the
+-- application layer (see /c/Users/anwar/Documents/toskd/src/server.js
+-- :: validateOptionScores, §10 V1-strict for TKP / V5-relaxed for
+-- binary).
+--
+-- SAFETY:
+--   - `ADD COLUMN IF NOT EXISTS` makes the statement idempotent — safe
+--     to run multiple times without error.
+--   - `JSONB` (not `JSON`) for indexability + binary-storage efficiency.
+--   - The column is nullable — no NOT NULL constraint needed; NULL is
+--     the semantic default for binary soal (TWK/TIU) and for TKP soal
+--     whose admin hasn't filled bobot yet.
+--   - No DEFAULT value — adding a default like '{}' would force a
+--     full-table rewrite on large tables; omitting it lets Postgres
+--     use a fast metadata-only ADD COLUMN (catalog update only).
+--   - No backfill — the application layer treats NULL option_scores
+--     as "score as binary (5/0)" per src/server.js :: scoreQuestion,
+--     so pre-existing rows continue to function correctly without
+--     any data migration.
+--
+-- POST-MIGRATION VERIFICATION:
+--   In Supabase SQL Editor, run:
+--     SELECT column_name, data_type, is_nullable
+--     FROM information_schema.columns
+--     WHERE table_schema = 'public'
+--       AND table_name = 'questions'
+--       AND column_name = 'option_scores';
+--   Expected: data_type = 'jsonb', is_nullable = 'YES'.
+--
+--   Then submit a TKP-soal in /kelola-soal.html — should succeed
+--   without PGRST204.
+-- ============================================================================
+
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS option_scores JSONB;
+

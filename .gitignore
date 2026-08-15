@@ -177,8 +177,15 @@ tests/trace-*.mjs
 tests/migration-*.mjs
 apply*.mjs
 
-# Supabase
-supabase/**
+# Supabase — commit hanya sumber (config + migrations); cache/artefak lokal tetap di-ignore
+supabase/*
+!supabase/config.toml
+!supabase/migrations/
+!supabase/seed.sql
+!supabase/.gitignore
+supabase/.temp/
+supabase/.branches/
+supabase/snippets/
 
 # Supabase DB backups (supabase db dump)
 backup-*.sql

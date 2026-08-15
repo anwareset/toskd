@@ -179,6 +179,7 @@
                                     Dikerjakan<span class="sort-indicator"></span>
                                 </th>
                                 <th>Subtes</th>
+                                <th>Penayangan</th>
                                 <th class="sticky-col-right">Aksi</th>
                             </tr>
                         </thead>
@@ -272,6 +273,59 @@
                                     min="1"
                                     placeholder="Contoh: 60"
                                 />
+                            </div>
+                            <!-- ============================================
+                                 Penayangan chip picker (single-select radio,
+                                 pack-visibility-spec.md §4.3). Reuse komponen
+                                 .chip yang sama dengan subtes picker — CSS
+                                 .chip__input:checked + .chip__label bekerja
+                                 identik utk radio (selector :checked).
+                                 Default: Publik (pre-checked). Arsip tetap
+                                 terlihat di CMS (agar bisa un-arsip) — hanya
+                                 disembunyikan dari select-pack.html.
+                                 ============================================ -->
+                            <div class="form-group" id="pack-visibility-group">
+                                <label>Penayangan</label>
+                                <div
+                                    id="pack-visibility-picker"
+                                    class="chip-group"
+                                >
+                                    <label class="chip">
+                                        <input
+                                            type="radio"
+                                            name="pack-visibility"
+                                            value="public"
+                                            class="chip__input"
+                                            checked
+                                        />
+                                        <span class="chip__label">Publik</span>
+                                    </label>
+                                    <label class="chip">
+                                        <input
+                                            type="radio"
+                                            name="pack-visibility"
+                                            value="admin"
+                                            class="chip__input"
+                                        />
+                                        <span class="chip__label">Admin</span>
+                                    </label>
+                                    <label class="chip">
+                                        <input
+                                            type="radio"
+                                            name="pack-visibility"
+                                            value="archived"
+                                            class="chip__input"
+                                        />
+                                        <span class="chip__label">Arsip</span>
+                                    </label>
+                                </div>
+                                <small
+                                    id="pack-visibility-helper"
+                                    class="field-helper"
+                                >
+                                    Publik: semua orang. Admin: hanya admin
+                                    login. Arsip: disembunyikan dari peserta.
+                                </small>
                             </div>
                             <!-- ============================================
                                  Subtes chip picker (1-3 toggle) + per-subtes

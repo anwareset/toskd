@@ -167,7 +167,14 @@ async function loadPacks() {
         return { ...p, count: qs.length };
       }),
     );
-    packsList = packsWithCounts;
+    // Visibility filter (pack-visibility-spec.md §4.4): GET /api/packs
+    // mengembalikan SEMUA pack utk admin (dibutuhkan CMS paket-soal.html),
+    // jadi di sini kita saring 'archived' keluar — archived TIDAK boleh
+    // muncul di select-pack untuk siapa pun (termasuk admin). Non-admin
+    // sudah aman by construction (server hanya kirim pack 'public').
+    packsList = packsWithCounts.filter(
+      (p) => (p.visibility ?? "public") !== "archived",
+    );
     setLoadingStatus(null);
     const filtered = filterPacks(packsList, currentSearch);
     renderPacks(filtered);
