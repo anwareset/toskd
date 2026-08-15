@@ -1,0 +1,97 @@
+-- ============================================================================
+-- Schema Migration 003 — Pack Subtest Picker + Per-Subtest Thresholds
+-- ============================================================================
+-- Spec: paket-soal-pack-type-spec.md §2
+--
+-- PURPOSE:
+-- Mendukung checkbox picker 1-3 subtes di public/paket-soal.html:
+--   - 1 subtes  : 1 passing grade input (paket khusus subtes itu saja)
+--   - 2 subtes  : 2 passing grade inputs (combo 2-subtes)
+--   - 3 subtes  : 3 passing grade inputs (combo 3-subtes / paket lengkap)
+-- ketika user klik "Lihat soal" → paket-detail.html hanya menampilkan soal
+-- dengan question_type yang termasuk dalam pack.subtests.
+--
+-- Kolom baru di question_packs:
+--   subtests            TEXT[]  daftar token subtes ['TWK','TIU'] dst.
+--                                panjang 1-3 sesuai pilihan admin.
+--   subtest_thresholds  JSONB   peta {TWK:N, TIU:N, TKP:N} per-subtes
+--                                default Indonesia: TWK=65, TIU=80, TKP=166
+--
+-- Tidak ada konsep Tipe Paket (Single/Combo) terpisah di DB — cukup
+-- panjang array subtests (1 = khusus, 2-3 = combo). Server
+-- normalizePackInput memvalidasi min 1 subtes; UI enforces max 3 via
+-- checkbox picker.
+--
+-- Aplikasi client (public/js/paket-soal.js) mengirim subtests[] +
+-- subtest_thresholds{} ke POST /api/packs dan PUT /api/packs/:id.
+-- Server (src/server.js :: normalizePackInput) default-kan ke
+-- {TWK,TIU,TKP} + threshold standar jika field dihilangkan
+-- (backward compat dengan legacy POST).
+--
+-- SAFETY:
+--   - `ADD COLUMN IF NOT EXISTS` membuat statement idempotent — aman
+--     dijalankan berulang tanpa error.
+--   - Kedua kolom NOT NULL dengan DEFAULT: Postgres >=11 menggunakan
+--     fast metadata-only ADD COLUMN (catalog update saja, tidak ada
+--     full-table rewrite) bahkan untuk NOT NULL columns dengan DEFAULT
+--     non-volatile (ARRAY[...] dan JSONB literal keduanya termasuk
+--     non-volatile). Baris existing otomatis terisi DEFAULT.
+--   - KNOWN LIMITATION: `ADD COLUMN IF NOT EXISTS` diam-diam menjadi
+--     no-op jika kolom sudah ada dengan TIPE BERBEDA (mis. seseorang
+--     membuat `subtests` sebagai TEXT sebelumnya). Postgres tidak
+--     memberi peringatan. Untuk project ini kemungkinannya kecil
+--     karena kolom baru ini memang baru, tapi worth noting untuk
+--     audit trail. Jika pre-check menunjukkan tipe berbeda, jalankan
+--     `ALTER TABLE question_packs DROP COLUMN subtests;` dulu lalu
+--     jalankan ulang migration ini.
+--   - Tidak ada DROP COLUMN: pack_type TIDAK PERNAH DITAMBAHKAN ke DB
+--     (user belum menjalankan migration 001/002 awal yang sempat
+--     mengajukannya), jadi tidak perlu rollback. Lihat file history:
+--     pack_type dihapus dari schema.sql di round refactor terakhir
+--     sebelum migration ini ditulis.
+--   - Tidak ada backfill: existing rows auto-fill dengan
+--     {TWK,TIU,TKP} + {TWK:65,TIU:80,TKP:166}, persis seperti yang
+--     diharapkan untuk paket yang sudah ada (3 subtes penuh).
+--     review.js + paket-detail.js + server.js sudah handle default
+--     ini untuk legacy packs (subtests null → fallback ke 3 subtes).
+--
+-- POST-MIGRATION VERIFICATION:
+--   Di Supabase SQL Editor, jalankan:
+--     SELECT column_name, data_type, is_nullable, column_default
+--     FROM information_schema.columns
+--     WHERE table_schema = 'public'
+--       AND table_name = 'question_packs'
+--       AND column_name IN ('subtests', 'subtest_thresholds')
+--     ORDER BY column_name;
+--   Expected:
+--     column_name         | data_type | is_nullable | column_default
+--     --------------------+-----------+-------------+--------------------------------
+--     subtests            | ARRAY     | NO          | {'TWK','TIU','TKP'}::text[]
+--     subtest_thresholds  | jsonb     | NO          | {"TWK": 65, ...}::jsonb
+--
+--   Lalu cek existing rows sudah ter-fill:
+--     SELECT id, name, subtests, subtest_thresholds
+--     FROM question_packs
+--     LIMIT 5;
+--   Expected: setiap row punya subtests = {TWK,TIU,TKP} dan
+--   subtest_thresholds = {"TWK": 65, "TIU": 80, "TKP": 166}.
+--
+--   Terakhir, sanity check bahwa semua existing rows sudah ter-fill
+--   dengan default (seharusnya 0 baris yang tidak match):
+--     SELECT COUNT(*) AS rows_not_defaulted
+--     FROM question_packs
+--     WHERE NOT (subtests = ARRAY['TWK','TIU','TKP'])
+--        OR subtest_thresholds <> '{"TWK":65,"TIU":80,"TKP":166}'::jsonb;
+--   Expected: 0.
+--
+--   Lalu buka /paket-soal.html → klik "Tambah Paket Soal",
+--   uncheck 2 dari 3 subtes (sisakan 1), isi nama + durasi + 1
+--   threshold, simpan. Refresh halaman. Expected: paket baru
+--   muncul di list dengan hanya 1 subtes aktif.
+-- ============================================================================
+
+ALTER TABLE question_packs
+  ADD COLUMN IF NOT EXISTS subtests TEXT[] NOT NULL DEFAULT ARRAY['TWK','TIU','TKP'],
+  ADD COLUMN IF NOT EXISTS subtest_thresholds JSONB NOT NULL DEFAULT
+    '{"TWK":65,"TIU":80,"TKP":166}'::jsonb;
+

@@ -128,6 +128,35 @@ ALTER TABLE question_packs
     '{"TWK":65,"TIU":80,"TKP":166}'::jsonb;
 
 -- ============================================
+-- PACK VISIBILITY (2026-08-15, lihat specs/pack-visibility-spec.md)
+-- ============================================
+-- Kontrol penayangan paket soal di select-pack.html:
+--   - 'public'   → tampil + bisa dikerjakan semua orang
+--   - 'admin'    → tampil + hanya bisa dikerjakan admin (login via
+--                  cookie toskd_admin_sess, dideteksi server-side)
+--   - 'archived' → TIDAK tampil di select-pack + TIDAK bisa dikerjakan
+--                  siapa pun; CMS tetap melihatnya (untuk un-arsip)
+-- DEFAULT 'public' → existing rows otomatis terisi Publik (requirement).
+-- App memakai service_role (bypass RLS) → RLS/GRANT tidak berubah.
+ALTER TABLE question_packs
+  ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public';
+
+-- CHECK constraint (idempotent via DO block — ADD CONSTRAINT tidak punya
+-- IF NOT EXISTS). Mencegah nilai tak dikenal lewat API langsung.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'question_packs_visibility_check'
+      AND conrelid = 'question_packs'::regclass
+  ) THEN
+    ALTER TABLE question_packs
+      ADD CONSTRAINT question_packs_visibility_check
+      CHECK (visibility IN ('public', 'admin', 'archived'));
+  END IF;
+END $$;
+
+-- ============================================
 -- ROW LEVEL SECURITY (2026-08-12, align dengan prod)
 -- ============================================
 -- Prod mengaktifkan RLS di 5 tabel + deny policies di admins. Tanpa RLS,

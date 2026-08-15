@@ -158,6 +158,15 @@ async function init() {
       fetch(`/api/packs/${packId}`),
       fetch(`/api/packs/${packId}/questions`),
     ]);
+    // Paket yang diblokir visibility (admin-only utk non-admin / archived)
+    // → server 403 { error: "Forbidden" } (pack-visibility-spec.md §4.2).
+    // Tampilkan pesan jelas, jangan lanjut render ujian.
+    if (packRes.status === 403 || qRes.status === 403) {
+      qContentEl.textContent =
+        "Paket ini tidak tersedia untuk dikerjakan.";
+      packNameEl.textContent = "Paket tidak tersedia";
+      return;
+    }
     pack = await packRes.json();
     questions = await qRes.json();
   } catch {

@@ -2646,6 +2646,16 @@ tbody tr:hover .sticky-col-right {
     display: none;
 }
 
+/* Badge Penayangan 'Arsip' (pack-visibility-spec.md §4.5): variant muted
+   dari .chip__label--display — terlihat non-aktif dibanding Publik/Admin
+   (indigo). Token existing saja; light/dark parity otomatis karena token
+   sudah parallel di :root + [data-theme="dark"]. */
+.chip__label--display--muted {
+    background: var(--surface);
+    color: var(--text-muted);
+    border-color: var(--border);
+}
+
 .subtes-chips {
     display: inline-flex;
     gap: 4px;

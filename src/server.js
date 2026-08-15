@@ -178,6 +178,42 @@ function readSession(req) {
   }
 }
 
+// ============================================
+// PACK VISIBILITY (specs/pack-visibility-spec.md §4.2)
+// ============================================
+// Single source of truth untuk gate penayangan paket soal
+// (public/admin/archived). Admin = punya session cookie valid
+// (toskd_admin_sess) — SAMA definisinya dengan requireAdmin, tapi di sini
+// kita cuma butuh boolean (tidak redirect/401) karena endpoint ini publik
+// dan harus LULUS untuk non-admin selama pack-nya 'public'.
+function isAdminRequest(req) {
+  return !!readSession(req);
+}
+
+// Visibility gate (READ endpoints): 'public' → semua orang;
+// 'admin'/'archived' → admin only (admin butuh lihat archived utk CMS
+// paket-soal.html / un-arsip). Legacy row tanpa kolom visibility (null,
+// sebelum migration-007) → treat sebagai 'public' (backward compat, pola
+// fallback sama seperti subtests).
+function isPackVisibleTo(pack, req) {
+  const v = pack?.visibility ?? "public";
+  if (v === "public") return true;
+  return isAdminRequest(req);
+}
+
+// Bisa DIKERJAKAN? (POST /api/exam/start + /submit) — LEBIH STRICT dari
+// isPackVisibleTo (pack-visibility-spec.md matriks §12.1):
+//   - 'archived' → TIDAK untuk siapa pun, TERMASUK admin (admin boleh
+//     membaca archived di CMS, tapi TIDAK boleh mengerjakannya).
+//   - 'admin'    → hanya admin.
+//   - 'public'   → semua orang.
+function canWorkPack(pack, req) {
+  const v = pack?.visibility ?? "public";
+  if (v === "archived") return false;
+  if (v === "admin") return isAdminRequest(req);
+  return true;
+}
+
 // Should the session cookie carry the `Secure` flag? MUST NOT be tied to
 // NODE_ENV alone: the Docker image sets NODE_ENV=production, and when a
 // container is served over plain http://localhost:PORT (self-host), a
@@ -925,10 +961,17 @@ app.get("/api/packs", async (req, res) => {
       countsByPack[row.pack_id] = (countsByPack[row.pack_id] || 0) + 1;
     }
 
-    const data = packsRes.data.map((pack) => ({
-      ...pack,
-      completion_count: countsByPack[pack.id] || 0,
-    }));
+    // Visibility gate (pack-visibility-spec.md §4.2): non-admin hanya dapat
+    // pack 'public'; admin mendapat SEMUA termasuk 'archived' (dibutuhkan
+    // CMS paket-soal.html untuk un-arsip). select-pack.js menyaring
+    // 'archived' client-side (archived tidak boleh muncul di select-pack
+    // untuk siapa pun — server tetap enforce 403 di /api/exam/start).
+    const data = packsRes.data
+      .filter((pack) => isPackVisibleTo(pack, req))
+      .map((pack) => ({
+        ...pack,
+        completion_count: countsByPack[pack.id] || 0,
+      }));
     res.json(data);
   } catch (error) {
     logger.error({ event: "pack.list", operation_status: "failed", error: errorField(error) }, "Failed to fetch packs");
@@ -945,6 +988,15 @@ app.get("/api/packs/:id", async (req, res) => {
       .eq("id", req.params.id)
       .single();
     if (error) throw error;
+    // Visibility gate (pack-visibility-spec.md §4.2): non-admin tidak boleh
+    // membaca detail pack 'admin'/'archived' (403). Admin (CMS) bypass.
+    if (!isPackVisibleTo(data, req)) {
+      logger.warn(
+        { event: "pack.access_denied", operation_status: "denied", pack_id: req.params.id },
+        "Pack access denied (403)",
+      );
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.json(data);
   } catch (error) {
     logger.error({ event: "pack.get", operation_status: "failed", error: errorField(error), pack_id: req.params.id }, "Failed to fetch pack");
@@ -960,6 +1012,9 @@ app.get("/api/packs/:id", async (req, res) => {
 // panjang array subtests yang menentukan apakah paket itu 1-subtes
 // (khusus) atau 2-3-subtes (combo).
 const DEFAULT_SUBTEST_THRESHOLDS = { TWK: 65, TIU: 80, TKP: 166 };
+// Visibility values (pack-visibility-spec.md §4.1) — sama dengan CHECK
+// constraint di migration-007; server-side validation defense-in-depth.
+const PACK_VISIBILITY_VALUES = new Set(["public", "admin", "archived"]);
 function normalizePackInput(body, { allowPartial = false } = {}) {
   const {
     name,
@@ -967,6 +1022,7 @@ function normalizePackInput(body, { allowPartial = false } = {}) {
     passing_grade,
     subtests,
     subtest_thresholds,
+    visibility,
   } = body || {};
   if (!allowPartial && (typeof name !== "string" || !name.trim())) {
     return { error: "name required" };
@@ -1018,12 +1074,30 @@ function normalizePackInput(body, { allowPartial = false } = {}) {
       normalizedThresholds[k] = DEFAULT_SUBTEST_THRESHOLDS[k] || 0;
     }
   }
+  // visibility (pack-visibility-spec.md §4.3): POST default 'public'
+  // (requirement: paket baru default Publik); PUT hanya forward jika
+  // benar-benar dikirim (partial update — jangan timpa nilai existing
+  // dengan 'public' saat field dihilangkan). Nilai tak dikenal → 400.
+  let normalizedVisibility;
+  if (visibility !== undefined) {
+    if (
+      typeof visibility !== "string" ||
+      !PACK_VISIBILITY_VALUES.has(visibility)
+    ) {
+      return { error: "visibility must be one of public/admin/archived" };
+    }
+    normalizedVisibility = visibility;
+  } else if (!allowPartial) {
+    normalizedVisibility = "public";
+  }
+
   const row = {
     name: typeof name === "string" ? name.trim() : undefined,
     duration_minutes: Number.isFinite(dur) ? dur : undefined,
     passing_grade: Number.isFinite(pg) ? pg : undefined,
     subtests: normalizedSubtests,
     subtest_thresholds: normalizedThresholds,
+    visibility: normalizedVisibility,
   };
   if (allowPartial) {
     // PUT: only forward fields that were actually provided.
@@ -1159,6 +1233,25 @@ app.post("/api/packs/:id/questions", async (req, res) => {
 // Get questions for a specific pack
 app.get("/api/packs/:id/questions", async (req, res) => {
   try {
+    // Visibility gate (pack-visibility-spec.md §4.2): endpoint ini adalah
+    // satu-satunya jalur isi soal — non-admin TIDAK boleh membaca soal pack
+    // 'admin'/'archived' (403). Admin (paket-detail, counts) bypass.
+    // Diterima (R1.2 strict everywhere): participant yang pack-nya berubah
+    // status setelah submit tidak bisa lagi buka review sendiri.
+    const { data: pack, error: packErr } = await supabase
+      .from("question_packs")
+      .select("visibility")
+      .eq("id", req.params.id)
+      .single();
+    if (packErr) throw packErr;
+    if (!isPackVisibleTo(pack, req)) {
+      logger.warn(
+        { event: "pack.questions_denied", operation_status: "denied", pack_id: req.params.id },
+        "Pack questions access denied (403)",
+      );
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     // Deterministic tiebreak (bug-fix 2026-08-12): question_number bisa
     // duplikat untuk data lama (sebelum POST memakai max+1 server-side),
     // dan PostgREST tidak menjamin urutan antar baris bernomor sama —
@@ -1183,6 +1276,31 @@ app.get("/api/packs/:id/questions", async (req, res) => {
 app.post("/api/exam/start", async (req, res) => {
   try {
     const { pack_id, participant_name } = req.body;
+    // Visibility gate (pack-visibility-spec.md §4.2) — titik enforce utama
+    // "tak bisa dikerjakan": canWorkPack LEBIH strict dari isPackVisibleTo:
+    //   - pack 'archived'  → 403 untuk SEMUA (termasuk admin)
+    //   - pack 'admin'     → 403 untuk non-admin
+    //   - pack 'public'    → lanjut
+    const { data: pack, error: packErr } = await supabase
+      .from("question_packs")
+      .select("visibility")
+      .eq("id", pack_id)
+      .single();
+    if (packErr || !pack) {
+      logger.warn(
+        { event: "exam.start.denied", operation_status: "denied", pack_id, reason: "pack-not-found" },
+        "Exam start denied (pack not found)",
+      );
+      return res.status(404).json({ error: "Pack not found" });
+    }
+    if (!canWorkPack(pack, req)) {
+      logger.warn(
+        { event: "exam.start.denied", operation_status: "denied", pack_id, visibility: pack.visibility },
+        "Exam start denied (403)",
+      );
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     // Span manual exam.start.create (spec §4.6) — attribute hanya pack_id.
     const spanAttrs = {};
     if (pack_id !== undefined) spanAttrs.pack_id = pack_id;
@@ -1214,6 +1332,31 @@ app.post("/api/exam/start", async (req, res) => {
 app.post("/api/exam/submit", async (req, res) => {
   try {
     const { pack_id, participant_name, answers } = req.body;
+
+    // Visibility gate (pack-visibility-spec.md §4.2) — defense-in-depth,
+    // strict everywhere (R1.2): canWorkPack → archived 403 utk SEMUA
+    // (termasuk admin); admin-only → 403 utk non-admin. SEBELUM
+    // duplicate-check supaya peserta yang tidak berhak tidak bisa memaksa
+    // submit via API langsung.
+    const { data: packGate, error: packGateErr } = await supabase
+      .from("question_packs")
+      .select("visibility")
+      .eq("id", pack_id)
+      .single();
+    if (packGateErr || !packGate) {
+      logger.warn(
+        { event: "exam.submit.denied", operation_status: "denied", pack_id, reason: "pack-not-found" },
+        "Exam submit denied (pack not found)",
+      );
+      return res.status(404).json({ error: "Pack not found" });
+    }
+    if (!canWorkPack(packGate, req)) {
+      logger.warn(
+        { event: "exam.submit.denied", operation_status: "denied", pack_id, visibility: packGate.visibility },
+        "Exam submit denied (403)",
+      );
+      return res.status(403).json({ error: "Forbidden" });
+    }
 
     // Duplicate-submission guard (§defense-in-depth): satu peserta hanya
     // boleh submit satu kali per paket. Cek exact match participant_name +
@@ -1394,6 +1537,30 @@ app.get("/api/exam/:id/results", async (req, res) => {
 app.get("/api/scoreboard", async (req, res) => {
   try {
     const { pack_id } = req.query;
+    // Visibility gate (pack-visibility-spec.md §4.2, R3.2): non-admin tidak
+    // boleh lihat scoreboard paket 'admin'/'archived' meski via URL langsung
+    // (403). Admin → semua.
+    if (pack_id) {
+      const { data: pack, error: packErr } = await supabase
+        .from("question_packs")
+        .select("visibility")
+        .eq("id", pack_id)
+        .single();
+      if (packErr || !pack) {
+        logger.warn(
+          { event: "scoreboard.denied", operation_status: "denied", pack_id, reason: "pack-not-found" },
+          "Scoreboard denied (pack not found)",
+        );
+        return res.status(404).json({ error: "Pack not found" });
+      }
+      if (!isPackVisibleTo(pack, req)) {
+        logger.warn(
+          { event: "scoreboard.denied", operation_status: "denied", pack_id, visibility: pack.visibility },
+          "Scoreboard denied (403)",
+        );
+        return res.status(403).json({ error: "Forbidden" });
+      }
+    }
     const { data, error } = await supabase
       .from("exam_results")
       .select("participant_name, score, status")
@@ -1763,6 +1930,32 @@ app.put("/api/packs/:id/questions", async (req, res) => {
 // /api/exam/:id/results).
 app.get("/api/scoreboard-all", async (req, res) => {
   try {
+    const { pack_id } = req.query;
+    // Visibility gate (pack-visibility-spec.md §4.2, R3.2):
+    //   - pack_id diberikan → non-admin dilarang utk pack 'admin'/'archived' (403).
+    //   - tanpa pack_id      → non-admin hanya melihat hasil pack 'public'
+    //     (filter di bawah setelah query) — admin melihat semua.
+    if (pack_id) {
+      const { data: pack, error: packErr } = await supabase
+        .from("question_packs")
+        .select("visibility")
+        .eq("id", pack_id)
+        .single();
+      if (packErr || !pack) {
+        logger.warn(
+          { event: "scoreboard.denied", operation_status: "denied", pack_id, reason: "pack-not-found" },
+          "Scoreboard denied (pack not found)",
+        );
+        return res.status(404).json({ error: "Pack not found" });
+      }
+      if (!isPackVisibleTo(pack, req)) {
+        logger.warn(
+          { event: "scoreboard.denied", operation_status: "denied", pack_id, visibility: pack.visibility },
+          "Scoreboard denied (403)",
+        );
+        return res.status(403).json({ error: "Forbidden" });
+      }
+    }
     let query = supabase
       .from("exam_results")
       .select(
@@ -1770,10 +1963,25 @@ app.get("/api/scoreboard-all", async (req, res) => {
       )
       .order("score", { ascending: false })
       .order("created_at", { ascending: false });
-    const { pack_id } = req.query;
     if (pack_id) query = query.eq("pack_id", pack_id);
     const { data, error } = await query;
     if (error) throw error;
+
+    // Non-admin tanpa pack_id: sembunyikan hasil pack non-public (strict
+    // everywhere — pack name + participant names tidak boleh bocor).
+    if (!pack_id && !isAdminRequest(req)) {
+      const { data: packs, error: packsErr } = await supabase
+        .from("question_packs")
+        .select("id, visibility");
+      if (packsErr) throw packsErr;
+      const visibleIds = new Set(
+        (packs || [])
+          .filter((p) => (p.visibility ?? "public") === "public")
+          .map((p) => p.id),
+      );
+      res.json(data.filter((r) => visibleIds.has(r.pack_id)));
+      return;
+    }
     res.json(data);
   } catch (error) {
     logger.error({ event: "scoreboard.all", operation_status: "failed", error: errorField(error) }, "Failed to fetch scoreboard");

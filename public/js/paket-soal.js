@@ -189,6 +189,23 @@ function esc(s) {
 }
 
 // ============================================================================
+// pack-visibility-spec.md §4.3 — badge Penayangan
+// ============================================================================
+// Label + variant badge utk kolom Penayangan di tabel CMS. Values DB
+// English ('public'/'admin'/'archived'), label UI Bahasa Indonesia
+// (Publik/Admin/Arsip). Legacy pack tanpa kolom visibility → fallback
+// 'public' (Publik) — konsisten dgn fallback server isPackVisibleTo.
+const VISIBILITY_LABELS = { public: "Publik", admin: "Admin", archived: "Arsip" };
+const VISIBILITY_MUTED = { archived: true };
+
+function packVisibilityBadge(pack) {
+  const v = pack?.visibility ?? "public";
+  const label = VISIBILITY_LABELS[v] || "Publik";
+  const muted = VISIBILITY_MUTED[v] ? " chip__label--display--muted" : "";
+  return `<span class="chip__label chip__label--display${muted}">${esc(label)}</span>`;
+}
+
+// ============================================================================
 // paket-soal-pagination-spec.md §5.3 — Comparator
 // ============================================================================
 //
@@ -280,6 +297,11 @@ function renderBody(pageData, startIdx) {
         )
         .join("");
       const subtesLabel = `<div class="subtes-chips">${subtesChips}</div>`;
+      // Penayangan badge (pack-visibility-spec.md §4.3): reuse
+      // .chip__label--display; 'archived' pakai modifier muted
+      // (.chip__label--display--muted) supaya terlihat non-aktif.
+      // Legacy pack tanpa kolom visibility → fallback 'public' (Publik).
+      const visibilityBadge = packVisibilityBadge(p);
       return `
         <tr>
           <td class="sticky-col-left">${startIdx + i + 1}</td>
@@ -289,6 +311,7 @@ function renderBody(pageData, startIdx) {
           <td>${count ?? 0} Soal</td>
           <td>${p.completion_count ?? 0}&times;</td>
           <td>${subtesLabel}</td>
+          <td>${visibilityBadge}</td>
           <td class="sticky-col-right">
             <button class="btn-secondary" onclick="editPack(${p.id})">Edit</button>
             <button class="btn-primary" onclick="location.href='/paket-detail.html?packId=${p.id}'">Lihat Soal</button>
@@ -315,8 +338,14 @@ function renderBars(total, totalPages) {
 
   // Show bars iff we have at least one row visible (post-search).
   // Hide bars AND table when total === 0 (empty state owns the screen).
+  // Bug-fix 2026-08-15 (parity dengan scoreboard): saat search menghasilkan
+  // nol (state.packs.length > 0 tapi total === 0), bar ATAS (#controls-top
+  // yang berisi #search-input) HARUS tetap tampil supaya user bisa
+  // mengedit/menghapus query — hanya bar bawah yang disembunyikan.
+  // Truly-empty (tidak ada pack sama sekali) tetap menyembunyikan kedua bar.
   const hasRows = total > 0;
-  controlsTopEl.style.display = hasRows ? "flex" : "none";
+  const isTrulyEmpty = state.packs.length === 0;
+  controlsTopEl.style.display = hasRows || !isTrulyEmpty ? "flex" : "none";
   controlsBottomEl.style.display = hasRows ? "flex" : "none";
 }
 
@@ -583,6 +612,13 @@ form.onsubmit = async (e) => {
     return;
   }
 
+  // Penayangan (pack-visibility-spec.md §4.3): radio single-select di modal;
+  // fallback 'public' (default chip Publik pre-checked — sama dgn default
+  // server di normalizePackInput utk POST).
+  const visibility =
+    document.querySelector('input[name="pack-visibility"]:checked')?.value ??
+    "public";
+
   const method = id ? "PUT" : "POST";
   const url = id ? `/api/packs/${id}` : "/api/packs";
 
@@ -596,6 +632,7 @@ form.onsubmit = async (e) => {
         passing_grade,
         subtests: selectedSubtests,
         subtest_thresholds,
+        visibility,
       }),
     });
     if (!res.ok) throw new Error();
@@ -622,6 +659,12 @@ window.editPack = (id) => {
     : ["TWK", "TIU", "TKP"];
   for (const cb of document.querySelectorAll('input[name="pack-sub"]')) {
     cb.checked = subtests.includes(cb.value);
+  }
+  // Penayangan (pack-visibility-spec.md §4.3): pre-check nilai stored;
+  // legacy pack tanpa kolom visibility → fallback 'public' (Publik).
+  const visibility = p.visibility ?? "public";
+  for (const rb of document.querySelectorAll('input[name="pack-visibility"]')) {
+    rb.checked = rb.value === visibility;
   }
   // renderThresholdInputs() (called below) will refresh the helper text
   // via updateSubtestsHelper() with the correct count based on the
