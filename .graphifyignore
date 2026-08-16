@@ -1,0 +1,6 @@
+# Graphify ignore — jaga paritas hook lokal vs CI (code-only)
+# CI pakai `extract --code-only` (skip docs); hook `_rebuild_code` mengekstrak
+# markdown struktural → tanpa ini graph hook != graph CI (churn tiap commit).
+# specs/ sudah ter-ignore via .gitignore; .agents/ = skill (bukan arsitektur repo).
+.agents/
+*.md
