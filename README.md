@@ -6,15 +6,88 @@ Platform CAT (Computer Assisted Test) untuk simulasi ujian SKD (Seleksi Kompeten
 
 ## 📌 Tech Stack
 
-- **Hosting / Deploy**: Vercel
-- **Database**: Supabase (PostgreSQL)
-- **Storage**: Vercel Blob (untuk gambar soal)
-- **Backend**: Node.js + Express
-- **Frontend**: HTML, CSS, VanillaJS
-- **Rich Text Editor**: Quill.js 1.3.7 (WYSIWYG editor dengan toolbar untuk bold, italic, image upload, dll)
-- **Math Rendering**: MathJax 3 CDN (support ekspresi matematika `$$\frac{a}{b}$$`)
-- **Logger**: Pino (Structured JSON Log)
-- **Observability**: OTel SDK (OTel SDK → OTLP Collector → Prometheus & Jaeger → Grafana)
+| Layer | Stack |
+|---|---|
+| Hosting / Deploy | Vercel |
+| Database | Supabase (PostgreSQL) |
+| Storage | Vercel Blob (untuk gambar soal) |
+| Backend | Node.js + Express |
+| Frontend | HTML, CSS, VanillaJS |
+| Rich Text Editor | Quill.js 1.3.7 (WYSIWYG editor dengan toolbar untuk bold, italic, image upload, dll) |
+| Math Rendering | MathJax 3 CDN (support ekspresi matematika `$$\frac{a}{b}$$`) |
+| Logger | Pino (Structured JSON Log) |
+| Observability | OTel SDK (OTel SDK → OTLP Collector → Prometheus & Jaeger → Grafana) |
+
+---
+
+## 🏗️ Arsitektur Sistem
+
+```mermaid
+flowchart TB
+    %% ===== Client =====
+    subgraph Client["Browser / Client"]
+        FE["Frontend"]
+        QUILL["Quill.js<br/>(Rich Text Editor)"]
+        MATHJAX["MathJax<br/>(Rendering Matematika)"]
+    end
+
+    %% ===== Hosting =====
+    subgraph Host["Vercel (Production)"]
+        EXPRESS["Express Server (src/server.js)"]
+        OTEL["OTel SDK (src/otel.js)<br/>Metrics + Traces"]
+        PINO["Pino Logger<br/>(Structured JSON logs)"]
+    end
+
+    %% ===== Data layer =====
+    subgraph Data["Data Layer"]
+        SUPABASE["Supabase (PostgreSQL)"]
+        BLOB["Vercel Blob<br/>(Gambar di Soal)"]
+    end
+
+    %% ===== Observability =====
+    subgraph Obs["Observability (Self-host, opsional)"]
+        COLLECTOR["OTLP Collector<br/>(otel-collector)"]
+        PROM["Prometheus<br/>(Metrics)"]
+        JAEGER["Jaeger<br/>(Traces)"]
+        GRAFANA["Grafana<br/>(Dashboard)"]
+    end
+
+    %% ===== Alternatif hosting =====
+    subgraph SelfHost["Docker (Self-host, Production Alternative)"]
+        CADDY["Caddy<br/>(Reverse Proxy)"]
+        DOCKER["Container toskd<br/>(node:22-alpine)"]
+    end
+
+    %% ===== Edges =====
+    FE -->|"HTTP /api/* + static"| EXPRESS
+    QUILL --> FE
+    MATHJAX --> FE
+
+    EXPRESS -->|"SQL query (service_role)"| SUPABASE
+    EXPRESS -->|"POST /api/upload-image"| BLOB
+    EXPRESS -->|"POST /api/fetch-image (anti-hotlink)"| BLOB
+
+    EXPRESS --> OTEL
+    EXPRESS --> PINO
+
+    OTEL -->|"OTLP (Metrics + Traces)"| COLLECTOR
+    COLLECTOR --> PROM
+    COLLECTOR --> JAEGER
+    PROM --> GRAFANA
+    JAEGER --> GRAFANA
+
+    CADDY -->|"HTTPS :443"| DOCKER
+    DOCKER -->|"Menjalankan"| EXPRESS
+    DOCKER --> SUPABASE
+    DOCKER --> BLOB
+```
+
+**Alur utama**:
+
+- **Ujian**: Browser (exam.html) → `POST /api/exam/start` → `POST /api/exam/submit` → Supabase (`exam_results`) → cookie peserta utk akses hasil.
+- **CMS**: Browser (protected HTML) → `requireAdmin` (cookie `toskd_admin_sess`) → CRUD soal/paket → Supabase + Vercel Blob (gambar).
+- **Gambar anti-hotlink**: CMS → `/api/fetch-image` (proxy download, SSRF guard) → Vercel Blob → URL Blob dipakai di preview/exam/review.
+- **Observability**: tiap request di-`tracked` → histogram golden-signals + trace → OTLP Collector → Prometheus (metrik) & Jaeger (trace) → Grafana (dashboard).
 
 ---
 
@@ -38,72 +111,6 @@ Platform CAT (Computer Assisted Test) untuk simulasi ujian SKD (Seleksi Kompeten
 - Tabel peringkat peserta
 - Filter berdasarkan paket soal
 - Sorting berdasarkan skor
-
----
-
-## 📂 Struktur File Utama
-
-```
-toskd/
-├── public/
-│   ├── index.html                # Halaman utama (Mulai Ujian, Bank Soal, Scoreboard)
-│   ├── select-pack.html          # Halaman pemilihan paket ujian
-│   ├── exam.html                 # Halaman ujian (real-time timer & grid lembar jawaban + TKP weighted scoring)
-│   ├── review.html               # Halaman hasil & pembahasan soal lengkap (TKP weighted rendering + per-subtest breakdown)
-│   ├── bank-soal.html             # Menu CMS (Kelola Paket Soal, Kelola Soal) - protected
-│   ├── paket-soal.html            # Kelola paket soal (CRUD + subtes chip picker 1-3 + per-subtest thresholds) - protected
-│   ├── kelola-soal.html           # Kelola bank soal (CRUD + Quill.js editor + TKP Bobot field + bulk-add modal) - protected
-│   ├── paket-detail.html          # Kelola relasi & urutan soal (Drag & Drop + subtest-filtered bank list) - protected
-│   ├── login.html                # Halaman login admin (CMS protection)
-│   ├── scoreboard.html           # Papan peringkat peserta (Paging & filter + tombol Reset admin-only)
-│   ├── assets/
-│   │   └── toskd-emoticon.svg    # Logo SVG (browser tab favicon + global header brand mark)
-│   ├── css/
-│   │   ├── tokens.css            # Design tokens (CSS variables untuk color, spacing, dll)
-│   │   └── styles.css            # CSS Global & Responsive Variables (termasuk .chip picker, .field-helper, bobot/TKP styles)
-│   └── js/
-│       ├── theme.js              # Theme manager + dynamic global header injector (auto-inject di semua page, kecuali exam/review)
-│       ├── main.js               # Halaman index (landing - navigasi utama: Mulai Ujian, Bank Soal, Scoreboard)
-│       ├── select-pack.js        # Halaman Pilih Paket - listing paket + validasi 1–110 soal + modal nama peserta
-│       ├── exam.js               # Halaman ujian - timer persist (wall-clock + sid + multi-tab sync) + answer grid (hijau/merah) + TKP weighted scoring (option_scores per soal)
-│       ├── review.js             # Halaman pembahasan - skor + status Lulus/Tidak + per-soal pembahasan (benar/salah/partial) + TKP weight gradient cards + per-subtest breakdown (filtered by pack.subtests) + <p> wrapper stripping + overlay "Akses Ditolak" (403 access control, auto-redirect 5 detik)
-│       ├── scoreboard.js         # Halaman scoreboard - pagination + sortable headers + search filter (sticky-left No column) + admin-only: tombol Reset Scoreboard + link peserta ke review (isAdmin via /api/admin/me)
-│       ├── login.js              # Login admin form handler (POST /api/admin/login, redirect ke ?next=, auto-fill username dari cookie session)
-│       ├── kelola-soal.js        # Kelola bank soal: CRUD + Quill.js editor (full toolbar) + image upload ke Vercel Blob + TKP Bobot dropdown (1-5, dedupe otomatis) + bulk-add modal dengan TKP format help
-│       ├── paket-soal.js         # Kelola paket soal: CRUD + subtes chip picker 1-3 + per-subtest threshold inputs + live running total + sortable/pagination table + Subtes column (chip-styled)
-│       ├── paket-detail.js       # Relasi soal ↔ paket: drag-and-drop reorder + tentative selection + subtest-filtered bank list (only questions matching pack.subtests shown) + partial-failure add-to-pack + urutan add sesuai urutan centang checkbox (question_number naik per iterasi)
-│       ├── bulk-parser.js        # ESM parser untuk bulk-add soal format v2 (premise list + lead-in + options A–E + key + TKP `Bobot:` line parsing) + previewHtmlForCell helper
-│       ├── image-uploader.js     # Pipeline rehost gambar anti-hotlink: scan ![alt](url)/<img src> → download (no-referrer + fallback /api/fetch-image) → IndexedDB staging → upload Vercel Blob → cleanup (window.ImageUploader)
-│       └── markdown-image.js     # Modul BERSAMA render markdown-img: IMAGE_MD_REGEX + renderInlineMd/renderInlinePreview (single source of truth, dipakai exam.js/review.js/kelola-soal.js; muat sbg <script type="module"> sebelum classic scripts)
-├── src/
-│   ├── server.js                 # API Express.js (Vercel Serverless Function) - TKP weighted scoring (scoreForQuestion + validateOptionScores) + normalizePackInput + validateQuestionMatchesPack + POST /api/fetch-image (proxy download anti-hotlink: requireAdmin + SSRF guard) + DELETE /api/scoreboard (reset, requireAdmin) + access control review: cookie peserta toskd_participant_sess + gate GET /api/exam/:id/results (admin ATAU pemilik, selain → 403) + urutan soal paket: POST /api/packs/:id/questions assign question_number = max(existing)+1 server-side (ignore client number, gap-safe) + GET /api/packs/:id/questions tiebreak .order('id') deterministik + observability: middleware golden-signals (histogram http.server.request.duration + access log, hanya /api/* + *.html) + migrasi console.* → Pino + span manual (exam.start.create / exam.submit.scoring / admin.login.verify / question.bulk_add) + shutdownTelemetry() di graceful shutdown
-│   ├── otel.js                   # OpenTelemetry bootstrap (WAJIB di-import pertama): guard OTEL_SERVICE_NAME+OTEL_EXPORTER_OTLP_ENDPOINT, NodeSDK + instrumentations (http/express/undici/pino/runtime-node), sampler AlwaysOn route ujian + TraceIdRatioBased 10%, histogram golden-signals, withSpan/currentTraceContext/shutdownTelemetry
-│   ├── logger.js                 # Pino singleton (service=toskd, pino-redact password/token/cookie/authorization/body/answers, pino-pretty hanya dev) + errorField helper
-│   └── db.js                     # Supabase client connection
-├── scripts/
-│   └── migrate-images.mjs        # CLI migrasi massal gambar soal → Vercel Blob (pnpm migrate:images; dry-run default, --apply untuk eksekusi)
-├── tests/                        # Unit tests (Node built-in test runner; run via `pnpm test`)
-│   ├── test-bulk-parser.mjs                       # Unit tests untuk public/js/bulk-parser.js (parser + previewHtmlForCell)
-│   ├── test-bulk-parser-catalog.mjs               # Catalog regression suite untuk bulk-input patterns (parser integration)
-│   ├── test-image-url-paste.mjs                   # IMAGE_URL_REGEX paste contract; IMAGE_MD_REGEX di-import dari markdown-image.js (modul bersama)
-│   ├── test-health.mjs                            # GET /health readiness probe (mock PostgREST: 200 ready / 503 unavailable / version fallback)
-│   ├── test-bulk-parser-bobot.mjs                 # Unit tests untuk TKP Bobot validation (option_scores invariants: himpunan {1..5})
-│   ├── test-tkp-scoring.mjs                       # Integration tests untuk TKP weighted scoring (scoreForQuestion + computePackScore)
-│   ├── test-image-uploader.mjs                    # Pure helpers scan/replace (image-uploader.js: scanImageUrls/applyUrlReplacements/isRehostedUrl)
-│   ├── test-migrate-images.mjs                    # URL collection + transformasi field (scripts/migrate-images.mjs)
-│   ├── test-markdown-render.mjs                   # renderInlineMd/renderInlinePreview/IMAGE_MD_REGEX (markdown-image.js)
-│   ├── test-pack-question-order.mjs               # Urutan soal paket: POST max+1 server-side + client number diabaikan + tiebreak GET deterministik (mock PostgREST stateful)
-│   ├── test-logger-redact.mjs                     # Lock-in src/logger.js: pino-redact menyensor password/token/cookie/authorization/body/answers + service=toskd + errorField shape
-│   ├── test-otel-exporter-env.mjs                 # Lock-in Pendekatan A: validateExporterEnv mendeteksi nilai OTEL_*_EXPORTER tak dikenal (anti-senyap; prometheus metrics ditolak)
-│   └── test-otel-smoke.mjs                        # Lock-in end-to-end OTLP: mock receiver → histogram golden-signals (2xx+4xx) ter-ekspor, route ternormalisasi di traces, /health tidak masuk metrik; access log ber-trace_id (trace correlation)
-├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)
-├── pnpm-workspace.yaml           # Config pnpm: packages ["."] (kompat pnpm 9) + allowBuilds protobufjs (pnpm 10+/11)
-├── Dockerfile                    # Multi-stage Docker build (node:22-alpine, non-root, tini init, HEALTHCHECK)
-├── .dockerignore                 # Exclude unnecessary or sensitive files
-├── .github/workflows/            # CI/CD (GitHub Actions): docker-build.yml pnpm test gate (blocking) + build & push image multi-arch (amd64+arm64) ke GHCR
-├── vercel.json                   # Konfigurasi routing Vercel
-└── package.json
-```
 
 ---
 
@@ -154,33 +161,32 @@ toskd/
 
 Buat file `.env` di root folder project:
 
-```env
-SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...            # service_role key (Wajib, bukan anon)
-BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxxxxxxxxxxxxx
-JWT_SECRET=<random-32+-chars>                                   # Generate: openssl rand -hex 32
-COOKIE_SECURE=true                                              # Opsional: variabel ini mengatur keamanan cookie login, sistem otomatis mendeteksi apakah situs diakses lewat `https://` (koneksi aman) atau `http://` (koneksi biasa).
-NODE_ENV=production                                             # Opsi: (production|development)
-BOOTSTRAP_ADMIN_USERNAME=admin                                  # Opsional: untuk bootstrap admin pertama
-BOOTSTRAP_ADMIN_PASSWORD=<strong-password>                      # Opsional: akan di-hash bcrypt lalu di-insert
-LOG_LEVEL=info                                                  # Opsi: (trace|debug|info|warn|error|fatal|silent)
-
-# Observability (OpenTelemetry)
-#OTEL_SERVICE_NAME=toskd                                         # Nama service di Prometheus/Jaeger
-#OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318          # OTLP HTTP endpoint Collector
-#OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf                       # Protokol OTLP (default)
-#OTEL_METRICS_EXPORTER=otlp                                      # Opsi: (otlp|console|none)
-#OTEL_TRACES_EXPORTER=otlp                                       # Opsi: (otlp|zipkin|console|none)
-#OTEL_METRIC_EXPORT_INTERVAL=60000                               # Interval ekspor metrics (ms)
-#OTEL_TRACE_SAMPLE_RATIO=0.1                                     # Sampling ratio trace non-kritikal (10%)
-```
+| Variable | Nilai contoh | Keterangan |
+|---|---|---|
+| `SUPABASE_URL` | `https://your-project-ref.supabase.co` | Project URL |
+| `SUPABASE_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | **service_role key (Wajib, bukan anon)** |
+| `BLOB_READ_WRITE_TOKEN` | `vercel_blob_rw_xxxxxxxxxxxxxx` | Blob Read/Write Token |
+| `JWT_SECRET` | `<random-32+-chars>` | Generate: `openssl rand -hex 32` |
+| `COOKIE_SECURE` | `true` | Opsional — atur keamanan cookie login (lihat Catatan #3) |
+| `NODE_ENV` | `production` | Opsi: `production` / `development` |
+| `BOOTSTRAP_ADMIN_USERNAME` | `admin` | Opsional — bootstrap admin pertama |
+| `BOOTSTRAP_ADMIN_PASSWORD` | `<strong-password>` | Opsional — di-hash bcrypt lalu di-insert |
+| `LOG_LEVEL` | `info` | Opsi: `trace`/`debug`/`info`/`warn`/`error`/`fatal`/`silent` |
+| `OTEL_SERVICE_NAME` | `toskd` | Opsional — nama service di Prometheus/Jaeger |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | OTLP HTTP endpoint Collector |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | Protokol OTLP (default) |
+| `OTEL_METRICS_EXPORTER` | `otlp` | Opsi: `otlp` / `console` / `none` |
+| `OTEL_TRACES_EXPORTER` | `otlp` | Opsi: `otlp` / `zipkin` / `console` / `none` |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `60000` | Interval ekspor metrics (ms) |
+| `OTEL_TRACE_SAMPLE_RATIO` | `0.1` | Sampling ratio trace non-kritikal (10%) |
 
 #### Catatan Env Variables
-1. **Observability**: Telemetry AKTIF hanya jika `OTEL_SERVICE_NAME` DAN `OTEL_EXPORTER_OTLP_ENDPOINT` keduanya terisi (guard di `src/otel.js`). Tanpa keduanya local dev, Vercel serverless, CI OTel no-op dan aplikasi berjalan normal. toskd mengirim OTLP (metrics + traces) ke OTel Collector; toskd TIDAK mengekspos endpoint metrics sendiri.
 
-2. **`BOOTSTRAP_ADMIN_*`**: env var ini dibaca sekali di cold-start. Jika tabel `admins` kosong, server akan otomatis hash password (bcrypt cost 10) dan insert admin pertama. **PENTING: DELETE kedua env var ini dari Vercel dashboard setelah admin pertama berhasil login**. Server log warning setiap cold-start kalau masih ada (plaintext password leak risk).
-
-3. **`COOKIE_SECURE`**: **Kosongkan** (recommended) → otomatis: aman di `https://`, tetap berfungsi di `http://localhost` (misal Docker di komputer sendiri). Atau **isi `true`** → paksa cookie login hanya dikirim lewat koneksi aman `https://`, dipakai hanya jika situs Anda diakses lewat `https://` tapi login tetap selalu balik ke halaman login (misalnya di belakang reverse proxy HTTPS). **JANGAN isi `true` jika akses masih `http://`** malah membuat login tidak akan pernah bisa masuk. Bisa **diisi `false`** → paksa cookie boleh lewat `http://`, hanya untuk percobaan lokal; di jaringan publik berisiko (data login bisa terbaca orang lain).
+| No | Catatan |
+|---|---|
+| 1 | **Observability**: Telemetry AKTIF hanya jika `OTEL_SERVICE_NAME` DAN `OTEL_EXPORTER_OTLP_ENDPOINT` keduanya terisi (guard di `src/otel.js`). Tanpa keduanya local dev, Vercel serverless, CI OTel no-op dan aplikasi berjalan normal. toskd mengirim OTLP (metrics + traces) ke OTel Collector; toskd TIDAK mengekspos endpoint metrics sendiri. |
+| 2 | **`BOOTSTRAP_ADMIN_*`**: env var ini dibaca sekali di cold-start. Jika tabel `admins` kosong, server akan otomatis hash password (bcrypt cost 10) dan insert admin pertama. **PENTING: DELETE kedua env var ini dari Vercel dashboard setelah admin pertama berhasil login**. Server log warning setiap cold-start kalau masih ada (plaintext password leak risk). |
+| 3 | **`COOKIE_SECURE`**: **Kosongkan** (recommended) → otomatis: aman di `https://`, tetap berfungsi di `http://localhost` (misal Docker di komputer sendiri). Atau **isi `true`** → paksa cookie login hanya dikirim lewat koneksi aman `https://`, dipakai hanya jika situs Anda diakses lewat `https://` tapi login tetap selalu balik ke halaman login (misalnya di belakang reverse proxy HTTPS). **JANGAN isi `true` jika akses masih `http://`** malah membuat login tidak akan pernah bisa masuk. Bisa **diisi `false`** → paksa cookie boleh lewat `http://`, hanya untuk percobaan lokal; di jaringan publik berisiko (data login bisa terbaca orang lain). |
 
 ### 4. Setup Database
 
