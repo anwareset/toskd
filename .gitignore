@@ -189,3 +189,14 @@ supabase/snippets/
 
 # Supabase DB backups (supabase db dump)
 backup-*.sql
+
+# Graphify — graph artifacts are TRACKED (graphify-out/), only local-only/non-deterministic files ignored
+# cost.json: local-only token cost tracker (per Graphify README); cache/ optional utk kecepatan (default skip)
+# .graphify_root: path absolut lokal (scan root), dibuat ulang otomatis saat extract — tidak portabel utk commit
+# .graphify_python: path interpreter lokal (dibuat skill), tidak portabel utk commit
+# manifest.json: berisi timestamp 'seen' yang berubah tiap run → commit churn di CI; dibuat ulang otomatis (CI selalu --force)
+graphify-out/cost.json
+graphify-out/cache/
+graphify-out/.graphify_root
+graphify-out/.graphify_python
+graphify-out/manifest.json

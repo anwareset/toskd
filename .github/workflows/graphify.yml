@@ -1,0 +1,77 @@
+name: Graphify — Rebuild Knowledge Graph
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Butuh hak tulis utk commit hasil build (graph.json/GRAPH_REPORT.md) kembali ke repo
+permissions:
+  contents: write
+
+# Cegah run beruntun yang sama saling tumpuk — run terbaru membatalkan yang lama
+concurrency:
+  group: graphify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  graph:
+    # Jangan re-trigger dari commit bot graphify sendiri (anti-loop):
+    # commit hasil build akan memicu push baru, tapi graph sudah fresh → diff kosong → skip.
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---- Setup Graphify (Python tool terpisah — dev-only, tidak masuk package.json/Docker) ----
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install graphifyy (dengan extra sql utk migrations/seed.sql)
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv tool install graphifyy[sql]
+
+      # ---- Rebuild graph: code-only (zero API key, docs di-skip — keputusan spec R2Q2) ----
+      # --force: timpa graph yang lebih besar dari build lokal (guard shrink #479)
+      - name: Extract graph (code-only, force)
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          graphify extract . --code-only --force
+
+      # Cluster ulang utk GRAPH_REPORT.md + graph.html (label komunitas placeholder, tanpa LLM)
+      - name: Cluster + generate report/HTML
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          graphify cluster-only .
+
+      # Regenerate wiki markdown dari graph
+      - name: Export wiki
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          graphify export wiki
+
+      # ---- Commit hasil build HANYA jika ada perubahan (anti-loop) ----
+      # Catatan: pakai `git add -n` + `git diff --cached` (bukan `git diff`)
+      # karena `git diff` TIDAK menghitung untracked files — kalau graphify
+      # menghasilkan file baru (mis. artikel wiki komunitas baru), diff biasa
+      # akan bilang "bersih" padahal ada perubahan. Artefak lain (graph.json,
+      # GRAPH_REPORT.md, graph.html, wiki/, sidecar) deterministik dari kondisi
+      # fresh (terverifikasi), jadi hanya manifest.json yang non-deterministik
+      # — sudah di-.gitignore, tidak ikut commit.
+      - name: Commit updated graph if changed
+        run: |
+          if git add -n graphify-out/ | grep -q .; then
+            echo "Graph changed — committing."
+          else
+            echo "Graph is up-to-date — no changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add graphify-out/
+          git commit -m "chore(graphify): rebuild knowledge graph (CI)"
+          git push
