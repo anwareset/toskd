@@ -214,6 +214,13 @@ if (usageModalOkBtn) {
   });
 }
 
+// Klik di luar modal (backdrop) → tutup (pola sama bank-preview-modal).
+if (usageModal) {
+  usageModal.addEventListener("click", (e) => {
+    if (e.target === usageModal) usageModal.close();
+  });
+}
+
 // questionUsage — cache Map<id, { used, packs }> dari POST
 // /api/questions/bulk-usage (satu round-trip per chunk, endpoint cap 1000
 // ids/request). Usage TIDAK berubah selama halaman terbuka: bank list
@@ -231,6 +238,17 @@ const bankPreviewOkBtn = document.getElementById("bank-preview-ok-btn");
 if (bankPreviewOkBtn) {
   bankPreviewOkBtn.addEventListener("click", () => {
     if (bankPreviewModal) bankPreviewModal.close();
+  });
+}
+
+// Klik di luar modal (backdrop) → tutup (user request 2026-08-17).
+// Pattern native <dialog>: saat showModal(), klik pada backdrop punya
+// e.target === dialog itu sendiri; klik di dalam .modal-content menimpa
+// elemen anak. Jadi cek `e.target === bankPreviewModal` membedakan
+// backdrop vs isi modal tanpa perlu elemen backdrop tambahan.
+if (bankPreviewModal) {
+  bankPreviewModal.addEventListener("click", (e) => {
+    if (e.target === bankPreviewModal) bankPreviewModal.close();
   });
 }
 
@@ -800,6 +818,11 @@ bankList.addEventListener("click", (e) => {
   if (tsChip) {
     e.preventDefault();
     e.stopPropagation();
+    // blur() SEBELUM showModal(): saat dialog ditutup, browser mengembalikan
+    // fokus ke elemen yang fokus sebelum modal dibuka. Tanpa blur, fokus
+    // kembali ke tombol → :focus-within membuat tooltip tetap tampil
+    // (nyangkut) walau mouse sudah pergi. Dengan blur, fokus balik ke <body>.
+    tsChip.blur();
     const qId = parseInt(tsChip.dataset.qId, 10);
     const q = allQuestions.find((x) => x.id === qId);
     if (q) openBankPreviewModal(q);
@@ -809,6 +832,9 @@ bankList.addEventListener("click", (e) => {
   if (!chip) return;
   e.preventDefault();
   e.stopPropagation();
+  // blur() sebelum modal — pola sama dengan chip .bank-timestamp (fix
+  // tooltip nyangkut via :focus-within setelah modal ditutup).
+  chip.blur();
   const qId = parseInt(chip.dataset.qId, 10);
   openUsageModal(questionUsage.get(qId)?.packs || []);
 });
