@@ -219,6 +219,30 @@ if (usageModalOkBtn) {
 // ids/request). Usage TIDAK berubah selama halaman terbuka: bank list
 // mengecualikan paket saat ini (add/remove hanya menyentuh paket ini),
 // jadi fetch sekali saat init cukup dan tetap akurat.
+// ==== Bank preview modal (chip tanggal/waktu .bank-timestamp) ====
+// Preview pertanyaan SAJA (tanpa opsi/kunci/pembahasan — mirror tab Preview
+// modal Add/Edit Soal di kelola-soal) + waktu soal ditambahkan ke bank.
+// Reuse komponen dialog.modal — pattern usage-modal (single OK).
+const bankPreviewModal = document.getElementById("bank-preview-modal");
+const bankPreviewTitle = document.getElementById("bank-preview-title");
+const bankPreviewBody = document.getElementById("bank-preview-body");
+const bankPreviewTime = document.getElementById("bank-preview-time");
+const bankPreviewOkBtn = document.getElementById("bank-preview-ok-btn");
+if (bankPreviewOkBtn) {
+  bankPreviewOkBtn.addEventListener("click", () => {
+    if (bankPreviewModal) bankPreviewModal.close();
+  });
+}
+
+// renderInlineMd — thin local wrapper atas helper bersama
+// public/js/markdown-image.js (window.MarkdownImage), pola sama dengan
+// kelola-soal.js / exam.js / review.js. Tanpa resolveUrl: halaman ini tidak
+// memuat image-uploader.js, jadi URL gambar asli tetap dipakai (renderInlineMd
+// mengembalikan url asli jika resolveUrl tidak dikirim / undefined).
+function renderInlineMd(html) {
+  return window.MarkdownImage?.renderInlineMd(html) ?? html;
+}
+
 const questionUsage = new Map();
 
 // Fetch usage SEMUA soal bank dalam chunk PARALEL (Promise.all). Kegagalan
@@ -289,6 +313,34 @@ function openUsageModal(packs) {
     }
   }
   usageModal.showModal();
+}
+
+// Modal preview soal dari chip tanggal/waktu (.bank-timestamp). Menampilkan
+// pertanyaan SAJA (renderInlineMd q.content — mirror tab Preview modal
+// Add/Edit Soal di kelola-soal, TANPA opsi/kunci/pembahasan) + baris
+// "Ditambahkan: <full timestamp>" (sama seperti tooltip hover chip).
+function openBankPreviewModal(q) {
+  if (!bankPreviewModal || !bankPreviewBody) return;
+  if (bankPreviewTitle) {
+    bankPreviewTitle.textContent = `📝 Preview Soal #${q.id}`;
+  }
+  const ts = formatIndonesianFull(q.created_at);
+  if (bankPreviewTime) {
+    bankPreviewTime.textContent = ts
+      ? `🕐 Ditambahkan: ${ts}`
+      : "🕐 Ditambahkan: (waktu tidak diketahui)";
+  }
+  // MathJax: lupa math lama sebelum innerHTML diganti (registry MathItem
+  // tidak boleh menumpuk antar bukaan modal — pola sama kelola-soal).
+  if (window.MathJax?.typesetClear) MathJax.typesetClear([bankPreviewBody]);
+  bankPreviewBody.innerHTML = `
+    <div style="font-weight:bold;margin-bottom:8px">Pertanyaan:</div>
+    <div>${renderInlineMd(q.content || "(kosong)")}</div>
+  `;
+  bankPreviewModal.showModal();
+  if (window.MathJax?.typesetPromise) {
+    MathJax.typesetPromise([bankPreviewBody]).catch(() => {});
+  }
 }
 
 function esc(s) {
@@ -485,7 +537,7 @@ function renderBankList() {
           <strong>[${esc(q.question_type.toUpperCase())}]</strong> ${window.bulkParser.previewHtmlForCell(q.content)}
         </span>
         <span class="bank-timestamp-wrap">
-          <time class="bank-timestamp" datetime="${esc(q.created_at || "")}" aria-label="Ditambahkan ${esc(formatIndonesianRelative(q.created_at))}${ts ? `. ${ts}` : ""}">🕐 ${esc(formatIndonesianRelative(q.created_at))}</time>
+          <button type="button" class="bank-timestamp" data-q-id="${q.id}" aria-label="Ditambahkan ${esc(formatIndonesianRelative(q.created_at))}${ts ? `. ${ts}` : ""}. Klik untuk preview soal.">🕐 ${esc(formatIndonesianRelative(q.created_at))}</button>
           ${ts ? `<span class="bank-timestamp-tooltip" role="tooltip"><strong>Ditambahkan</strong>${esc(ts)}</span>` : ""}
         </span>
         ${renderUsageChip(q)}
@@ -741,6 +793,18 @@ bankList.addEventListener("change", (e) => {
 // add-q). preventDefault + stopPropagation supaya klik button di dalam
 // <label> tidak ikut meng-toggle checkbox add-q.
 bankList.addEventListener("click", (e) => {
+  // Chip tanggal/waktu → modal preview soal (delegated: renderBankList
+  // rebuilds DOM tiap render). preventDefault + stopPropagation supaya
+  // klik button di dalam <label> tidak ikut meng-toggle checkbox add-q.
+  const tsChip = e.target.closest(".bank-timestamp");
+  if (tsChip) {
+    e.preventDefault();
+    e.stopPropagation();
+    const qId = parseInt(tsChip.dataset.qId, 10);
+    const q = allQuestions.find((x) => x.id === qId);
+    if (q) openBankPreviewModal(q);
+    return;
+  }
   const chip = e.target.closest(".bank-usage-chip");
   if (!chip) return;
   e.preventDefault();
@@ -996,26 +1060,25 @@ function setControlsLocked(locked) {
 
 addBtn.onclick = async () => {
   // ---- Source-of-truth resolution ----
-  // tentativeSelections is the user's intent (across all pages / filters).
-  // availableIds is the server's authoritative "still addable" list
-  // (already filtered to NOT be in packQuestions + search filter).
-  // Same apply-search logic as renderBankList() to stay consistent.
+  // tentativeSelections is the user's intent (across all pages / filters):
+  // soal yang dicentang di hasil search A, lalu B, lalu C — SEMUA ikut
+  // ditambahkan saat add-to-pack (bug-fix 2026-08-17: dulu availableIds
+  // ikut difilter bankSearchTerm, sehingga drain "ghost IDs" di bawah
+  // membuang centang dari hasil search lain dan hanya soal hasil search
+  // terakhir yang masuk ke paket).
+  // availableIds = daftar "masih bisa ditambahkan" (belum ada di paket +
+  // masih ada di allQuestions) — TANPA filter search. Search adalah filter
+  // VIEW (renderBankList), bukan status ketersediaan; soal yang tidak match
+  // search SAAT INI tetap valid untuk ditambahkan.
   const packIds = new Set(packQuestions.map((q) => q.id));
-  let availableForSubmit = allQuestions.filter((q) => !packIds.has(q.id));
-  if (bankSearchTerm) {
-    const term = bankSearchTerm.toLowerCase();
-    availableForSubmit = availableForSubmit.filter((q) => {
-      const ct = (q.content || "").replace(/<[^>]*>/g, "").toLowerCase();
-      const tt = (q.question_type || "").toLowerCase();
-      return ct.includes(term) || tt.includes(term);
-    });
-  }
-  const availableIds = new Set(availableForSubmit.map((q) => q.id));
+  const availableIds = new Set(
+    allQuestions.filter((q) => !packIds.has(q.id)).map((q) => q.id),
+  );
 
   // Drain ghost IDs from tentativeSelections: anything the user had
   // selected but is no longer available (server-side deletion, race
-  // with another tab, etc.). Without this, the button label would lie
-  // ("Masukkan 5 Soal...") while we actually POST fewer.
+  // with another tab, etc.). Tanpa filter search — tanpa ini label tombol
+  // berbohong ("Masukkan 5 Soal...") sementara kita POST lebih sedikit.
   for (const id of Array.from(tentativeSelections)) {
     if (!availableIds.has(id)) tentativeSelections.delete(id);
   }
