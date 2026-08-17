@@ -545,6 +545,52 @@
                         </div>
                     </div>
                 </dialog>
+
+                <!-- ==================== BANK PREVIEW MODAL ====================
+                     Preview soal dari chip tanggal/waktu (.bank-timestamp) di
+                     bank list. Menampilkan pertanyaan SAJA (mirror tab Preview
+                     modal Add/Edit Soal di kelola-soal — tanpa opsi jawaban,
+                     kunci jawaban, dan pembahasan) + waktu soal ditambahkan ke
+                     bank soal. Reuse komponen dialog.modal — pattern
+                     usage-modal/notification-modal (single OK). JS di
+                     public/js/paket-detail.js :: openBankPreviewModal(). -->
+                <dialog
+                    id="bank-preview-modal"
+                    class="modal"
+                    style="max-width: 640px"
+                >
+                    <div class="modal-content">
+                        <h3 id="bank-preview-title">📝 Preview Soal</h3>
+                        <div
+                            id="bank-preview-body"
+                            style="
+                                padding: 8px 0 16px;
+                                font-size: 0.95rem;
+                                line-height: 1.6;
+                            "
+                        >
+                            — placeholder —
+                        </div>
+                        <div
+                            id="bank-preview-time"
+                            style="
+                                padding: 10px 0 14px;
+                                border-top: 1px solid var(--border);
+                                color: var(--text-muted);
+                                font-size: 0.85rem;
+                            "
+                        ></div>
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-primary"
+                                id="bank-preview-ok-btn"
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
             </div>
             <footer class="footer">
                 Untuk latihan SKD · Made with ♥️ in
@@ -552,6 +598,10 @@
             </footer>
         </div>
         <script type="module" src="/js/bulk-parser.js"></script>
+        <!-- Shared markdown-image helpers (renderInlineMd utk preview soal).
+             Must load BEFORE paket-detail.js (module scripts run in document
+             order) supaya window.MarkdownImage tersedia di runtime. -->
+        <script type="module" src="/js/markdown-image.js"></script>
         <script defer src="/js/paket-detail.js"></script>
     </body>
 </html>

@@ -2118,6 +2118,10 @@ tbody tr:hover .sticky-col-right {
     color: var(--text-muted);
 }
 
+/* Chip tanggal/waktu — kini button yang bisa diklik (klik → modal preview
+   soal; hover/focus → tooltip waktu penuh). Button reset: font-family &
+   line-height di-inherit dari button default; affordance klik mirror chip
+   "Dipakai" (.bank-usage-chip). */
 .bank-timestamp {
     font-size: 0.76rem;
     color: var(--text-muted);
@@ -2126,8 +2130,24 @@ tbody tr:hover .sticky-col-right {
     border-radius: 6px;
     padding: 2px 8px;
     white-space: nowrap;
-    cursor: help;
+    cursor: pointer;
     font-weight: 500;
+    font-family: inherit;
+    line-height: 1.5;
+    transition: background 0.15s ease, border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.bank-timestamp:hover,
+.bank-timestamp:focus-visible {
+    background: var(--primary-light);
+    border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+    color: var(--accent);
+}
+
+.bank-timestamp:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 .pack-list-selection-toolbar {
