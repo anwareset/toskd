@@ -154,18 +154,35 @@ const state = {
 
 // ==== Sort key maps (spec §5) ====
 //
-// `name`/`duration_minutes`/`passing_grade`/`question_count` are the 4
-// user-clickable sort columns. `created_at` is NOT in SORT_KEYS because
-// there is no visible Tanggal column — it's the implicit default only.
+// `name`/`duration_minutes`/`passing_grade`/`question_count`/
+// `completion_count`/`subtests`/`visibility` are the 7 user-clickable
+// sort columns. `created_at` is NOT in SORT_KEYS because there is no
+// visible Tanggal column — it's the implicit default only.
 //
 // DEFAULT_DIR encodes each column's first-click direction (Round 1: All
-// numeric columns "Largest first"; Nama Paket first click is A→Z).
+// numeric columns "Largest first"; Nama Paket first click is A→Z;
+// SUBTES 1 → 3; PENAYANGAN alphabetical by label).
 const SORT_KEYS = {
   name: (r) => r.name || "",
   duration_minutes: (r) => Number(r.duration_minutes || 0),
   passing_grade: (r) => Number(r.passing_grade || 0),
   question_count: (r) => Number(state.countsById[r.id] || 0),
   completion_count: (r) => Number(r.completion_count || 0),
+  // Composite: jumlah subtes dulu (1 → 3), lalu alfabetis nama subtes.
+  // Dienkode sebagai count zero-padded + ":" + nama terurut sehingga
+  // cabang string comparator() mengurutkannya dengan benar. Legacy pack
+  // tanpa kolom subtests → fallback ["TWK","TIU","TKP"] (sama dgn
+  // renderBody) = count 3.
+  subtests: (r) => {
+    const subs = Array.isArray(r.subtests) && r.subtests.length
+      ? r.subtests
+      : ["TWK", "TIU", "TKP"];
+    const names = subs.map((s) => String(s).toUpperCase()).sort().join("+");
+    return `${String(subs.length).padStart(2, "0")}:${names}`;
+  },
+  // Label Bahasa Indonesia (Publik/Admin/Arsip) — cabang string
+  // comparator mengurutkan alfabetis: Admin → Arsip → Publik.
+  visibility: (r) => VISIBILITY_LABELS[r.visibility ?? "public"] || "Publik",
 };
 const DEFAULT_DIR = {
   name: "asc", // A → Z
@@ -173,6 +190,8 @@ const DEFAULT_DIR = {
   passing_grade: "desc", // highest first
   question_count: "desc", // most first
   completion_count: "desc", // most first
+  subtests: "asc", // 1 subtes → 3 subtes
+  visibility: "asc", // A → Z (Admin, Arsip, Publik)
 };
 const DIRECTION_SIGN = { asc: 1, desc: -1 };
 const DIR_GLYPH = { asc: " ▲", desc: " ▼" };
@@ -357,6 +376,12 @@ function renderBars(total, totalPages) {
 function updateEmptyState(total, query) {
   if (total > 0) {
     emptyMsgEl.style.display = "none";
+    // Restore table visibility when rows come back (e.g. user clears a
+    // no-match search). updateEmptyState is the only place that hides
+    // the table on empty results — symmetry requires it to also be the
+    // one that un-hides it (mirror of scoreboard renderTable).
+    tableEl.style.display = "table";
+    tableEl.closest(".table-scroll-wrapper")?.toggleAttribute("inert", false);
     return;
   }
   emptyMsgEl.style.display = "block";
