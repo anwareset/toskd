@@ -9,6 +9,35 @@ const searchClear = document.getElementById("pack-search-clear");
 const searchBar = document.getElementById("pack-search-bar");
 const modal = document.getElementById("name-modal");
 const nameInput = document.getElementById("participant-name");
+const nameHelper = document.getElementById("participant-name-helper");
+
+// Validasi nama peserta (2026-08-19) — mirror rules server-side
+// (validateParticipantName di src/server.js): hanya alfabet + spasi, tidak
+// boleh diawali spasi, wajib non-empty, maks 100 karakter. Dipakai untuk
+// error inline di modal (bukan alert) sebelum redirect ke exam.html.
+const PARTICIPANT_NAME_MAX_LEN = 100;
+function validateParticipantName(raw) {
+  const name = raw.trim();
+  if (!name) return "Nama peserta wajib diisi.";
+  if (raw !== raw.trimStart()) return "Nama tidak boleh diawali spasi.";
+  if (name.length > PARTICIPANT_NAME_MAX_LEN) {
+    return `Nama terlalu panjang (maks ${PARTICIPANT_NAME_MAX_LEN} karakter).`;
+  }
+  if (!/^[A-Za-z][A-Za-z ]*$/.test(name)) {
+    return "Nama hanya boleh berisi huruf alfabet dan spasi.";
+  }
+  return null; // valid
+}
+
+// Error inline di bawah input: .field-helper--error (token --danger) + border
+// merah. Dihapus otomatis saat user mengetik (listener input di bawah).
+function setNameError(message) {
+  if (nameHelper) {
+    nameHelper.textContent = message;
+    nameHelper.style.display = message ? "block" : "none";
+  }
+  nameInput.style.borderColor = message ? "var(--danger)" : "";
+}
 
 // Pagination (spec: specs/select-pack-pagination-spec.md) — 6 kartu per
 // halaman, bar bawah saja, reuse komponen .pagination-bar yang sama dengan
@@ -301,12 +330,14 @@ function selectPack(id) {
 }
 document.getElementById("cancel-btn").onclick = () => modal.close();
 document.getElementById("start-btn").onclick = () => {
-  const name = nameInput.value.trim();
-  if (!name) {
-    nameInput.style.borderColor = "var(--danger)";
+  const nameError = validateParticipantName(nameInput.value);
+  if (nameError) {
+    setNameError(nameError);
     nameInput.focus();
     return;
   }
+  setNameError("");
+  const name = nameInput.value.trim();
   // Exam Timer Persistence (spec: specs/exam-timer-persistence-spec.md, AC1):
   // generate SID sekali per "Mulai" click — jadi exam.html bisa pakai wall-clock
   // untuk resume timer walaupun user me-refresh.
@@ -315,10 +346,7 @@ document.getElementById("start-btn").onclick = () => {
     (Date.now().toString(36) + Math.random().toString(36).slice(2)).slice(0, 32);
   location.href = `/exam.html?packId=${selectedPackId}&name=${encodeURIComponent(name)}&sid=${sid}`;
 };
-nameInput.addEventListener(
-  "input",
-  () => (nameInput.style.borderColor = ""),
-);
+nameInput.addEventListener("input", () => setNameError(""));
 if (packPrevBtn) packPrevBtn.addEventListener("click", () => gotoPage(-1));
 if (packNextBtn) packNextBtn.addEventListener("click", () => gotoPage(1));
 loadPacks();

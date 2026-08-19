@@ -18,6 +18,23 @@ const emptyEl = document.getElementById("empty-msg");
 const controlsTopEl = document.getElementById("controls-top");
 const controlsBottomEl = document.getElementById("controls-bottom");
 
+// Admin-only selection UI (2026-08-19) — mirror bulk-delete kelola-soal.js:
+// selectedIds Set + header select-all 3-state + selection pill + tombol
+// Hapus Terpilih. Kolom checkbox/Aksi tersembunyi utk non-admin via CSS
+// #score-table.admin-mode (lihat .admin-actions di styles.css).
+const selectAllCheckbox = document.getElementById(
+  "scoreboard-select-all-checkbox",
+);
+const bulkDeleteBtn = document.getElementById("scoreboard-bulk-delete-btn");
+const selectionPill = document.getElementById("scoreboard-selection-pill");
+const selectionPillText = document.getElementById(
+  "scoreboard-selection-pill-text",
+);
+const clearSelectionBtn = document.getElementById(
+  "scoreboard-clear-selection-btn",
+);
+const selectedIds = new Set();
+
 function esc(s) {
   const d = document.createElement("div");
   d.textContent = s;
@@ -93,6 +110,13 @@ async function init() {
   // link participant → review.html tidak bergantung pada keberadaan markup
   // tombol reset — dua fitur admin-only yang independen.
   checkAdmin();
+
+  // Selection & delete (2026-08-19) — delegation ONCE sebelum render pertama
+  // supaya checkbox/aksi yang muncul belakangan tetap tertangani.
+  setupCheckboxDelegation();
+  bindSelectAll();
+  bindClearSelection();
+  bindDeleteActions();
 
   reapplyView();
 }
@@ -184,9 +208,22 @@ function renderTable(rankById) {
     r.id && isAdmin
       ? `<a class="participant-link" href="/review.html?id=${encodeURIComponent(r.id)}" title="Lihat pembahasan untuk ${esc(r.participant_name)}">${esc(r.participant_name)}</a>`
       : esc(r.participant_name);
-      // Spec: kelola-soal-mobile-table-spec §6.2 — sticky-left on the No
-      // column only (scoreboard has no Aksi column → no sticky-right).
-      return `<tr><td class="sticky-col-left">${globalIdx}</td><td>${nameCell}</td><td>${esc(r.question_packs?.name || "-")}</td><td>${r.score}</td><td class="${sc}">${r.status}</td><td>${d}</td></tr>`;
+      // Spec: kelola-soal-mobile-table-spec §6.2 + revisi 2026-08-19:
+      //   - No column sticky-left HANYA saat non-admin (checkbox col tersembunyi
+      //     → No = kolom pertama). Saat admin, checkbox col (sticky-left) jadi
+      //     kolom pertama dan No kembali plain — mirror kelola-soal (checkbox
+      //     sticky-left, No plain) supaya TIDAK ada offset sticky yang rapuh.
+      //   - Aksi col sticky-right (mirror kolom Aksi kelola-soal).
+      //   - Nama peserta diberi class .score-name-col eksplisit (max-width +
+      //     ellipsis) agar lebarnya STABIL di kedua mode — sebelumnya gaya
+      //     Nama datang dari rule global nth-child(2) yang berubah posisinya
+      //     saat checkbox disisipkan → kolom terlihat bergeser.
+      //   - .admin-actions disembunyikan utk non-admin via CSS
+      //     #score-table.admin-mode.
+      const noClass = isAdmin ? "" : "sticky-col-left";
+      const checkboxTd = `<td class="col-checkbox sticky-col-left admin-actions"><input type="checkbox" class="row-checkbox" data-id="${r.id}" ${selectedIds.has(r.id) ? "checked" : ""} aria-label="Pilih hasil ${esc(r.participant_name)}"></td>`;
+      const aksiTd = `<td class="sticky-col-right admin-actions"><button type="button" class="btn-danger" data-action="delete" data-id="${r.id}" aria-label="Hapus hasil ${esc(r.participant_name)}">Hapus</button></td>`;
+      return `<tr>${checkboxTd}<td class="${noClass}">${globalIdx}</td><td class="score-name-col">${nameCell}</td><td>${esc(r.question_packs?.name || "-")}</td><td>${r.score}</td><td class="${sc}">${r.status}</td><td>${d}</td>${aksiTd}</tr>`;
     })
     .join("");
 
@@ -196,6 +233,11 @@ function renderTable(rankById) {
   controlsTopEl.style.display = "flex";
   controlsBottomEl.style.display = "flex";
   emptyEl.style.display = "none";
+
+  // Sync selection pill + header checkbox 3-state after every render
+  // (mirror updateSelectionUI kelola-soal.js). Reads selectedIds (state,
+  // not DOM) + current filtered pageData (view).
+  updateSelectionUI();
 }
 
 function renderEmpty() {
@@ -342,6 +384,238 @@ function bindSortHeaders() {
     });
 }
 
+// ====== Admin-only: selection + delete (2026-08-19) ======
+// Tiga tipe penghapusan: (1) single via tombol Hapus per-row,
+// (2) bulk via checkbox + Hapus Terpilih, (3) reset-all (sudah ada).
+// Pattern seleksi mirror kelola-soal.js (bulk-delete): selectedIds Set,
+// header checkbox 3-state, selection pill, tombol Hapus Terpilih.
+
+// updateSelectionUI() — sinkronkan pill + tombol Hapus Terpilih + header
+// checkbox 3-state dari selectedIds (state) + pageData view (filteredResults
+// dihalaman saat ini). Strict-scope: header checkbox mencerminkan baris
+// halaman ini SAJA; seleksi lintas halaman tetap terlihat via pill.
+function updateSelectionUI() {
+  const total = selectedIds.size;
+  const start = (currentPage - 1) * rowsPerPage;
+  const pageData = filteredResults.slice(start, start + rowsPerPage);
+  const onThisPage = pageData.filter((r) => selectedIds.has(r.id)).length;
+  const totalOnPage = pageData.length;
+
+  // Sembunyikan tombol Reset All saat ada checkbox ticked (revisi 2026-08-19):
+  // mencegah salah pencet — admin mengira reset hanya menghapus baris terpilih,
+  // padahal Reset All menghapus SEMUA hasil. Muncul lagi setelah seleksi
+  // dibersihkan (clear selection / seleksi habis). updateSelectionUI dipanggil
+  // di tiap perubahan seleksi + tiap render, jadi state selalu sinkron.
+  if (resetScoreboardBtn) {
+    resetScoreboardBtn.style.display = isAdmin && total === 0 ? "" : "none";
+  }
+
+  if (total === 0) {
+    selectionPill.style.display = "none";
+    bulkDeleteBtn.disabled = true;
+  } else {
+    selectionPill.style.display = "inline-flex";
+    if (total === totalOnPage && total > 0) {
+      selectionPillText.textContent = `${total} dipilih di halaman ini`;
+    } else {
+      selectionPillText.textContent = `${total} dipilih total · ${onThisPage} di halaman ini`;
+    }
+    bulkDeleteBtn.disabled = false;
+  }
+
+  // Header checkbox 3-state (mirror state machine kelola-soal).
+  if (totalOnPage === 0 || onThisPage === 0) {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = false;
+  } else if (onThisPage === totalOnPage) {
+    selectAllCheckbox.checked = true;
+    selectAllCheckbox.indeterminate = false;
+  } else {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = true;
+  }
+}
+
+// setupCheckboxDelegation() — delegated `change` handler ONCE di bodyEl.
+// Konversi toggle .row-checkbox jadi mutasi selectedIds (mirror kelola-soal).
+let checkboxDelegationInstalled = false;
+function setupCheckboxDelegation() {
+  if (checkboxDelegationInstalled) return;
+  if (!bodyEl) return;
+  checkboxDelegationInstalled = true;
+  bodyEl.addEventListener("change", (e) => {
+    const cb = e.target.closest(".row-checkbox");
+    if (!cb) return;
+    const id = Number(cb.dataset.id);
+    if (!Number.isInteger(id) || id <= 0) return;
+    if (cb.checked) selectedIds.add(id);
+    else selectedIds.delete(id);
+    updateSelectionUI();
+  });
+}
+
+// bindSelectAll() — header checkbox: centang/lepas SEMUA baris di halaman
+// saat ini (strict-scope, mirror kelola-soal).
+function bindSelectAll() {
+  if (!selectAllCheckbox) return;
+  selectAllCheckbox.addEventListener("change", () => {
+    const start = (currentPage - 1) * rowsPerPage;
+    const pageData = filteredResults.slice(start, start + rowsPerPage);
+    for (const r of pageData) {
+      if (selectAllCheckbox.checked) selectedIds.add(r.id);
+      else selectedIds.delete(r.id);
+    }
+    // Re-render (bukan hanya updateSelectionUI) supaya checkbox ROW ikut
+    // menampilkan state checked — mirror kelola-soal.js (select-all handler
+    // re-render body; renderTable diakhiri updateSelectionUI).
+    reapplyView();
+  });
+}
+
+// bindClearSelection() — membersihkan seleksi (revisi 2026-08-19):
+//   - klik di MANA PUN pada selection pill (termasuk teks "N dipilih")
+//   - tombol ✕ di dalam pill (tetap berfungsi; kliknya ikut ter-bubble ke
+//     pill handler — clear idempotent, jadi aman dieksekusi dua kali)
+//
+// WAJIB reapplyView(), bukan sekadar updateSelectionUI(): checkbox ROW
+// dirender dari selectedIds di renderTable, jadi state DOM baru sinkron
+// setelah tabel di-render ulang (renderTable diakhiri updateSelectionUI
+// → pill/header ikut bersih).
+function bindClearSelection() {
+  const clearSelection = () => {
+    selectedIds.clear();
+    reapplyView();
+  };
+  if (selectionPill) {
+    selectionPill.addEventListener("click", clearSelection);
+  }
+  if (clearSelectionBtn) {
+    clearSelectionBtn.addEventListener("click", clearSelection);
+  }
+}
+
+// bindDeleteActions() — satu modal konfirmasi utk dua alur hapus:
+//   single: klik tombol "Hapus" per-row (data-action="delete") → [id]
+//   bulk  : klik #scoreboard-bulk-delete-btn → Array.from(selectedIds)
+// Konfirmasi: DELETE /api/scoreboard/:id (single) atau
+// POST /api/scoreboard/bulk-delete { ids } (bulk) — keduanya requireAdmin.
+const deleteModal = document.getElementById("scoreboard-delete-modal");
+const deleteTitle = document.getElementById("scoreboard-delete-title");
+const deleteDesc = document.getElementById("scoreboard-delete-desc");
+const deleteList = document.getElementById("scoreboard-delete-list");
+const deleteCancelBtn = document.getElementById("scoreboard-delete-cancel-btn");
+const deleteConfirmBtn = document.getElementById("scoreboard-delete-confirm-btn");
+let pendingDeleteIds = [];
+let isDeleteInFlight = false;
+
+function openDeleteModal(ids) {
+  if (!deleteModal) return;
+  pendingDeleteIds = ids;
+  const rows = ids
+    .map((id) => allResults.find((r) => r.id === id))
+    .filter(Boolean);
+  if (rows.length === 1) {
+    const r = rows[0];
+    deleteTitle.textContent = "🗑 Konfirmasi Hapus Hasil";
+    deleteDesc.textContent = `Anda akan menghapus hasil ujian milik "${r.participant_name}" (paket "${r.question_packs?.name || "-"}", skor ${r.score}, ${r.status}).`;
+  } else {
+    deleteTitle.textContent = `🗑 Konfirmasi Hapus ${rows.length} Hasil`;
+    deleteDesc.textContent = `Anda akan menghapus ${rows.length} hasil ujian berikut:`;
+  }
+  deleteList.innerHTML = rows
+    .map(
+      (r) =>
+        `<li><strong>${esc(r.participant_name)}</strong> — ${esc(r.question_packs?.name || "-")} · skor ${r.score} · ${esc(r.status)}</li>`,
+    )
+    .join("");
+  deleteModal.showModal();
+}
+
+async function confirmDelete() {
+  if (isDeleteInFlight || pendingDeleteIds.length === 0) return;
+  isDeleteInFlight = true;
+  const originalText = deleteConfirmBtn.textContent;
+  deleteConfirmBtn.disabled = true;
+  deleteConfirmBtn.textContent = "Menghapus…";
+  try {
+    let r;
+    if (pendingDeleteIds.length === 1) {
+      r = await fetch(`/api/scoreboard/${pendingDeleteIds[0]}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+    } else {
+      r = await fetch("/api/scoreboard/bulk-delete", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: pendingDeleteIds }),
+      });
+    }
+    if (r.status === 401) {
+      // Sesi admin kedaluwarsa mid-use → sembunyikan seluruh UI admin.
+      hideAdminUi();
+      deleteModal?.close();
+      return;
+    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const deletedSet = new Set(pendingDeleteIds);
+    allResults = allResults.filter((row) => !deletedSet.has(row.id));
+    for (const id of pendingDeleteIds) selectedIds.delete(id);
+    deleteModal?.close();
+    reapplyView();
+    showNotification(
+      "✓ Hapus Berhasil",
+      `${data.deleted} hasil ujian telah dihapus.`,
+    );
+  } catch (err) {
+    console.error("[scoreboard] delete failed:", err);
+    deleteModal?.close();
+    showNotification(
+      "❌ Gagal Menghapus",
+      "Gagal menghapus hasil ujian. Coba lagi.",
+    );
+  } finally {
+    isDeleteInFlight = false;
+    deleteConfirmBtn.disabled = false;
+    deleteConfirmBtn.textContent = originalText;
+  }
+}
+
+function bindDeleteActions() {
+  // Tombol "Hapus" per-row (single) — delegated click di bodyEl.
+  bodyEl?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action='delete']");
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    if (Number.isInteger(id) && id > 0) openDeleteModal([id]);
+  });
+  // Tombol "Hapus Terpilih" (bulk).
+  bulkDeleteBtn?.addEventListener("click", () => {
+    if (selectedIds.size === 0) return;
+    openDeleteModal(Array.from(selectedIds));
+  });
+  deleteCancelBtn?.addEventListener("click", () => deleteModal?.close());
+  deleteConfirmBtn?.addEventListener("click", confirmDelete);
+}
+
+// hideAdminUi() — cabut seluruh UI admin (dipakai saat sesi 401: reset
+// maupun delete). Setelah logout/expired, kolom checkbox/Aksi disembunyikan
+// lagi dan seleksi dibersihkan.
+function hideAdminUi() {
+  isAdmin = false;
+  selectedIds.clear();
+  if (resetScoreboardBtn) resetScoreboardBtn.style.display = "none";
+  if (bulkDeleteBtn) bulkDeleteBtn.style.display = "none";
+  updateSelectionUI();
+  tableEl.classList.remove("admin-mode");
+  // Kembalikan sticky No column (kolom pertama saat non-admin).
+  document
+    .getElementById("scoreboard-no-col")
+    ?.classList.add("sticky-col-left");
+}
+
 // ====== Admin-only: Reset Scoreboard ======
 // Button (#reset-scoreboard-btn) is hidden in markup; shown only when the
 // session cookie authenticates as admin (GET /api/admin/me — same pattern
@@ -405,6 +679,14 @@ async function checkAdmin() {
     if (!data?.username) return;
     isAdmin = true;
     if (resetScoreboardBtn) resetScoreboardBtn.style.display = "";
+    if (bulkDeleteBtn) bulkDeleteBtn.style.display = "";
+    // Kolom checkbox/Aksi hanya aktif saat admin (CSS #score-table.admin-mode
+    // mengontrol visibilitas .admin-actions). Saat admin, No column TIDAK
+    // sticky (checkbox col jadi kolom pertama — mirror kelola-soal).
+    tableEl.classList.add("admin-mode");
+    document
+      .getElementById("scoreboard-no-col")
+      ?.classList.remove("sticky-col-left");
     reapplyView();
   } catch (err) {
     console.warn("[scoreboard] auth check failed:", err);
@@ -436,8 +718,8 @@ function wireAdminReset() {
         credentials: "same-origin",
       });
       if (r.status === 401) {
-        // Session expired mid-use → hide the admin button + close modal.
-        resetScoreboardBtn.style.display = "none";
+        // Session expired mid-use → hide ALL admin UI + close modal.
+        hideAdminUi();
         resetScoreboardModal?.close();
         return;
       }

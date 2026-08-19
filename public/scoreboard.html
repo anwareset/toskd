@@ -18,6 +18,40 @@
                         class="header-actions"
                         style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap"
                     >
+                        <!-- Admin-only: disembunyikan default; checkAdmin() di
+                             scoreboard.js menampilkannya hanya jika
+                             GET /api/admin/me mengembalikan sesi admin.
+                             Mirror markup bulk-delete kelola-soal.html
+                             (tombol Hapus Terpilih + selection pill); warna
+                             danger disamakan dgn #reset-scoreboard-btn
+                             (btn-back btn-back-danger, revisi 2026-08-19). -->
+                        <button
+                            id="scoreboard-bulk-delete-btn"
+                            class="btn-back btn-back-danger"
+                            type="button"
+                            style="display: none"
+                            disabled
+                            title="Pilih minimal 1 hasil untuk mengaktifkan"
+                        >
+                            <span class="btn-back-label">🗑 Hapus Terpilih</span>
+                        </button>
+                        <span
+                            id="scoreboard-selection-pill"
+                            class="selection-pill"
+                            style="display: none"
+                            aria-live="polite"
+                        >
+                            <span id="scoreboard-selection-pill-text"
+                                >0 dipilih</span
+                            >
+                            <button
+                                id="scoreboard-clear-selection-btn"
+                                type="button"
+                                aria-label="Batalkan semua pilihan"
+                            >
+                                ✕
+                            </button>
+                        </span>
                         <!-- Admin-only: disembunyikan default; wireAdminReset()
                              di scoreboard.js menampilkannya hanya jika
                              GET /api/admin/me mengembalikan sesi admin.
@@ -29,7 +63,11 @@
                             type="button"
                             style="display: none"
                         >
-                            <span class="btn-back-label">Reset</span>
+                            <!-- ↻ (U+21BB): glyph teks polos, bukan emoji — warnanya
+                                 mengikuti teks tombol (putih) sehingga netral &
+                                 matching dgn tombol danger merah (revisi 2026-08-19;
+                                 🔄 sebelumnya biru dan bentrok dgn warna tombol). -->
+                            <span class="btn-back-label">↻ Reset All</span>
                         </button>
                         <button class="btn-back" onclick="location.href = '/'">
                             <span class="btn-back-icon" aria-hidden="true"></span>
@@ -124,17 +162,44 @@
                         <thead>
                             <tr>
                                 <!--
+                                  Checkbox column (ADMIN ONLY, 2026-08-19): mirror
+                                  kelola-soal.html col-checkbox sticky-col-left.
+                                  .admin-actions disembunyikan saat non-admin via
+                                  CSS #score-table.admin-mode.
+                                -->
+                                <th
+                                    class="col-checkbox sticky-col-left admin-actions"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        id="scoreboard-select-all-checkbox"
+                                        aria-label="Pilih semua hasil di halaman ini"
+                                    >
+                                </th>
+                                <!--
                                   No column: NOT sortable (per Round 1 — user listed
                                   only 5 sortable headers: Nama, Paket, Skor, Status,
                                   Tanggal). The row number is recomputed by
                                   scoreboard.js as (currentPage - 1) * perPage + i + 1
-                                  so numbering continues across pages. Marked
-                                  sticky-col-left so the visual row index stays
-                                  pinned on mobile (kelola-soal-mobile-table-spec §6.2).
+                                  so numbering continues across pages. sticky-col-left
+                                  HANYA saat non-admin (checkbox col tersembunyi → No
+                                  kolom pertama); checkAdmin() melepasnya saat admin
+                                  (checkbox col jadi sticky-left, No plain — mirror
+                                  kelola-soal, revisi 2026-08-19).
                                 -->
-                                <th class="sticky-col-left">No</th>
+                                <th class="sticky-col-left" id="scoreboard-no-col">
+                                    No
+                                </th>
+                                <!--
+                                  Nama Peserta: .score-name-col eksplisit (max-width +
+                                  ellipsis) supaya lebarnya STABIL di kedua mode —
+                                  sebelumnya gaya datang dari rule global
+                                  .table-condensed th:nth-child(2) yang berubah posisi
+                                  saat kolom checkbox disisipkan (admin) → kolom
+                                  terlihat bergeser (fix 2026-08-19).
+                                -->
                                 <th
-                                    class="sortable"
+                                    class="sortable score-name-col"
                                     data-sort-column="participant_name"
                                 >
                                     Nama Peserta
@@ -156,6 +221,15 @@
                                     data-sort-column="created_at"
                                 >
                                     Tanggal
+                                </th>
+                                <!--
+                                  Aksi column (ADMIN ONLY, 2026-08-19): tombol
+                                  hapus per-row. sticky-col-right mirror kolom
+                                  Aksi kelola-soal.html. .admin-actions disembunyikan
+                                  saat non-admin via CSS #score-table.admin-mode.
+                                -->
+                                <th class="sticky-col-right admin-actions">
+                                    Aksi
                                 </th>
                             </tr>
                         </thead>
@@ -275,6 +349,64 @@
                                 type="button"
                             >
                                 Ya, Reset
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
+
+                <!-- ==================== DELETE CONFIRM MODAL ====================
+                     Admin-only (2026-08-19). Dipakai untuk DUA alur hapus:
+                       - Single : tombol "Hapus" per-row (data-action="delete")
+                       - Bulk   : tombol #scoreboard-bulk-delete-btn (checkbox)
+                     Konten (judul + daftar baris) diisi dinamis oleh
+                     scoreboard.js sebelum showModal(); konfirmasi memanggil
+                     DELETE /api/scoreboard/:id (single) atau
+                     POST /api/scoreboard/bulk-delete (bulk) — requireAdmin.
+                     Markup mirror dialog.modal delete-pack paket-soal.html /
+                     single-delete-confirm-modal kelola-soal.html. -->
+                <dialog
+                    id="scoreboard-delete-modal"
+                    class="modal"
+                    style="max-width: 600px"
+                >
+                    <div class="modal-content">
+                        <h3 id="scoreboard-delete-title">🗑 Konfirmasi Hapus</h3>
+
+                        <div class="bulk-delete-summary">
+                            <p
+                                id="scoreboard-delete-desc"
+                                style="font-weight: 600; margin-bottom: 8px"
+                            ></p>
+                            <div
+                                id="scoreboard-delete-list-wrap"
+                                class="bulk-delete-pack-list"
+                            >
+                                <strong>📊 Hasil ujian yang akan dihapus:</strong>
+                                <ul id="scoreboard-delete-list"></ul>
+                            </div>
+                            <p
+                                style="color: var(--text-muted); font-size: 0.9rem"
+                            >
+                                Tindakan ini menghapus hasil ujian secara permanen
+                                dan tidak dapat dibatalkan. Counter
+                                <strong>"Dikerjakan N×"</strong> ikut berkurang.
+                            </p>
+                        </div>
+
+                        <div class="modal-buttons">
+                            <button
+                                type="button"
+                                class="btn-secondary"
+                                id="scoreboard-delete-cancel-btn"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                type="button"
+                                class="btn-danger"
+                                id="scoreboard-delete-confirm-btn"
+                            >
+                                Ya, Hapus
                             </button>
                         </div>
                     </div>

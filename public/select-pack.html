@@ -100,7 +100,18 @@
                             id="participant-name"
                             class="input-field"
                             placeholder="contoh: Prabowo Subianto"
+                            aria-describedby="participant-name-helper"
                         />
+                        <!-- Error inline validasi nama (2026-08-19): pattern
+                             field-helper dari paket-soal/kelola-soal. Pesan
+                             error merah di-set oleh select-pack.js;
+                             kosong + tersembunyi saat nama valid. -->
+                        <small
+                            id="participant-name-helper"
+                            class="field-helper field-helper--error"
+                            style="display: none"
+                            role="alert"
+                        ></small>
                         <!-- Rincian paket + aturan ujian: diisi dinamis oleh
                              renderPackDetail() di select-pack.js saat
                              selectPack(id) dipanggil. Memberi tahu peserta

@@ -1272,10 +1272,43 @@ app.get("/api/packs/:id/questions", async (req, res) => {
   }
 });
 
+// --- Participant name validation (2026-08-19) ---
+// Rules (interview 2026-08-19): hanya alfabet (A-Z/a-z) + spasi; TIDAK boleh
+// diawali spasi; wajib non-empty setelah trim; maks 100 karakter. Dipakai
+// server-side di exam/start + exam/submit (defense-in-depth — client sudah
+// validasi inline di modal select-pack). Data lama yang tidak valid → 400.
+const PARTICIPANT_NAME_MAX_LEN = 100;
+function validateParticipantName(raw) {
+  if (typeof raw !== "string") return { error: "nama peserta wajib diisi" };
+  const name = raw.trim();
+  if (!name) return { error: "nama peserta wajib diisi" };
+  if (raw !== raw.trimStart()) {
+    return { error: "nama peserta tidak boleh diawali spasi" };
+  }
+  if (name.length > PARTICIPANT_NAME_MAX_LEN) {
+    return {
+      error: `nama peserta terlalu panjang (maks ${PARTICIPANT_NAME_MAX_LEN} karakter)`,
+    };
+  }
+  if (!/^[A-Za-z][A-Za-z ]*$/.test(name)) {
+    return {
+      error: "nama peserta hanya boleh berisi huruf alfabet dan spasi",
+    };
+  }
+  return { name };
+}
+
 // Start exam
 app.post("/api/exam/start", async (req, res) => {
   try {
     const { pack_id, participant_name } = req.body;
+    // Nama peserta wajib valid (alfabet + spasi, tanpa spasi di awal) —
+    // enforcement server-side, mirror validasi inline modal select-pack.
+    const nameCheck = validateParticipantName(participant_name);
+    if (nameCheck.error) {
+      return res.status(400).json({ error: nameCheck.error });
+    }
+    const name = nameCheck.name;
     // Visibility gate (pack-visibility-spec.md §4.2) — titik enforce utama
     // "tak bisa dikerjakan": canWorkPack LEBIH strict dari isPackVisibleTo:
     //   - pack 'archived'  → 403 untuk SEMUA (termasuk admin)
@@ -1309,7 +1342,7 @@ app.post("/api/exam/start", async (req, res) => {
         .from("exam_results")
         .insert({
           pack_id,
-          participant_name,
+          participant_name: name,
           score: 0,
           status: "In Progress",
           answers: {},
@@ -1332,6 +1365,13 @@ app.post("/api/exam/start", async (req, res) => {
 app.post("/api/exam/submit", async (req, res) => {
   try {
     const { pack_id, participant_name, answers } = req.body;
+    // Nama peserta wajib valid — enforcement sama dengan exam/start
+    // (2026-08-19): menolak nama legacy/aneh di submit juga.
+    const nameCheck = validateParticipantName(participant_name);
+    if (nameCheck.error) {
+      return res.status(400).json({ error: nameCheck.error });
+    }
+    const name = nameCheck.name;
 
     // Visibility gate (pack-visibility-spec.md §4.2) — defense-in-depth,
     // strict everywhere (R1.2): canWorkPack → archived 403 utk SEMUA
@@ -1366,7 +1406,7 @@ app.post("/api/exam/submit", async (req, res) => {
       .from("exam_results")
       .select("id")
       .eq("pack_id", pack_id)
-      .eq("participant_name", participant_name)
+      .eq("participant_name", name)
       .limit(1);
     if (dupCheckErr) throw dupCheckErr;
     if (existing && existing.length > 0) {
@@ -1374,13 +1414,46 @@ app.post("/api/exam/submit", async (req, res) => {
         { event: "exam.submit", operation_status: "duplicate", pack_id, result_id: existing[0].id },
         "Duplicate exam submission (409)",
       );
+      // Fix 2026-08-19: bersihkan row In Progress dari percobaan yang
+      // barusan ditolak (jangan sentuh hasil lama). Client mengirim
+      // result_id yang didapat dari POST /api/exam/start; filter
+      // pack_id + participant_name + status='In Progress' memastikan
+      // row hasil LAMA yang sudah selesai tidak pernah tersentuh
+      // walau client mengirim id yang salah.
+      const rid = Number(req.body?.result_id);
+      if (Number.isInteger(rid) && rid > 0) {
+        const { error: delErr } = await supabase
+          .from("exam_results")
+          .delete()
+          .eq("id", rid)
+          .eq("pack_id", pack_id)
+          .eq("participant_name", name)
+          .eq("status", "In Progress");
+        if (delErr) {
+          logger.warn(
+            {
+              event: "exam.submit",
+              operation_status: "partial",
+              detail: "in-progress-cleanup-failed",
+              error: errorField(delErr),
+              result_id: rid,
+            },
+            "Gagal membersihkan row In Progress saat 409",
+          );
+        } else {
+          logger.info(
+            { event: "exam.submit", operation_status: "cleaned", result_id: rid, pack_id },
+            "Row In Progress percobaan ditolak dihapus",
+          );
+        }
+      }
       // Refresh participant cookie ke hasil yang sudah ada (2026-08-11):
       // kalau cookie asli sudah kadaluarsa, redirect ke review miliknya
       // sendiri setelah retry tetap diizinkan (bukan 403).
       setParticipantCookie(req, res, {
         kind: "participant",
         result_id: existing[0].id,
-        participant_name,
+        participant_name: name,
       });
       return res.status(409).json({
         error: "Anda sudah menyelesaikan ujian ini sebelumnya.",
@@ -1468,7 +1541,7 @@ app.post("/api/exam/submit", async (req, res) => {
 
     const { data, error } = await supabase
       .from("exam_results")
-      .insert({ pack_id, participant_name, score, status, answers })
+      .insert({ pack_id, participant_name: name, score, status, answers })
       .select();
     if (error) throw error;
     logger.info(
@@ -1488,7 +1561,7 @@ app.post("/api/exam/submit", async (req, res) => {
     setParticipantCookie(req, res, {
       kind: "participant",
       result_id: data[0].id,
-      participant_name,
+      participant_name: name,
     });
     res.status(201).json(data[0]);
   } catch (error) {
@@ -2011,6 +2084,76 @@ app.delete("/api/scoreboard", requireAdmin, async (req, res) => {
   } catch (error) {
     logger.error({ event: "scoreboard.reset", operation_status: "failed", error: errorField(error) }, "Failed to reset scoreboard");
     res.status(500).json({ error: "Gagal mereset scoreboard" });
+  }
+});
+
+// Delete single scoreboard row (admin only, 2026-08-19) — hapus SATU hasil
+// ujian (mis. junk "In Progress" / duplikat nama). Kebalikan dari reset-all:
+// menghapus hanya baris yang dipilih, completion_count ikut menurun otomatis.
+app.delete("/api/scoreboard/:id", requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: "invalid id" });
+    }
+    const { data, error } = await supabase
+      .from("exam_results")
+      .delete()
+      .eq("id", id)
+      .select("id");
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: "result not found" });
+    }
+    logger.info(
+      { event: "scoreboard.delete", operation_status: "success", id },
+      "Scoreboard row deleted",
+    );
+    res.json({ deleted: 1 });
+  } catch (error) {
+    logger.error({ event: "scoreboard.delete", operation_status: "failed", error: errorField(error) }, "Failed to delete scoreboard row");
+    res.status(500).json({ error: "Gagal menghapus hasil ujian" });
+  }
+});
+
+// Bulk delete scoreboard rows (admin only, 2026-08-19) — hapus beberapa hasil
+// terpilih sekaligus (mirror pola bulk-delete soal: POST + body { ids }).
+// Satu query PostgREST `in` (tanpa per-id allSettled — baris exam_results
+// tidak punya dependensi FK, jadi partial-failure reporting tidak diperlukan).
+app.post("/api/scoreboard/bulk-delete", requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids must be a non-empty array" });
+    }
+    if (ids.length > 1000) {
+      return res.status(400).json({ error: "max 1000 ids per request" });
+    }
+    const numericIds = ids
+      .map(Number)
+      .filter((n) => Number.isInteger(n) && n > 0);
+    if (numericIds.length === 0) {
+      return res.status(400).json({ error: "ids must be positive integers" });
+    }
+    const { data, error } = await supabase
+      .from("exam_results")
+      .delete()
+      .in("id", numericIds)
+      .select("id");
+    if (error) throw error;
+    logger.info(
+      {
+        event: "scoreboard.bulk_delete",
+        operation_status: "success",
+        deleted: data?.length ?? 0,
+        requested: numericIds.length,
+      },
+      "Scoreboard bulk delete",
+    );
+    res.json({ deleted: data?.length ?? 0, requested: numericIds.length });
+  } catch (error) {
+    logger.error({ event: "scoreboard.bulk_delete", operation_status: "failed", error: errorField(error) }, "Failed to bulk delete scoreboard rows");
+    res.status(500).json({ error: "Gagal menghapus hasil ujian" });
   }
 });
 

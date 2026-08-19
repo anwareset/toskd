@@ -995,6 +995,12 @@ select.input-field {
     margin-top: 6px;
 }
 
+/* Error variant — dipakai validasi nama peserta di select-pack (2026-08-19)
+   dan pola field-helper lain yang butuh state error. Token-only. */
+.field-helper--error {
+    color: var(--danger);
+}
+
 /* ==========================================================
  * 7. Modal
  * ========================================================== */
@@ -1250,6 +1256,33 @@ tbody tr:last-child td {
 .sticky-col-left {
     left: 0;
     box-shadow: 4px 0 8px -6px rgba(20, 24, 33, 0.22);
+}
+
+/* Kolom admin scoreboard (checkbox + Aksi) — tersembunyi utk non-admin;
+   tampil hanya saat table diberi .admin-mode oleh checkAdmin(). */
+.admin-actions {
+    display: none;
+}
+
+#score-table.admin-mode .admin-actions {
+    display: table-cell;
+}
+
+/* Nama peserta scoreboard — max-width + ellipsis EKSPLISIT per class, bukan
+   nth-child: posisi kolom Nama berubah saat admin (kolom checkbox disisipkan
+   di depan), jadi rule position-based (global .table-condensed th:nth-child(2))
+   tidak lagi kena — tanpa ini kolom Nama kehilangan truncation saat admin
+   dan seluruh tabel bergeser (fix 2026-08-19). Nilai sama dengan rule lama
+   (320px; .container--wide → 480px) supaya kedua mode identik. */
+#score-table .score-name-col {
+    max-width: 320px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.container--wide #score-table .score-name-col {
+    max-width: 480px;
 }
 
 .sticky-col-right {

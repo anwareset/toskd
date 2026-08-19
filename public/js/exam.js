@@ -25,7 +25,21 @@ const packId = params.get("packId");
 const participantName = decodeURIComponent(params.get("name") || "");
 const sid = params.get("sid") || generateSid();
 
-if (!packId || !participantName) location.href = "/select-pack.html";
+// Defense (2026-08-19): nama wajib valid — mirror rules modal select-pack
+// (alfabet + spasi, tanpa spasi di awal). URL yang di-tamper manual → kembali
+// ke select-pack; mencegah terjebak di submit yang pasti 400 dari server.
+function isValidParticipantName(raw) {
+  if (typeof raw !== "string") return false;
+  const name = raw.trim();
+  if (!name) return false;
+  if (raw !== raw.trimStart()) return false;
+  if (name.length > 100) return false;
+  return /^[A-Za-z][A-Za-z ]*$/.test(name);
+}
+
+if (!packId || !isValidParticipantName(participantName)) {
+  location.href = "/select-pack.html";
+}
 
 function generateSid() {
   return (
@@ -318,6 +332,14 @@ async function submitExam() {
       }),
     });
     const result = await res.json();
+
+    // Defense (2026-08-19): nama tidak valid → 400 dari server (modal sudah
+    // mencegah, ini hanya untuk sesi legacy/URL tamper). Balik ke select-pack.
+    if (res.status === 400) {
+      alert(result.error || "Nama peserta tidak valid. Silakan mulai ulang.");
+      location.href = "/select-pack.html";
+      return;
+    }
 
     // Bersihkan localStorage + set sessionStorage flag (berlaku untuk
     // kedua path: 409 duplicate maupun success). Hanya redirectId
