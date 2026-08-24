@@ -233,3 +233,65 @@ docker run -it -p 3000:3000 \
   toskd
 ```
 
+---
+
+## 🔄 Backup & Restore
+
+Prosedur menyalin seluruh data **soal**, **paket soal**, dan **scoreboard**. Tidak termasuk data user admin.
+
+### Prerequisites
+
+- Supabase CLI v2.113+ untuk subcommand `db query`.
+- `supabase login` untuk access token.
+- Project ref tiap environment (cek `supabase projects list`).
+- `psql` terpasang untuk restore local (karena limitasi `supabase db query --local` yaitu CLI mengeksekusi seluruh isi file sebagai single prepared statement, dan PostgreSQL menolak lebih dari satu command dalam satu prepared statement).
+
+### 1. Backup
+
+```bash
+supabase link --project-ref <REF_PROJECT_X>
+mkdir -p backups
+supabase db dump --data-only --linked -x public.admins -f backup/all-data.sql
+```
+
+### 2. Restore ke remote project Supabase
+
+```bash
+supabase link --project-ref <REF_PROJECT_Y>
+# Bersihkan data lama dev (tanpa menyentuh data user admin)
+supabase db query --linked \
+  "TRUNCATE pack_questions, exam_results, questions, question_packs RESTART IDENTITY CASCADE;"
+# Restore
+supabase db query --linked -f backup/all-data.sql
+```
+
+### 3. Restore ke Supabase local
+
+```bash
+supabase start
+DB_URL=$(supabase status -o env 2>/dev/null | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')
+# Bersihkan data lama local
+psql "$DB_URL" -c "TRUNCATE pack_questions, exam_results, questions, question_packs RESTART IDENTITY CASCADE;"
+# Restore
+psql "$DB_URL" -v ON_ERROR_STOP=1 -f backup/all-data.sql
+```
+
+Tanpa `psql` terpasang, bisa langsung lewat container local:
+
+```bash
+docker exec -i supabase_db_toskd psql -U postgres -d postgres < backup/all-data.sql
+```
+
+### 4. Verifikasi
+
+```bash
+psql "$DB_URL" -c "
+  SELECT (SELECT count(*) FROM questions)      AS soal,
+         (SELECT count(*) FROM question_packs) AS paket,
+         (SELECT count(*) FROM pack_questions) AS relasi,
+         (SELECT count(*) FROM exam_results)   AS hasil_ujian;"
+```
+
+Bandingkan angkanya dari Supabase `REF_PROJECT_X` dan `REF_PROJECT_Y` harus sama persis.
+
+
