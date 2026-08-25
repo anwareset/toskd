@@ -168,9 +168,9 @@ Buat file `.env` di root folder project:
 | `BLOB_READ_WRITE_TOKEN` | `vercel_blob_rw_xxxxxxxxxxxxxx` | Blob Read/Write Token |
 | `JWT_SECRET` | `<random-32+-chars>` | Generate: `openssl rand -hex 32` |
 | `COOKIE_SECURE` | `true` | Opsional — atur keamanan cookie login (lihat Catatan #3) |
-| `NODE_ENV` | `production` | Opsi: `production` / `development` |
-| `BOOTSTRAP_ADMIN_USERNAME` | `admin` | Opsional — bootstrap admin pertama |
-| `BOOTSTRAP_ADMIN_PASSWORD` | `<strong-password>` | Opsional — di-hash bcrypt lalu di-insert |
+| `NODE_ENV` | `production` | Opsi: `production` / `development`; **kosongkan di lokal** (auto-generate admin aktif) |
+| `BOOTSTRAP_ADMIN_USERNAME` | `admin` | Opsional (mode eksplisit) — set KEDUANYA bersama PASSWORD; jalan di semua NODE_ENV |
+| `BOOTSTRAP_ADMIN_PASSWORD` | `<strong-password>` | Opsional (mode eksplisit) — di-hash bcrypt lalu di-insert |
 | `LOG_LEVEL` | `info` | Opsi: `trace`/`debug`/`info`/`warn`/`error`/`fatal`/`silent` |
 | `OTEL_SERVICE_NAME` | `toskd` | Opsional — nama service di Prometheus/Jaeger |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | OTLP HTTP endpoint Collector |
@@ -185,7 +185,7 @@ Buat file `.env` di root folder project:
 | No | Catatan |
 |---|---|
 | 1 | **Observability**: Telemetry AKTIF hanya jika `OTEL_SERVICE_NAME` DAN `OTEL_EXPORTER_OTLP_ENDPOINT` keduanya terisi (guard di `src/otel.js`). Tanpa keduanya local dev, Vercel serverless, CI OTel no-op dan aplikasi berjalan normal. toskd mengirim OTLP (metrics + traces) ke OTel Collector; toskd TIDAK mengekspos endpoint metrics sendiri. |
-| 2 | **`BOOTSTRAP_ADMIN_*`**: env var ini dibaca sekali di cold-start. Jika tabel `admins` kosong, server akan otomatis hash password (bcrypt cost 10) dan insert admin pertama. **PENTING: DELETE kedua env var ini dari Vercel dashboard setelah admin pertama berhasil login**. Server log warning setiap cold-start kalau masih ada (plaintext password leak risk). |
+| 2 | **Bootstrap admin (dua mode)**: **(a) Auto-generate (default)** — biarkan `BOOTSTRAP_ADMIN_*` kosong; saat tabel `admins` kosong, server membuat user `admin` dengan password acak 20 char lalu menampilkannya **sekali** via banner `GENERATED ADMIN CREDENTIALS` di log. **(b) Eksplisit** — set `BOOTSTRAP_ADMIN_USERNAME` + `BOOTSTRAP_ADMIN_PASSWORD`; dibaca sekali di cold-start, lalu akan dibuat user admin pertama. **PENTING: DELETE kedua env var ini dari Vercel dashboard setelah admin pertama berhasil login** karena server log akan warning setiap cold-start kalau masih ada (plaintext password leak risk). |
 | 3 | **`COOKIE_SECURE`**: **Kosongkan** (recommended) → otomatis: aman di `https://`, tetap berfungsi di `http://localhost` (misal Docker di komputer sendiri). Atau **isi `true`** → paksa cookie login hanya dikirim lewat koneksi aman `https://`, dipakai hanya jika situs Anda diakses lewat `https://` tapi login tetap selalu balik ke halaman login (misalnya di belakang reverse proxy HTTPS). **JANGAN isi `true` jika akses masih `http://`** malah membuat login tidak akan pernah bisa masuk. Bisa **diisi `false`** → paksa cookie boleh lewat `http://`, hanya untuk percobaan lokal; di jaringan publik berisiko (data login bisa terbaca orang lain). |
 
 ### 4. Setup Database

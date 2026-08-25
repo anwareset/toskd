@@ -17,6 +17,7 @@ import supabase from "./db.js";
 import { put } from "@vercel/blob";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { randomBytes } from "node:crypto";
 import { logger, errorField } from "./logger.js";
 import {
   recordHttpRequest,
@@ -320,26 +321,131 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// --- Bootstrap: seed first admin from env vars on cold-start ---
-// Short-circuits if already done in this process. Idempotent: subsequent
-// cold-starts log a warning if env vars still set + table non-empty.
+// --- Bootstrap admin on cold-start (specs/auto-bootstrap-admin-spec.md) ---
+// Dua jalur (matriks perilaku §5):
+//   1. EKSLISIT — BOOTSTRAP_ADMIN_USERNAME + BOOTSTRAP_ADMIN_PASSWORD lengkap
+//      diset → insert admin pertama dari env. Berlaku di SEMUA NODE_ENV
+//      (revisi 2026-08-25: guard dev-mode dihapus, tidak perlu NODE_ENV=
+//      production lagi) — utk prod first-deploy maupun bikin admin eksplisit
+//      di lokal.
+//   2. AUTO-GENERATE — kedua env kosong DAN NODE_ENV ≠ production (termasuk
+//      unset) → buat admin `admin` dengan password acak, print banner SEKALI
+//      ke stdout via console.log.
+// Env parsial (hanya salah satu diset) → error log fail-fast-ringan, tanpa
+// bootstrap apa pun. Idempotent per proses via bootstrapDoneThisProcess;
+// race antar-proses ditangani UNIQUE constraint (kode 23505).
 let bootstrapDoneThisProcess = false;
 
 async function maybeBootstrapAdmin() {
-  if (!BOOTSTRAP_USERNAME || !BOOTSTRAP_PASSWORD) return;
-  // Dev guard: skip bootstrap outside production. Avoids log spam on every
-  // cold start when SUPABASE_URL is mocked or admins table is absent locally.
-  // To test bootstrap locally, run with `NODE_ENV=production node src/server.js`.
-  // We log a one-liner (not console.error) so it's visible in dev but doesn't
-  // look alarming. Lets the next person hitting a bootstrap issue immediately
-  // see "skipped (dev mode)" and know how to enable it.
-  if (process.env.NODE_ENV?.toLowerCase() !== "production") {
-    logger.info(
-      { event: "admin.bootstrap", operation_status: "skipped", reason: "dev-mode" },
-      "Bootstrap skipped (dev mode). Set NODE_ENV=production to test.",
+  const hasUser = Boolean(BOOTSTRAP_USERNAME);
+  const hasPass = Boolean(BOOTSTRAP_PASSWORD);
+  // Fail-fast ringan (spec §6.1 #1): berlaku di semua NODE_ENV. Server tetap
+  // start — hanya bootstrap yang tidak jalan sampai config dibenahi.
+  if (hasUser !== hasPass) {
+    logger.error(
+      { event: "admin.bootstrap", operation_status: "failed", reason: "partial-env" },
+      "Set BOTH BOOTSTRAP_ADMIN_USERNAME and BOOTSTRAP_ADMIN_PASSWORD, or leave BOTH unset.",
     );
     return;
   }
+  if (hasUser && hasPass) return bootstrapFromEnv();
+  return autoBootstrapAdmin();
+}
+
+// Password acak 20 char base62 untuk auto-bootstrap lokal (spec D4). Mapping
+// modulo 256→62 punya bias kecil (~8/256) — dapat diterima untuk kredensial
+// dev yang hanya hidup di stdout lokal.
+function generateAutoPassword(length = 20) {
+  const charset =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = randomBytes(length);
+  let password = "";
+  for (let i = 0; i < length; i++) password += charset[bytes[i] % charset.length];
+  return password;
+}
+
+// Jalur 2: auto-generate admin lokal (dev-only).
+async function autoBootstrapAdmin() {
+  // Dev gate (spec D2/D8): NODE_ENV=production (termasuk image Docker yang
+  // men-set-nya) TIDAK pernah auto-generate — self-host prod-like tetap pakai
+  // jalur eksplisit BOOTSTRAP_ADMIN_*. Silent skip, tanpa spam log.
+  if (process.env.NODE_ENV?.toLowerCase() === "production") return;
+  if (bootstrapDoneThisProcess) return;
+
+  try {
+    const { count, error: countError } = await supabase
+      .from("admins")
+      .select("*", { count: "exact", head: true });
+
+    if (countError) throw countError;
+
+    if (count > 0) {
+      logger.info(
+        { event: "admin.bootstrap.auto", operation_status: "skipped", reason: "admins-table-not-empty" },
+        "Auto-bootstrap skipped: admins table not empty.",
+      );
+      bootstrapDoneThisProcess = true;
+      return;
+    }
+
+    const password = generateAutoPassword(20);
+    const password_hash = await bcrypt.hash(password, BCRYPT_COST);
+    const { error: insertError } = await supabase
+      .from("admins")
+      .insert({ username: "admin", password_hash });
+
+    if (insertError) {
+      // UNIQUE violation = race condition (instance lain menang). Password
+      // yang barusan digenerate tidak valid lagi — JANGAN print banner.
+      if (insertError.code === "23505") {
+        logger.info(
+          { event: "admin.bootstrap.auto", operation_status: "success", detail: "race-resolved-by-unique" },
+          "Auto-bootstrap race resolved by UNIQUE constraint.",
+        );
+        bootstrapDoneThisProcess = true;
+        return;
+      }
+      throw insertError;
+    }
+
+    bootstrapDoneThisProcess = true;
+    // Banner via console.log polos (BUKAN Pino): selalu tampil apa pun
+    // LOG_LEVEL (spec AC8) dan tidak tersentuh pino-redact. Plaintext tidak
+    // pernah masuk jalur Pino sama sekali (spec §6.1 caveat). Dev-only.
+    console.log(
+      [
+        "",
+        "========================================================",
+        "  GENERATED ADMIN CREDENTIALS (local dev bootstrap)",
+        "  username: admin",
+        `  password: ${password}`,
+        "  Ditampilkan SEKALI ini saja. Simpan sekarang.",
+        "  Hilang? DELETE FROM public.admins; lalu restart app.",
+        "========================================================",
+        "",
+      ].join("\n"),
+    );
+    logger.info(
+      { event: "admin.bootstrap.auto", operation_status: "success", username: "admin" },
+      "Auto-generated local admin created (credentials printed above).",
+    );
+  } catch (err) {
+    logger.error(
+      {
+        event: "admin.bootstrap.auto",
+        operation_status: "failed",
+        error: errorField(err),
+        details: err?.details ?? null,
+      },
+      "Admin auto-bootstrap failed",
+    );
+  }
+}
+
+// Jalur 1: bootstrap eksplisit dari BOOTSTRAP_ADMIN_* — jalan di SEMUA
+// NODE_ENV (revisi 2026-08-25: guard dev-mode dihapus, jadi tidak perlu
+// NODE_ENV=production utk membuat admin dari env).
+async function bootstrapFromEnv() {
   if (bootstrapDoneThisProcess) return;
 
   try {
