@@ -169,8 +169,8 @@ Buat file `.env` di root folder project:
 | `JWT_SECRET` | `<random-32+-chars>` | Generate: `openssl rand -hex 32` |
 | `COOKIE_SECURE` | `true` | Opsional — atur keamanan cookie login (lihat Catatan #3) |
 | `NODE_ENV` | `production` | Opsi: `production` / `development`; **kosongkan di lokal** (auto-generate admin aktif) |
-| `BOOTSTRAP_ADMIN_USERNAME` | `admin` | Opsional (mode eksplisit) — set KEDUANYA bersama PASSWORD; jalan di semua NODE_ENV |
-| `BOOTSTRAP_ADMIN_PASSWORD` | `<strong-password>` | Opsional (mode eksplisit) — di-hash bcrypt lalu di-insert |
+| `BOOTSTRAP_ADMIN_USERNAME` | `admin` | Opsional |
+| `BOOTSTRAP_ADMIN_PASSWORD` | `<strong-password>` | Opsional |
 | `LOG_LEVEL` | `info` | Opsi: `trace`/`debug`/`info`/`warn`/`error`/`fatal`/`silent` |
 | `OTEL_SERVICE_NAME` | `toskd` | Opsional — nama service di Prometheus/Jaeger |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | OTLP HTTP endpoint Collector |
@@ -196,6 +196,17 @@ Jalankan query SQL di `schema.sql` melalui **Supabase SQL Editor**:
 2. Klik **SQL Editor** di sidebar
 3. Copy-paste seluruh isi file `schema.sql`
 4. Klik **Run** untuk membuat tabel
+
+#### Reset Password Admin
+
+Hapus user admin yang ada, lalu biarkan server bootstrap ulang:
+
+1. Via **Supabase SQL Editor**:
+   ```sql
+   DELETE FROM public.admins;
+   ```
+2. Restart aplikasi.
+3. Admin baru dibuat otomatis saat cold-start.
 
 ### 5. Jalankan Project
 
@@ -249,20 +260,22 @@ Prosedur menyalin seluruh data **soal**, **paket soal**, dan **scoreboard**. Tid
 ### 1. Backup
 
 ```bash
+supabase project list
 supabase link --project-ref <REF_PROJECT_X>
 mkdir -p backups
-supabase db dump --data-only --linked -x public.admins -f backup/all-data.sql
+supabase db dump --data-only --linked -x public.admins -f backups/all-data.sql
 ```
 
 ### 2. Restore ke remote project Supabase
 
 ```bash
+supabase project list
 supabase link --project-ref <REF_PROJECT_Y>
 # Bersihkan data lama dev (tanpa menyentuh data user admin)
 supabase db query --linked \
   "TRUNCATE pack_questions, exam_results, questions, question_packs RESTART IDENTITY CASCADE;"
 # Restore
-supabase db query --linked -f backup/all-data.sql
+supabase db query --linked -f backups/all-data.sql
 ```
 
 ### 3. Restore ke Supabase local
@@ -273,13 +286,13 @@ DB_URL=$(supabase status -o env 2>/dev/null | grep '^DB_URL=' | cut -d= -f2- | t
 # Bersihkan data lama local
 psql "$DB_URL" -c "TRUNCATE pack_questions, exam_results, questions, question_packs RESTART IDENTITY CASCADE;"
 # Restore
-psql "$DB_URL" -v ON_ERROR_STOP=1 -f backup/all-data.sql
+psql "$DB_URL" -v ON_ERROR_STOP=1 -f backups/all-data.sql
 ```
 
 Tanpa `psql` terpasang, bisa langsung lewat container local:
 
 ```bash
-docker exec -i supabase_db_toskd psql -U postgres -d postgres < backup/all-data.sql
+docker exec -i supabase_db_toskd psql -U postgres -d postgres < backups/all-data.sql
 ```
 
 ### 4. Verifikasi
