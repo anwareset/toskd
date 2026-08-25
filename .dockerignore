@@ -45,3 +45,8 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Backups
+backup/*
+backups/*
+*.sql

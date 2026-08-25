@@ -188,4 +188,6 @@ supabase/.branches/
 supabase/snippets/
 
 # Supabase DB backups (supabase db dump)
+backups/*.sql
+backup/*.sql
 backup-*.sql
