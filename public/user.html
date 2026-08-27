@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <link rel="icon" href="/assets/toskd-emoticon.svg" type="image/svg+xml" />
+    <title>TOSKD Ganti Kata Sandi</title>
+    <link rel="stylesheet" href="/css/tokens.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script src="/js/theme.js"></script>
+  </head>
+  <body>
+    <!-- client-side guard (admin-auth-spec.md §7.4, Rev 0.7) — copy verbatim
+         dari bank-soal.html: 401 → redirect ke login; 5xx/network error →
+         fail-open banner (JANGAN redirect — hindari login loop saat server
+         down). Server-side requireAdmin tetap primary defense. -->
+    <script>
+      (function () {
+        // Fail-open banner shown when server is unreachable. Extracted to
+        // helper so both the catch block (network error) AND the 5xx branch
+        // can use it. Critical: don't redirect to login on 5xx — user might
+        // be authenticated and the server is just temporarily down (Rev. 0.7).
+        function showServerDownBanner() {
+          const banner = document.createElement("div");
+          banner.style.cssText =
+            "position:fixed;top:0;left:0;right:0;padding:12px 16px;background:var(--danger);" +
+            "color:white;text-align:center;z-index:99999;font-size:0.9rem;";
+          banner.innerHTML =
+            "⚠️ Server tidak dapat dijangkau. CMS tidak dapat dimuat." +
+            " <button onclick=\"location.reload()\" style=\"margin-left:12px;background:white;color:var(--danger);" +
+            "border:0;padding:4px 10px;border-radius:4px;cursor:pointer\">Coba lagi</button>";
+          document.body.appendChild(banner);
+          const main = document.querySelector(".site-wrapper");
+          if (main) main.style.visibility = "hidden";
+        }
+        (async function () {
+          try {
+            const res = await fetch("/api/admin/me", { credentials: "same-origin" });
+            if (res.status === 401) {
+              // Not authenticated → redirect to login
+              const next = encodeURIComponent(window.location.pathname + window.location.search);
+              window.location.replace(`/login.html?next=${next}`);
+            } else if (!res.ok) {
+              // 5xx or other server error → fail-open banner, don't trap in login loop
+              showServerDownBanner();
+            }
+            // 2xx: authenticated, continue
+          } catch (err) {
+            // Network error → fail-open banner
+            showServerDownBanner();
+          }
+        })();
+      })();
+    </script>
+    <div class="site-wrapper">
+      <div class="login-container">
+        <div class="login-logo" aria-hidden="true">🔑</div>
+        <h1 class="app-title login-title">Ganti Kata Sandi</h1>
+        <p class="login-subtitle">Perbarui kata sandi admin</p>
+        <div id="password-error" class="login-error" role="alert"></div>
+        <form id="password-form" class="cms-form">
+          <div class="login-form-group">
+            <label for="current-password">Password Saat Ini</label>
+            <input
+              type="password"
+              id="current-password"
+              name="current-password"
+              class="input-field"
+              required
+              autocomplete="current-password"
+              autofocus
+            />
+          </div>
+          <div class="login-form-group">
+            <label for="new-password">Password Baru</label>
+            <input
+              type="password"
+              id="new-password"
+              name="new-password"
+              class="input-field"
+              required
+              minlength="8"
+              autocomplete="new-password"
+            />
+            <p class="field-helper">Minimal 8 karakter</p>
+          </div>
+          <div class="login-form-group">
+            <label for="confirm-password">Konfirmasi Password Baru</label>
+            <input
+              type="password"
+              id="confirm-password"
+              name="confirm-password"
+              class="input-field"
+              required
+              minlength="8"
+              autocomplete="new-password"
+            />
+          </div>
+          <button type="submit" class="btn-primary btn-block">Simpan Password</button>
+        </form>
+        <p class="login-back-link">
+          <a href="/bank-soal.html">Kembali ke Bank Soal</a>
+        </p>
+      </div>
+      <footer class="footer">
+        Untuk latihan SKD · Made with ♥️ in
+        2026
+      </footer>
+
+      <!-- ==================== NOTIFICATION MODAL ====================
+           Feedback sukses ganti password (per specs/admin-password-change-spec.md
+           §12.5). Single OK button — informational only. Mirror of the same
+           pattern in scoreboard.html / kelola-soal.html / paket-detail.html.
+           class="modal" WAJIB (konvensi modal-animation-convention-spec.md §12)
+           supaya animasi opening/closing otomatis dari monkey-patch theme.js. -->
+      <dialog
+        id="notification-modal"
+        class="modal"
+        style="max-width: 480px"
+      >
+        <div class="modal-content">
+          <h3 id="notification-title">ℹ️ Info</h3>
+          <div
+            style="
+              padding: 8px 0 16px;
+              font-size: 0.95rem;
+              line-height: 1.6;
+            "
+          >
+            <p id="notification-message" style="margin: 0">
+              — placeholder —
+            </p>
+          </div>
+          <div class="modal-buttons">
+            <button
+              type="button"
+              class="btn-primary"
+              id="notification-ok-btn"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      </dialog>
+    </div>
+    <script src="/js/user.js"></script>
+  </body>
+</html>

@@ -215,6 +215,26 @@
         // function declarations are hoisted, so this call is safe even
         // though source-order places relayout after this code.
         logoutBtn = btn;
+        // "User" link (specs/admin-password-change-spec.md §4.2, revisi
+        // 2026-08-27 per manual UAT): diletakkan di .global-header-nav (bukan
+        // rightGroup) — berperilaku seperti nav link lain (Ujian/Bank Soal/
+        // Scoreboard). Auth-gated: hanya dirender saat sesi valid. Ikut
+        // berpindah ke drawer mobile bersama nav (relayout memindahkan elemen
+        // nav utuh → tanpa cabang penempatan khusus).
+        if (nav) {
+          const link = document.createElement("a");
+          link.className = "global-header-link";
+          link.href = "/user.html";
+          link.textContent = "User";
+          // Highlight aktif saat berada di /user.html (mirror logika navlinks).
+          const currentPath = path.replace(/\/index\.html$/, "/");
+          const linkPath = new URL(link.href, window.location.origin).pathname.replace(
+            /\/index\.html$/,
+            "/",
+          );
+          if (linkPath === currentPath) link.classList.add("active");
+          nav.appendChild(link);
+        }
         relayout();
       } catch (err) {
         console.warn("[theme] Could not fetch /api/admin/me:", err);
