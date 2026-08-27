@@ -623,6 +623,100 @@ app.get("/api/admin/me", (req, res) => {
   res.json({ username: session.username });
 });
 
+// POST /api/admin/change-password
+// Self-service ganti kata sandi admin (specs/admin-password-change-spec.md §4.1).
+// requireAdmin → req.admin = { adminId, username, iat, exp }. Row admin diambil
+// BY ID (bukan username) supaya admin hanya bisa mengganti password MILIKNYA
+// sendiri (self-service by construction). Sesi JWT stateless TIDAK disentuh
+// (keputusan R2-Q1) — cookie tetap valid sampai kedaluwarsa 24 jam.
+app.post("/api/admin/change-password", requireAdmin, async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body || {};
+    // Validasi tipe + non-empty (mirror login "username + password required").
+    if (
+      typeof current_password !== "string" ||
+      typeof new_password !== "string" ||
+      current_password.length === 0 ||
+      new_password.length === 0
+    ) {
+      return res
+        .status(400)
+        .json({ error: "current_password + new_password required" });
+    }
+    // Input length cap (DoS mitigation — bcrypt on 1MB input burns CPU).
+    if (
+      current_password.length > MAX_PASSWORD_LEN ||
+      new_password.length > MAX_PASSWORD_LEN
+    ) {
+      return res.status(400).json({
+        error: `current_password or new_password too long (max ${MAX_PASSWORD_LEN})`,
+      });
+    }
+    // Kebijakan password baru (keputusan R2-Q2): minimal 8 karakter.
+    if (new_password.length < 8) {
+      return res
+        .status(400)
+        .json({ error: "new password must be at least 8 characters" });
+    }
+
+    const { data: admin, error } = await supabase
+      .from("admins")
+      .select("id, username, password_hash")
+      .eq("id", req.admin.adminId)
+      .single();
+    // Row admin hilang (mis. TRUNCATE) padahal sesi masih valid → 404.
+    if (error || !admin) {
+      logger.warn(
+        { event: "admin.password_change", operation_status: "failed", reason: "no-such-admin", admin_id: req.admin.adminId },
+        "Password change failed (admin not found)",
+      );
+      return res.status(404).json({ error: "admin not found" });
+    }
+
+    // Verifikasi password lama (bcrypt compare, span manual mirror admin.login.verify).
+    const valid = await withSpan(
+      "admin.password_change.verify",
+      { admin_id: admin.id },
+      () => bcrypt.compare(current_password, admin.password_hash),
+    );
+    if (!valid) {
+      logger.warn(
+        { event: "admin.password_change", operation_status: "failed", reason: "bad-current-password", admin_id: admin.id },
+        "Password change failed (bad current password)",
+      );
+      return res.status(400).json({ error: "current password incorrect" });
+    }
+
+    // Tolak no-op change: password baru harus berbeda dari password lama (R4-Q1).
+    const sameAsCurrent = await bcrypt.compare(new_password, admin.password_hash);
+    if (sameAsCurrent) {
+      return res
+        .status(400)
+        .json({ error: "new password must be different from the current password" });
+    }
+
+    const password_hash = await bcrypt.hash(new_password, BCRYPT_COST);
+    const { error: updateError } = await withSpan(
+      "admin.password_change.update",
+      { admin_id: admin.id },
+      () => supabase.from("admins").update({ password_hash }).eq("id", admin.id),
+    );
+    if (updateError) throw updateError;
+
+    logger.info(
+      { event: "admin.password_change", operation_status: "success", admin_id: admin.id, username: admin.username },
+      "Admin password changed",
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error(
+      { event: "admin.password_change", operation_status: "failed", error: errorField(err) },
+      "Password change failed",
+    );
+    res.status(500).json({ error: "change password failed" });
+  }
+});
+
 // --- Protected CMS HTML routes (BEFORE static) ---
 // These MUST be declared before `app.use(express.static(...))` to prevent
 // the static handler from bypassing the requireAdmin middleware.
@@ -631,6 +725,7 @@ const PROTECTED_HTML_ROUTES = [
   "kelola-soal.html",
   "paket-soal.html",
   "paket-detail.html",
+  "user.html",
 ];
 PROTECTED_HTML_ROUTES.forEach((filename) => {
   app.get(`/${filename}`, requireAdmin, (req, res) => {

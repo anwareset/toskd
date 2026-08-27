@@ -39,6 +39,7 @@ toskd/
 │   ├── paket-soal.html            # Kelola paket soal (CRUD + subtes chip picker 1-3 + per-subtest thresholds) - protected
 │   ├── kelola-soal.html           # Kelola bank soal (CRUD + Quill.js editor + TKP Bobot field + bulk-add modal) - protected
 │   ├── paket-detail.html          # Kelola relasi & urutan soal (Drag & Drop + subtest-filtered bank list) - protected
+│   ├── user.html                 # Ganti kata sandi admin (self-service: verifikasi password lama, min 8 karakter) - protected
 │   ├── login.html                # Halaman login admin (CMS protection)
 │   ├── scoreboard.html           # Papan peringkat peserta (Paging & filter + tombol Reset admin-only)
 │   ├── assets/
@@ -54,6 +55,7 @@ toskd/
 │       ├── review.js             # Halaman pembahasan - skor + status Lulus/Tidak + per-soal pembahasan (benar/salah/partial) + TKP weight gradient cards + per-subtest breakdown (filtered by pack.subtests) + <p> wrapper stripping + overlay "Akses Ditolak" (403 access control, auto-redirect 5 detik)
 │       ├── scoreboard.js         # Halaman scoreboard - pagination + sortable headers + search filter (sticky-left No column, admin: checkbox col + .score-name-col) + admin-only: tombol Reset All (tersembunyi saat seleksi), hapus per-row/bulk (checkbox + select-all + pill + modal konfirmasi) + link peserta ke review (isAdmin via /api/admin/me)
 │       ├── login.js              # Login admin form handler (POST /api/admin/login, redirect ke ?next=, auto-fill username dari cookie session)
+│       ├── user.js               # Halaman User - ganti kata sandi admin: validasi klien (min 8 + konfirmasi cocok) + POST /api/admin/change-password + mapping error EN→ID + showNotification + 401 → redirect login
 │       ├── kelola-soal.js        # Kelola bank soal: CRUD + Quill.js editor (full toolbar) + image upload ke Vercel Blob + TKP Bobot dropdown (1-5, dedupe otomatis) + bulk-add modal dengan TKP format help
 │       ├── paket-soal.js         # Kelola paket soal: CRUD + subtes chip picker 1-3 + per-subtest threshold inputs + live running total + sortable/pagination table + Subtes column (chip-styled)
 │       ├── paket-detail.js       # Relasi soal ↔ paket: drag-and-drop reorder + tentative selection + subtest-filtered bank list (only questions matching pack.subtests shown) + partial-failure add-to-pack + urutan add sesuai urutan centang checkbox (question_number naik per iterasi)
@@ -61,14 +63,14 @@ toskd/
 │       ├── image-uploader.js     # Pipeline rehost gambar anti-hotlink: scan ![alt](url)/<img src> → download (no-referrer + fallback /api/fetch-image) → IndexedDB staging → upload Vercel Blob → cleanup (window.ImageUploader)
 │       └── markdown-image.js     # Modul BERSAMA render markdown-img: IMAGE_MD_REGEX + renderInlineMd/renderInlinePreview (single source of truth, dipakai exam.js/review.js/kelola-soal.js; muat sbg <script type="module"> sebelum classic scripts)
 ├── src/
-│   ├── server.js                 # API Express.js (Vercel Serverless Function) - 31 endpoint: TKP weighted scoring (scoreForQuestion + validateOptionScores) + normalizePackInput + validateQuestionMatchesPack + POST /api/fetch-image (proxy download anti-hotlink: requireAdmin + SSRF guard) + DELETE /api/scoreboard (reset, requireAdmin) + DELETE /api/scoreboard/:id + POST /api/scoreboard/bulk-delete (hapus hasil per-row/bulk, requireAdmin) + validateParticipantName (alfabet+spasi, 400 di exam/start+submit) + cleanup row In Progress saat 409 (result_id opsional, guard status) + access control review: cookie peserta toskd_participant_sess + gate GET /api/exam/:id/results (admin ATAU pemilik, selain → 403) + urutan soal paket: POST /api/packs/:id/questions assign question_number = max(existing)+1 server-side (ignore client number, gap-safe) + GET /api/packs/:id/questions tiebreak .order('id') deterministik + observability: middleware golden-signals (histogram http.server.request.duration + access log, hanya /api/* + *.html) + migrasi console.* → Pino + span manual (exam.start.create / exam.submit.scoring / admin.login.verify / question.bulk_add) + shutdownTelemetry() di graceful shutdown
+│   ├── server.js                 # API Express.js (Vercel Serverless Function) - 32 endpoint: TKP weighted scoring (scoreForQuestion + validateOptionScores) + normalizePackInput + validateQuestionMatchesPack + POST /api/fetch-image (proxy download anti-hotlink: requireAdmin + SSRF guard) + DELETE /api/scoreboard (reset, requireAdmin) + DELETE /api/scoreboard/:id + POST /api/scoreboard/bulk-delete (hapus hasil per-row/bulk, requireAdmin) + validateParticipantName (alfabet+spasi, 400 di exam/start+submit) + cleanup row In Progress saat 409 (result_id opsional, guard status) + access control review: cookie peserta toskd_participant_sess + gate GET /api/exam/:id/results (admin ATAU pemilik, selain → 403) + POST /api/admin/change-password (self-service ganti password: verifikasi current → tolak new==current → bcrypt hash → UPDATE admins; span admin.password_change.verify/.update) + urutan soal paket: POST /api/packs/:id/questions assign question_number = max(existing)+1 server-side (ignore client number, gap-safe) + GET /api/packs/:id/questions tiebreak .order('id') deterministik + observability: middleware golden-signals (histogram http.server.request.duration + access log, hanya /api/* + *.html) + migrasi console.* → Pino + span manual (exam.start.create / exam.submit.scoring / admin.login.verify / question.bulk_add) + shutdownTelemetry() di graceful shutdown
 │   ├── otel.js                   # OpenTelemetry bootstrap (WAJIB di-import pertama): guard OTEL_SERVICE_NAME+OTEL_EXPORTER_OTLP_ENDPOINT, NodeSDK + instrumentations (http/express/undici/pino/runtime-node), sampler AlwaysOn route ujian + TraceIdRatioBased 10%, histogram golden-signals, withSpan/currentTraceContext/shutdownTelemetry
 │   ├── logger.js                 # Pino singleton (service=toskd, pino-redact password/token/cookie/authorization/body/answers, pino-pretty hanya dev) + errorField helper
 │   ├── db.js                     # Supabase client connection
 │   └── tracked-request.js        # Predikat tracking bersama isTrackedPath/isTrackedUrl/isTrackedRequest (single source of truth observability)
 ├── scripts/
 │   └── migrate-images.mjs        # CLI migrasi massal gambar soal → Vercel Blob (pnpm migrate:images; dry-run default, --apply untuk eksekusi)
-├── tests/                        # Unit tests (Node built-in test runner; run via `pnpm test`) — 17 files, 191 test
+├── tests/                        # Unit tests (Node built-in test runner; run via `pnpm test`) — 18 files, 206 test
 │   ├── test-bulk-parser.mjs                       # Unit tests untuk public/js/bulk-parser.js (parser + previewHtmlForCell)
 │   ├── test-bulk-parser-catalog.mjs               # Catalog regression suite untuk bulk-input patterns (parser integration)
 │   ├── test-image-url-paste.mjs                   # IMAGE_URL_REGEX paste contract; IMAGE_MD_REGEX di-import dari markdown-image.js (modul bersama)
@@ -85,7 +87,8 @@ toskd/
 │   ├── test-tracked-request.mjs                   # Predikat tracking bersama isTrackedPath/isTrackedUrl/isTrackedRequest (src/tracked-request.js) + paritas 3 fungsi
 │   ├── test-admin-auth-redirect.mjs               # Lock-in auth redirect: HTML → 302 login, API → 401 JSON, OPTIONS tidak diblokir, alur login→cookie→200
 │   ├── test-pack-visibility.mjs                   # Gate visibility paket: list/detail/questions/exam start-submit/scoreboard + validasi create-update + legacy fallback (mock PostgREST stateful)
-│   └── test-scoreboard-delete.mjs                 # Delete scoreboard per-row/bulk + validasi nama peserta (400) + cleanup row In Progress saat 409 (mock PostgREST stateful)
+│   ├── test-scoreboard-delete.mjs                 # Delete scoreboard per-row/bulk + validasi nama peserta (400) + cleanup row In Progress saat 409 (mock PostgREST stateful)
+│   └── test-admin-password-change.mjs             # Ganti kata sandi admin: 401/OPTIONS/validasi 400/min-8/new==current/404/500 + hash bcrypt ter-update + sesi tetap valid + edge multi-tab (mock PostgREST stateful mutatif)
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)
 ├── supabase/                     # Supabase CLI: config.toml + migrations/ (8 file: 000-007) + seed.sql (di-track sejak 2026-08-15)
 ├── pnpm-workspace.yaml           # Config pnpm: packages ["."] (kompat pnpm 9) + allowBuilds protobufjs (pnpm 10+/11)
@@ -119,7 +122,7 @@ node --check <file.js>   # Syntax check setiap edit JS
 ### MUST
 
 1. **Pakai `pnpm`.** Bukan npm, bukan yarn. `pnpm-lock.yaml` adalah lockfile source of truth. Package baru → `pnpm add <pkg>`.
-2. **Test gate hijau sebelum commit.** `pnpm test` wajib lolos (saat ini **191/191 pass**). Regresi = jangan commit.
+2. **Test gate hijau sebelum commit.** `pnpm test` wajib lolos (saat ini **206/206 pass**). Regresi = jangan commit.
 3. **Verify setiap edit JS** dengan `node --check <file.js>` sebelum commit. Untuk HTML/CSS refactor, cek konsistensi ID/class (grep).
 4. **Interview-first untuk feature ≥1 file atau behavior change.** 3-round `ask_user` interview SEBELUM implementasi untuk keputusan penting. (Detail konvensi: `specs/AGENTS.md`, lihat §7.)
 5. **Schema migrations diuji di DUA bentuk** — (A) fresh `supabase db reset --local`, (B) replika bentuk prod. Migration wajib idempotent + RLS/GRANT seaman prod.
@@ -227,7 +230,7 @@ Single-file tweaks (minor CSS, 1-line fix) tidak butuh spec — cukup commit mes
 
 ## 9. API Endpoints
 
-Semua endpoint didefinisikan di `src/server.js` (Express 5, di-deploy sebagai Vercel Serverless Function). **Total: 31 endpoint + 4 protected HTML routes.**
+Semua endpoint didefinisikan di `src/server.js` (Express 5, di-deploy sebagai Vercel Serverless Function). **Total: 32 endpoint + 5 protected HTML routes.**
 
 ### Questions (8)
 
@@ -281,13 +284,14 @@ Semua endpoint didefinisikan di `src/server.js` (Express 5, di-deploy sebagai Ve
 | POST | `/api/upload-image` | Upload base64 ke Vercel Blob (`{ image, folder? }` → `{ url }`) |
 | POST | `/api/fetch-image` | Proxy download anti-hotlink (requireAdmin + SSRF guard, max 8MB) |
 
-### Admin Auth (3)
+### Admin Auth (4)
 
 | Method | Endpoint | Deskripsi |
 |---|---|---|
 | POST | `/api/admin/login` | Login (cookie `toskd_admin_sess`, HttpOnly, SameSite=Strict, 24h) |
 | POST | `/api/admin/logout` | Logout (hapus cookie, idempotent) |
 | GET | `/api/admin/me` | Cek session aktif (200 `{ username }` / 401) |
+| POST | `/api/admin/change-password` | Ganti kata sandi admin (self-service, requireAdmin): verifikasi `current_password` → tolak new==current → bcrypt hash (cost 10) → UPDATE; 400/404/500, sesi JWT tidak disentuh |
 
 ### Health (1)
 
@@ -295,9 +299,9 @@ Semua endpoint didefinisikan di `src/server.js` (Express 5, di-deploy sebagai Ve
 |---|---|---|
 | GET | `/health` | Readiness probe — 200 `{ status: "ready", version }` / 503 saat DB down |
 
-### Protected HTML routes (4)
+### Protected HTML routes (5)
 
-`/bank-soal.html`, `/kelola-soal.html`, `/paket-soal.html`, `/paket-detail.html` — `requireAdmin`: HTML → 302 `/login.html?next=`, API → 401 JSON.
+`/bank-soal.html`, `/kelola-soal.html`, `/paket-soal.html`, `/paket-detail.html`, `/user.html` — `requireAdmin`: HTML → 302 `/login.html?next=`, API → 401 JSON.
 
 ---
 
