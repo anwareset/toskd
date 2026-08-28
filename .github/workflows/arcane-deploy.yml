@@ -1,15 +1,10 @@
 name: Arcane Deploy
 
-# Trigger via workflow_run, BUKAN langsung dari push — jadi hanya berjalan
-# SETELAH workflow build selesai, dan hanya jika hasilnya SUCCESS (image GHCR
-# benar-benar ter-publish). Jika docker-build.yml gagal, workflow ini tidak
-# akan men-deploy (job di-skip).
-#
-# Catatan: event `workflow_run` hanya bisa memicu workflow yang ada di default
-# branch — pastikan file ini sudah di-commit ke `main` agar berfungsi.
+# Deploy hanya setelah Docker Release workflow sukses. Source release selalu
+# canonical stable SemVer tag; workflow ini tidak pernah dipicu dari branch CI.
 on:
   workflow_run:
-    workflows: ["Docker Build & Push to GHCR"]
+    workflows: ["Docker Release & Push to GHCR"]
     types:
       - completed
 
@@ -20,24 +15,25 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Dua syarat sebelum trigger webhook Arcane:
-    # 1. docker-build.yml selesai dengan conclusion == 'success'
-    #    (failure/cancelled/skipped → job di-skip, run tetap hijau)
-    # 2. Run pemicu berasal dari default branch (main) — feature branch
-    #    dan tag v* TIDAK men-deploy (keputusan user).
-    # FIX 2026-08-03: pakai top-level `github.event.repository.default_branch`
-    # — nested `workflow_run.repository.default_branch` null di context Actions
-    # (dulu bikin job skipped padahal build sukses; fix diverifikasi 2026-08-03).
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == github.event.repository.default_branch }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, '') }}
     steps:
+      - name: Validate release source
+        env:
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          if ! printf '%s' "$RELEASE_TAG" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Release workflow did not originate from a canonical stable SemVer tag"
+            exit 1
+          fi
+
       - name: Trigger Arcane deployment webhook
         env:
           ARCANE_WEBHOOK_URL: ${{ secrets.ARCANE_WEBHOOK_URL }}
         run: |
-          # Cukup trigger/hit URL webhook — verifikasi dilakukan step berikutnya.
-          # --fail: HTTP >= 400 → exit non-zero → job merah (deploy dianggap gagal)
-          # --retry: transient network hiccup tidak langsung menggagalkan deploy
-          # Secret dipassing via env (bukan inline) supaya tidak bocor ke log
+          if [ -z "$ARCANE_WEBHOOK_URL" ]; then
+            echo "::error::ARCANE_WEBHOOK_URL secret is not configured"
+            exit 1
+          fi
           curl --fail --silent --show-error --retry 3 --retry-delay 5 --max-time 60 \
             -X POST "$ARCANE_WEBHOOK_URL" \
             -H "Content-Type: application/json"
@@ -45,38 +41,30 @@ jobs:
       - name: Verify deployment via /health
         env:
           SITE_DOMAIN: ${{ vars.SITE_DOMAIN }}
+          EXPECTED_VERSION: ${{ github.event.workflow_run.head_branch }}
           EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          # Verifikasi deploy: service toskd harus healthy DAN versinya terperbarui.
-          # Cek GET https://<SITE_DOMAIN>/health (repo variable, tanpa skema):
-          #   - status == "ready"  → server + DB siap (endpoint /health, 200)
-          #   - version == 7-char pertama head_sha → image commit yang barusan
-          #     di-build & di-push benar-benar live (GIT_SHA build-arg → /health)
-          # Polling karena Arcane butuh waktu pull image + restart container.
-          # 503/connection-refused/version lama → retry; habis waktu → job merah.
-          # "unreachable": curl gagal (container belum up) → tetap retry.
-          # Guard: SITE_DOMAIN kosong (repo variable belum di-set) → gagal cepat
-          # dengan pesan jelas, bukan retry 30× tanpa tahu penyebabnya.
           if [ -z "$SITE_DOMAIN" ]; then
-            echo "::error::SITE_DOMAIN repo variable not set — tambahkan domain toskd (tanpa skema) di Settings > Secrets and variables > Actions > Variables"
+            echo "::error::SITE_DOMAIN repo variable not set — tambahkan domain toskd tanpa skema"
             exit 1
           fi
-
-          EXPECTED_VERSION="${EXPECTED_SHA:0:7}"
+          EXPECTED_SHORT_SHA="${EXPECTED_SHA:0:7}"
           echo "Expected version: ${EXPECTED_VERSION}"
+          echo "Expected SHA: ${EXPECTED_SHORT_SHA}"
           echo "Health URL: https://${SITE_DOMAIN}/health"
 
           for i in $(seq 1 30); do
             RESP=$(curl --silent --show-error --max-time 15 "https://${SITE_DOMAIN}/health" 2>/dev/null) || true
             STATUS=$(printf '%s' "$RESP" | jq -r '.status // empty' 2>/dev/null || true)
             VERSION=$(printf '%s' "$RESP" | jq -r '.version // empty' 2>/dev/null || true)
-            if [ "$STATUS" = "ready" ] && [ "$VERSION" = "$EXPECTED_VERSION" ]; then
-              echo "Health check PASS (attempt ${i}/30): status=${STATUS}, version=${VERSION} matches ${EXPECTED_VERSION}"
+            SHA=$(printf '%s' "$RESP" | jq -r '.sha // empty' 2>/dev/null || true)
+            if [ "$STATUS" = "ready" ] && [ "$VERSION" = "$EXPECTED_VERSION" ] && [ "$SHA" = "$EXPECTED_SHORT_SHA" ]; then
+              echo "Health check PASS (attempt ${i}/30): status=${STATUS}, version=${VERSION}, sha=${SHA}"
               exit 0
             fi
-            echo "Attempt ${i}/30: status=${STATUS:-unreachable}, version=${VERSION:-n/a} (expected ${EXPECTED_VERSION})"
+            echo "Attempt ${i}/30: status=${STATUS:-unreachable}, version=${VERSION:-n/a}, sha=${SHA:-n/a} (expected version=${EXPECTED_VERSION}, sha=${EXPECTED_SHORT_SHA})"
             [ "$i" -lt 30 ] && sleep 10
           done
 
-          echo "::error::Health check FAILED after 30 attempts — /health tidak ready atau version tidak match ${EXPECTED_VERSION}"
+          echo "::error::Health check FAILED after 30 attempts — release version/SHA tidak match atau service belum ready"
           exit 1

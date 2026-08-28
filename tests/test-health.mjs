@@ -1,8 +1,8 @@
 // tests/test-health.mjs
 // Lock-in tests for the GET /health readiness probe in src/server.js:
-//   - 200 { status: "ready", version: "<short-sha>" } when DB is reachable
-//   - 503 { status: "unavailable", version, error } when DB check fails
-//   - version fallback chain: VERCEL_GIT_COMMIT_SHA → GIT_COMMIT_SHA →
+//   - 200 { status: "ready", version: "<semver>", sha: "<short-sha>" }
+//   - 503 { status: "unavailable", version, sha, error } when DB check fails
+//   - sha fallback chain: VERCEL_GIT_COMMIT_SHA → GIT_COMMIT_SHA →
 //     `git rev-parse --short HEAD` → "unknown"
 //
 // Strategy (no module-mocking framework): spin up a local mock PostgREST
@@ -71,6 +71,7 @@ before(async () => {
   process.env.NODE_ENV = "development"; // skip bootstrap seed
   process.env.VERCEL = "1"; // skip app.listen in server.js (we listen ourselves)
   process.env.SUPABASE_URL = `http://127.0.0.1:${fixture.srv.address().port}`;
+  process.env.APP_VERSION = "0.1.0";
   process.env.GIT_COMMIT_SHA = "0123456789abcdef"; // 16 chars → short = first 7
 
   const { default: imported } = await import(`file://${SERVER_PATH}`);
@@ -89,13 +90,17 @@ after(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-test("GET /health → 200 { status: ready, version } when DB reachable", async () => {
+test("GET /health → 200 { status, version, sha } when DB reachable", async () => {
   mockDb.state.down = false;
   const res = await fetch(`${baseUrl}/health`);
   assert.equal(res.status, 200);
   const body = await res.json();
-  // GIT_COMMIT_SHA 16-char "0123456789abcdef" → short = "0123456"
-  assert.deepEqual(body, { status: "ready", version: "0123456" });
+  // APP_VERSION is semantic version; GIT_COMMIT_SHA is exposed as short sha.
+  assert.deepEqual(body, {
+    status: "ready",
+    version: "0.1.0",
+    sha: "0123456",
+  });
 });
 
 test("GET /health → 503 { status: unavailable, version, error } when DB check fails", async () => {
@@ -104,14 +109,15 @@ test("GET /health → 503 { status: unavailable, version, error } when DB check 
   assert.equal(res.status, 503);
   const body = await res.json();
   assert.equal(body.status, "unavailable");
-  assert.equal(body.version, "0123456");
+  assert.equal(body.version, "0.1.0");
+  assert.equal(body.sha, "0123456");
   assert.ok(
     typeof body.error === "string" && body.error.length > 0,
     "503 response should carry an error detail",
   );
 });
 
-test("version falls back to 'unknown' when no SHA env and git unavailable", async () => {
+test("sha falls back to 'unknown' when no SHA env and git unavailable", async () => {
   // Spawn the REAL server in a child process whose cwd is NOT a git repo,
   // with both SHA env vars removed. getShortCommitSha() then bottoms out at
   // "unknown" (`git rev-parse --short HEAD` fails; try/catch catches it).
@@ -123,6 +129,7 @@ test("version falls back to 'unknown' when no SHA env and git unavailable", asyn
   const nonGitDir = mkdtempSync(join(tmpdir(), "toskd-health-unknown-"));
   const env = { ...process.env }; // inherit PATH, TZ, etc.
   delete env.SUPABASE_URL; // child sets its own below
+  delete env.APP_VERSION;
   delete env.GIT_COMMIT_SHA;
   delete env.VERCEL_GIT_COMMIT_SHA;
   env.JWT_SECRET = "x".repeat(64);
@@ -161,4 +168,5 @@ test("version falls back to 'unknown' when no SHA env and git unavailable", asyn
   assert.equal(status, 200);
   assert.equal(body.status, "ready");
   assert.equal(body.version, "unknown");
+  assert.equal(body.sha, "unknown");
 });
