@@ -1,0 +1,97 @@
+name: GitHub Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable SemVer tag to release (for example 0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: github-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate tag and deployment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if ! printf '%s' "$RELEASE_TAG" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag must use stable SemVer N.N.N without a v-prefix"
+            exit 1
+          fi
+
+          TAG_SHA=$(gh api "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
+          TAG_TYPE=$(gh api "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.type')
+          if [ "$TAG_TYPE" = "tag" ]; then
+            TAG_SHA=$(gh api "repos/$REPOSITORY/git/tags/$TAG_SHA" --jq '.object.sha')
+          fi
+          echo "Resolved tag $RELEASE_TAG to commit $TAG_SHA"
+
+          if gh release view "$RELEASE_TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::GitHub Release $RELEASE_TAG already exists; refusing to overwrite"
+            exit 1
+          fi
+
+          BUILD_RUN=$(gh run list \
+            --repo "$REPOSITORY" \
+            --workflow "Docker Release & Push to GHCR" \
+            --event push \
+            --status success \
+            --limit 100 \
+            --json databaseId,headSha,headBranch,event,conclusion \
+            --jq "map(select(.headSha == \"$TAG_SHA\" and .headBranch == \"$RELEASE_TAG\")) | .[0]")
+          if [ -z "$BUILD_RUN" ] || [ "$BUILD_RUN" = "null" ]; then
+            echo "::error::No successful Docker release run found for tag $RELEASE_TAG at $TAG_SHA"
+            exit 1
+          fi
+          BUILD_RUN_ID=$(printf '%s' "$BUILD_RUN" | jq -r '.databaseId')
+
+          DEPLOY_RUN=$(gh run list \
+            --repo "$REPOSITORY" \
+            --workflow "Arcane Deploy" \
+            --event workflow_run \
+            --status success \
+            --limit 100 \
+            --json databaseId,headSha,headBranch,event,conclusion \
+            --jq "map(select(.headSha == \"$TAG_SHA\" and .headBranch == \"$RELEASE_TAG\")) | .[0]")
+          if [ -z "$DEPLOY_RUN" ] || [ "$DEPLOY_RUN" = "null" ]; then
+            echo "::error::No successful Arcane deployment found for tag $RELEASE_TAG at $TAG_SHA"
+            exit 1
+          fi
+
+          echo "Deployment gate passed for $RELEASE_TAG at $TAG_SHA"
+          {
+            echo "## GitHub Release gate"
+            echo
+            echo "- Tag: \\`$RELEASE_TAG\\`"
+            echo "- Commit: \\`$TAG_SHA\\`"
+            echo "- Build run: \\`$BUILD_RUN_ID\\`"
+            echo "- Arcane deployment: successful"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create published release with generated notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            --repo "$REPOSITORY" \
+            --title "$RELEASE_TAG" \
+            --generate-notes \
+            --verify-tag

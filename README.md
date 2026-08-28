@@ -136,30 +136,6 @@ flowchart TB
 
 ## 🚀 Deployment
 
-### Release berbasis git tag
-
-Deployment production Docker hanya dipicu oleh canonical stable semantic-version tag tanpa prefix `v`, misalnya `0.1.0`. Push branch hanya menjalankan CI test-only; branch tidak membangun atau mendeploy image production. Image release dipin ke tag versi dan immutable commit SHA, tanpa `latest` sebagai target deployment.
-
-Prosedur rilis:
-
-```bash
-# Selaraskan metadata release
-# package.json: "version": "0.1.0"
-git tag 0.1.0
-git push origin 0.1.0
-```
-
-Tag yang didukung tepat berbentuk `N.N.N`; `v0.1.0`, prerelease, dan build metadata ditolak. Rilis dengan tag/image yang sudah ada gagal dan tidak menimpa artefak lama.
-
-`GET /health` sekarang mengembalikan `version` sebagai semantic version dan `sha` sebagai short commit SHA:
-
-```json
-{ "status": "ready", "version": "0.1.0", "sha": "abc1234" }
-```
-
-Consumer lama harus mengganti pembacaan commit SHA dari `health.version` menjadi `health.sha`.
-
-
 ### 1. Prerequisites
 
 - Node.js v22+
