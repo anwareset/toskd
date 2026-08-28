@@ -38,9 +38,11 @@ COPY public/ ./public/
 
 ENV NODE_ENV=production
 
-# Short git commit hash untuk endpoint /health — di-inject dari CI via
-# build-arg GIT_SHA (lihat .github/workflows/docker-build.yml
-# build-args: GIT_SHA=${{ github.sha }}). Fallback: "unknown".
+# Release metadata untuk endpoint /health. APP_VERSION berasal dari
+# canonical stable SemVer git tag; GIT_COMMIT_SHA berasal dari commit tag.
+# Keduanya di-inject oleh release workflow dan fallback hanya untuk local build.
+ARG APP_VERSION=unknown
+ENV APP_VERSION=$APP_VERSION
 ARG GIT_SHA=unknown
 ENV GIT_COMMIT_SHA=$GIT_SHA
 

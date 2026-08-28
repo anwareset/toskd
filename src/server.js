@@ -131,6 +131,10 @@ const BOOTSTRAP_PASSWORD = process.env.BOOTSTRAP_ADMIN_PASSWORD;
 const PUBLIC_DIR = join(__dirname, "..", "public");
 
 // --- Health check helpers ---
+// Release version berasal dari APP_VERSION (Docker build arg dari canonical
+// git tag). Local/serverless tanpa metadata memakai "unknown".
+const APP_VERSION = (process.env.APP_VERSION || "unknown").trim() || "unknown";
+
 // Short git commit hash (7 chars) untuk response /health.
 // Prioritas: env Vercel (VERCEL_GIT_COMMIT_SHA) → env Docker build-arg
 // (GIT_COMMIT_SHA, lihat Dockerfile ARG GIT_SHA) → git CLI (local dev) →
@@ -159,8 +163,6 @@ function getShortCommitSha() {
     return _cachedCommitSha;
   }
 }
-
-const APP_VERSION = getShortCommitSha();
 
 // --- Session helpers ---
 
@@ -2359,10 +2361,10 @@ app.post("/api/scoreboard/bulk-delete", requireAdmin, async (req, res) => {
 });
 
 // --- Health check (BEFORE static) ---
-// GET /health — readiness probe. 200 { status: "ready", version } jika
-// aplikasi berjalan + database reachable; 503 { status: "unavailable",
-// version } jika DB check gagal. Dipakai Docker HEALTHCHECK (lihat
-// Dockerfile) dan Caddy/monitoring eksternal.
+// GET /health — readiness probe. 200 { status, version, sha } jika aplikasi
+// berjalan + database reachable; 503 { status, version, sha, error } jika DB
+// check gagal. `version` adalah semantic release version; `sha` adalah short
+// commit SHA. Dipakai Docker HEALTHCHECK dan Caddy/monitoring eksternal.
 // Timeout untuk DB smoke-test di /health — supabase-js fetch tidak punya
 // default timeout; tanpa ini endpoint bisa hang selamanya untuk probe
 // eksternal (Caddy/monitoring) saat network stall. Docker HEALTHCHECK punya
@@ -2384,12 +2386,13 @@ app.get("/health", async (req, res) => {
     );
     const { error } = await Promise.race([dbCheck, timeout]);
     if (error) throw error;
-    res.json({ status: "ready", version: APP_VERSION });
+    res.json({ status: "ready", version: APP_VERSION, sha: getShortCommitSha() });
   } catch (err) {
     logger.error({ event: "health.check", operation_status: "failed", error: errorField(err) }, "Health DB check failed");
     res.status(503).json({
       status: "unavailable",
       version: APP_VERSION,
+      sha: getShortCommitSha(),
       error: err?.message || "database unreachable",
     });
   }

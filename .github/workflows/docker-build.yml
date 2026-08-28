@@ -1,34 +1,40 @@
-name: Docker Build & Push to GHCR
+name: Docker Release & Push to GHCR
 
 on:
   push:
-    # Jalankan di setiap push ke branch mana pun + tag versi (vX.Y.Z)
-    branches:
-      - "**"
     tags:
-      - "v*"
-  # Bisa juga di-trigger manual dari tab Actions (debug/rebuild ulang)
-  workflow_dispatch:
+      - "[0-9]+.[0-9]+.[0-9]+"
 
 permissions:
   contents: read
   packages: write
 
-# Cegah push beruntun yang sama saling tumpuk — run terbaru membatalkan yang lama
 concurrency:
-  group: docker-build-${{ github.ref }}
-  cancel-in-progress: true
+  group: docker-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   docker:
     runs-on: ubuntu-latest
-    # Multi-arch (amd64 + arm64 via QEMU) butuh waktu lebih lama dari build single-arch
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ---- Unit tests (pre-build gate — blocking: suite harus hijau sebelum build) ----
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if ! printf '%s' "$RELEASE_TAG" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Release tag must be stable SemVer N.N.N without v-prefix"
+            exit 1
+          fi
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PACKAGE_VERSION" != "$RELEASE_TAG" ]; then
+            echo "::error::package.json version ($PACKAGE_VERSION) does not match release tag ($RELEASE_TAG)"
+            exit 1
+          fi
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -52,7 +58,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # GITHUB_TOKEN sudah otomatis punya hak push ke GHCR (permissions: packages: write)
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -60,32 +65,39 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Generate tag otomatis: nama branch, tag v*, SHA, dan `latest` khusus default branch
-      - name: Extract metadata (tags, labels)
+      - name: Extract release metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=tag
+            type=raw,value=${{ github.ref_name }}
             type=sha,format=long
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+          labels: |
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Reject existing release tag
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::Image tag $IMAGE:$RELEASE_TAG already exists; refusing to overwrite immutable release"
+            exit 1
+          fi
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          # Multi-arch: image tunggal dengan manifest untuk amd64 + arm64
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # GIT_SHA dipakai endpoint /health (version: short commit hash)
-          # via ENV GIT_COMMIT_SHA di Dockerfile
           build-args: |
+            APP_VERSION=${{ github.ref_name }}
             GIT_SHA=${{ github.sha }}
-          # Cache antar-build di GitHub Actions — rebuild berikutnya jauh lebih cepat
           cache-from: type=gha
           cache-to: type=gha,mode=max

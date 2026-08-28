@@ -170,7 +170,8 @@ node --check <file.js>   # Syntax check setiap edit JS
 | `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD` | Bootstrap admin pertama saat `admins` kosong |
 | `LOG_LEVEL` | Level Pino (default `info`) |
 | `OTEL_SERVICE_NAME` + `OTEL_EXPORTER_OTLP_ENDPOINT` | Keduanya wajib terisi agar telemetry aktif |
-| `GIT_COMMIT_SHA` | Build-time (Docker `GIT_SHA`) — dipakai `/health` `version` |
+| `APP_VERSION` | Build-time (Docker `APP_VERSION`) dari canonical stable SemVer git tag — dipakai `/health` `version` |
+| `GIT_COMMIT_SHA` | Build-time (Docker `GIT_SHA`) — dipakai `/health` `sha` |
 
 Detail setup + sumber tiap var: `README.md` §Deployment + `.env.example`.
 
@@ -297,7 +298,7 @@ Semua endpoint didefinisikan di `src/server.js` (Express 5, di-deploy sebagai Ve
 
 | Method | Endpoint | Deskripsi |
 |---|---|---|
-| GET | `/health` | Readiness probe — 200 `{ status: "ready", version }` / 503 saat DB down |
+| GET | `/health` | Readiness probe — 200 `{ status: "ready", version, sha }` / 503 `{ status: "unavailable", version, sha, error }` saat DB down |
 
 ### Protected HTML routes (5)
 

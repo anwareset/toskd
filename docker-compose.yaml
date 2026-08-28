@@ -5,7 +5,8 @@
 # ⚠️  Persiapan sebelum menjalankan:
 #   1. Buat file .env dari .env.example dan isi semua variabel.
 #   2. Pastikan network "net1" sudah ada: docker network create net1
-#   3. Pastikan sudah ada image: docker pull ghcr.io/anwareset/toskd:latest
+#   3. Pastikan sudah ada image release immutable, misalnya:
+#      docker pull ghcr.io/anwareset/toskd:0.1.0
 #      (atau build sendiri: docker build -t toskd .)
 #
 # Jalankan: docker compose -p toskd up
@@ -13,11 +14,12 @@
 services:
   toskd:
     container_name: toskd
-    image: ghcr.io/anwareset/toskd:latest
+    # Pin ke release tag immutable; update eksplisit saat rilis baru.
+    image: ghcr.io/anwareset/toskd:0.1.0
     # Untuk development / build lokal, ganti image di atas dengan:
     # build:
     #   context: .
-    # image: toskd:latest
+    # image: toskd:0.1.0
 
     networks:
       - net1
