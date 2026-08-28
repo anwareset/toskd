@@ -185,8 +185,8 @@ Bagian ini adalah catatan internal untuk AI coding agents di masa depan. Jangan 
   git push origin 0.1.0
   ```
 - `/health` mengembalikan `version` sebagai semantic version dan `sha` sebagai short commit SHA. Consumer yang membutuhkan commit SHA harus membaca `health.sha`, bukan `health.version`.
-- GitHub Release tidak dibuat otomatis. Jalankan **Actions → GitHub Release → Run workflow**, masukkan existing stable SemVer tag, dan pastikan build Docker serta deployment Arcane untuk tag/commit tersebut sudah sukses.
-- Workflow GitHub Release menolak tag invalid, tag yang belum ada, dan tag yang sudah memiliki Release. Workflow tidak membuat atau mengubah tag, tidak mengunggah asset binary custom, dan memakai generated notes GitHub.
+- GitHub Release dibuat manual melalui GitHub **Releases → Draft a new release → Choose a tag**. Pilih existing stable SemVer tag setelah build Docker dan deployment Arcane untuk tag/commit tersebut sukses.
+- Tidak diperlukan workflow GitHub Release khusus. Jangan menambahkan kembali workflow otomatis/manual khusus untuk kebutuhan ini tanpa spec baru.
 - Jika mengubah workflow release/deployment, pertahankan korelasi tag dan commit SHA serta verifikasi `/health` (`status`, `version`, dan `sha`).
 
 Detail setup pengguna tetap berada di `README.md` §Deployment.
