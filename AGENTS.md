@@ -178,18 +178,23 @@ node --check <file.js>   # Syntax check setiap edit JS
 Bagian ini adalah catatan internal untuk AI coding agents di masa depan. Jangan menganggapnya sebagai konfigurasi runtime atau dokumentasi pengguna.
 
 - Deployment production Docker hanya dipicu oleh canonical stable SemVer tag tanpa prefix `v`, tepat berbentuk `N.N.N`, misalnya `0.1.0`. Push branch hanya menjalankan CI test-only; branch tidak membangun atau mendeploy image production.
-- Sebelum membuat tag release, selaraskan `package.json.version` dengan versi target. Image release menggunakan tag versi dan immutable commit SHA; `latest` bukan target deployment.
-- Alur rilis image: buat tag pada commit release lalu push tag tersebut, misalnya:
+- Sebelum membuat tag release, **ubah dan commit `package.json.version` terlebih dahulu** agar sama dengan versi target. Workflow Docker menolak tag jika versinya tidak cocok dengan `package.json`; image release menggunakan tag versi dan immutable commit SHA; `latest` bukan target deployment.
+- Setelah commit perubahan versi masuk ke `main`, buat tag pada commit tersebut lalu push tag. Contoh untuk rilis `0.1.1`:
   ```bash
-  git tag 0.1.0
-  git push origin 0.1.0
+  # 1. Ubah package.json menjadi: "version": "0.1.1"
+  # 2. Commit dan merge perubahan ke main
+  git switch main
+  git pull --ff-only origin main
+  git tag 0.1.1
+  git push origin 0.1.1
   ```
+- Jangan membuat atau memindahkan tag sebelum `package.json.version` diperbarui dan commit versi sudah menjadi dasar tag. Jika tag sudah terlanjur menunjuk commit yang salah, jangan memaksa/memindahkannya; buat perbaikan melalui commit baru dan gunakan versi tag berikutnya sesuai kebijakan immutable release.
 - `/health` mengembalikan `version` sebagai semantic version dan `sha` sebagai short commit SHA. Consumer yang membutuhkan commit SHA harus membaca `health.sha`, bukan `health.version`.
 - GitHub Release dibuat manual melalui GitHub **Releases → Draft a new release → Choose a tag**. Pilih existing stable SemVer tag setelah build Docker dan deployment Arcane untuk tag/commit tersebut sukses.
 - Tidak diperlukan workflow GitHub Release khusus. Jangan menambahkan kembali workflow otomatis/manual khusus untuk kebutuhan ini tanpa spec baru.
 - Jika mengubah workflow release/deployment, pertahankan korelasi tag dan commit SHA serta verifikasi `/health` (`status`, `version`, dan `sha`).
 
-Detail setup pengguna tetap berada di `README.md` §Deployment.
+Detail setup pengguna tetap berada di `README.md` §Deployment. Catatan penting: perubahan versi di `package.json` harus dibuat melalui commit/PR sebelum tag release dibuat.
 
 
 Detail setup + sumber tiap var: `README.md` §Deployment + `.env.example`.
