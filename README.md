@@ -159,6 +159,15 @@ Tag yang didukung tepat berbentuk `N.N.N`; `v0.1.0`, prerelease, dan build metad
 
 Consumer lama harus mengganti pembacaan commit SHA dari `health.version` menjadi `health.sha`.
 
+### GitHub Release
+
+GitHub Release dibuat manual dari tag release yang sudah ada dan sudah berhasil dideploy:
+
+1. Buka **Actions → GitHub Release → Run workflow**.
+2. Masukkan tag canonical, misalnya `0.1.0`.
+3. Workflow memvalidasi tag, memastikan build Docker dan deployment Arcane untuk commit/tag tersebut sukses, lalu membuat published Release dengan generated notes GitHub.
+
+Workflow menolak tag yang tidak berbentuk `N.N.N`, tag yang belum ada, dan tag yang sudah memiliki Release. Workflow tidak membuat atau mengubah tag dan tidak menambahkan asset binary; source archive GitHub tersedia otomatis.
 
 ### 1. Prerequisites
 

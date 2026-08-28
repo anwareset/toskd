@@ -95,7 +95,7 @@ toskd/
 ├── Dockerfile                    # Multi-stage Docker build (node:22-alpine, non-root, tini init, HEALTHCHECK)
 ├── docker-compose.yaml           # Self-host: service toskd di network eksternal net1 (Caddy reverse-proxy), env dari .env.container
 ├── .dockerignore                 # Exclude unnecessary or sensitive files
-├── .github/workflows/            # CI/CD (GitHub Actions): docker-build.yml pnpm test gate (blocking) + build & push image multi-arch (amd64+arm64) ke GHCR + arcane-deploy.yml (webhook Arcane + verifikasi /health)
+├── .github/workflows/            # CI/CD: ci.yml test-only branch/PR, docker-build.yml tag release GHCR, arcane-deploy.yml deployment, github-release.yml manual published Release
 ├── vercel.json                   # Konfigurasi routing Vercel
 ├── specs/                        # ⚠️ GITIGNORED — konvensi detail + spec docs (working-tree-only, tidak di-clone)
 └── package.json
@@ -172,6 +172,7 @@ node --check <file.js>   # Syntax check setiap edit JS
 | `OTEL_SERVICE_NAME` + `OTEL_EXPORTER_OTLP_ENDPOINT` | Keduanya wajib terisi agar telemetry aktif |
 | `APP_VERSION` | Build-time (Docker `APP_VERSION`) dari canonical stable SemVer git tag — dipakai `/health` `version` |
 | `GIT_COMMIT_SHA` | Build-time (Docker `GIT_SHA`) — dipakai `/health` `sha` |
+| GitHub Release | Manual `workflow_dispatch` dari existing stable SemVer tag setelah build dan Arcane deployment sukses |
 
 Detail setup + sumber tiap var: `README.md` §Deployment + `.env.example`.
 
