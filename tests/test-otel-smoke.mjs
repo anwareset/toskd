@@ -143,7 +143,10 @@ test("OTLP: golden-signals histogram ter-ekspor (2xx+4xx), route ternormalisasi,
   const exported = await waitFor(
     () =>
       metricsJoined().includes("http.server.request.duration") &&
+      metricsJoined().includes("2xx") &&
+      metricsJoined().includes("4xx") &&
       tracesJoined().includes("/api/exam/:id/results"),
+    15000,
   );
   assert.ok(exported, "histogram golden-signals + route ternormalisasi harus ter-ekspor");
 
