@@ -190,7 +190,7 @@ Bagian ini adalah catatan internal untuk AI coding agents di masa depan. Jangan 
   ```
 - Jangan membuat atau memindahkan tag sebelum `package.json.version` diperbarui dan commit versi sudah menjadi dasar tag. Jika tag sudah terlanjur menunjuk commit yang salah, jangan memaksa/memindahkannya; buat perbaikan melalui commit baru dan gunakan versi tag berikutnya sesuai kebijakan immutable release.
 - `/health` mengembalikan `version` sebagai semantic version dan `sha` sebagai short commit SHA. Consumer yang membutuhkan commit SHA harus membaca `health.sha`, bukan `health.version`.
-- GitHub Release dibuat manual melalui GitHub **Releases → Draft a new release → Choose a tag**. Pilih existing stable SemVer tag setelah build Docker dan deployment Arcane untuk tag/commit tersebut sukses.
+- GitHub Release dibuat manual melalui GitHub **Releases → Draft a new release → Choose a tag**. GitHub Release menggunakan nama `vN.N.N` (misalnya `v0.1.1`), sedangkan tag deployment yang dipilih tetap `N.N.N` (misalnya `0.1.1`) setelah build Docker dan deployment Arcane untuk tag/commit tersebut sukses.
 - Tidak diperlukan workflow GitHub Release khusus. Jangan menambahkan kembali workflow otomatis/manual khusus untuk kebutuhan ini tanpa spec baru.
 - Jika mengubah workflow release/deployment, pertahankan korelasi tag dan commit SHA serta verifikasi `/health` (`status`, `version`, dan `sha`).
 
