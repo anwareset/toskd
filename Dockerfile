@@ -5,13 +5,14 @@ FROM node:22-alpine AS deps
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@12 --activate
+RUN corepack enable && corepack prepare pnpm@next-12 --activate
 
 WORKDIR /app
 
 # Cache pnpm store across builds (BuildKit required)
 # pnpm-workspace.yaml ikut di-copy: memuat allowBuilds protobufjs (dibutuhkan
 # pnpm 10+/12; pnpm 9 mengabaikannya — single-package workspace).
+# pnpm 12 di-install dari tag next-12 (latest npm masih menunjuk pnpm 11).
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod
