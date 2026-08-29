@@ -162,5 +162,6 @@ jobs:
           docker buildx imagetools create \
             -t "$IMAGE:$RELEASE_TAG" \
             -t "$IMAGE:sha-$SHA" \
+            -t "$IMAGE:latest" \
             "$IMAGE:$RELEASE_TAG-amd64" \
             "$IMAGE:$RELEASE_TAG-arm64"
