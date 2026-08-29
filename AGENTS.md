@@ -209,7 +209,7 @@ Detail setup + sumber tiap var: `README.md` §Deployment + `.env.example`.
 | Konvensi detail (spec workflow, CSS token, API endpoints §10) | `specs/AGENTS.md` | ⚠️ Lokal saja (gitignored). Detail lengkap konvensi repo |
 | Spec docs (historical + aktif) | `specs/*-spec.md` | Implementation: peer ke spec utk AC/UAT/status |
 | Database schema | `schema.sql` + `supabase/migrations/` | Struktur tabel, migration history |
-| CI/CD | `.github/workflows/` | docker-build.yml (test gate + GHCR) + arcane-deploy.yml |
+| CI/CD | `.github/workflows/` | docker-build.yml (tag release + GHCR; test gate ada di ci.yml) + arcane-deploy.yml |
 
 > **Catatan sinkronisasi**: file ini **self-contained untuk clone baru** (aturan inti + arsitektur: API endpoints §9, token system §8, troubleshooting §10). `specs/` gitignored dan tidak ikut clone — jika folder itu tidak ada di working tree, abaikan referensi ke sana; file ini cukup.
 
