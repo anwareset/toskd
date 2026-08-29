@@ -91,7 +91,7 @@ toskd/
 │   └── test-admin-password-change.mjs             # Ganti kata sandi admin: 401/OPTIONS/validasi 400/min-8/new==current/404/500 + hash bcrypt ter-update + sesi tetap valid + edge multi-tab (mock PostgREST stateful mutatif)
 ├── schema.sql                    # Skema database Supabase (termasuk tabel admins + option_scores + subtests + subtest_thresholds)
 ├── supabase/                     # Supabase CLI: config.toml + migrations/ (8 file: 000-007) + seed.sql (di-track sejak 2026-08-15)
-├── pnpm-workspace.yaml           # Config pnpm: packages ["."] (kompat pnpm 9) + allowBuilds protobufjs (pnpm 10+/11)
+├── pnpm-workspace.yaml           # Config pnpm: packages ["."] (kompat pnpm 12) + allowBuilds protobufjs (pnpm 10+)
 ├── Dockerfile                    # Multi-stage Docker build (node:22-alpine, non-root, tini init, HEALTHCHECK)
 ├── docker-compose.yaml           # Self-host: service toskd di network eksternal net1 (Caddy reverse-proxy), env dari .env.container
 ├── .dockerignore                 # Exclude unnecessary or sensitive files

@@ -1,11 +1,12 @@
 # pnpm workspace config.
-# - `packages: ["."]` wajib ada agar pnpm 9 (Dockerfile + CI) tetap mengenali
+# - `packages: ["."]` wajib ada agar pnpm (CI + Dockerfile) tetap mengenali
 #   project ini sebagai single-package workspace tanpa error
 #   "packages field missing or empty".
-# - `allowBuilds: protobufjs: true` diperlukan pnpm 10+/11 (local dev):
+# - `allowBuilds: protobufjs: true` diperlukan pnpm 10+/12 (CI + Dockerfile,
+#   termasuk local dev):
 #   protobufjs@7 butuh postinstall utk dipakai eksporter OTLP protobuf
 #   (ter-bundle di @opentelemetry/sdk-node → exporter-*-otlp-proto).
-#   Tanpa ini pnpm 11 menganggap build di-ignore dan
+#   Tanpa ini pnpm menganggap build di-ignore dan
 #   `pnpm install`/`pnpm test` (deps status check) gagal dengan
 #   ERR_PNPM_IGNORED_BUILDS.
 packages:
