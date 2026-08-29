@@ -11,6 +11,13 @@ on:
 permissions:
   contents: read
 
+# Satu environment produksi: deploy serial, jangan pernah cancel deploy yang
+# sedang jalan (harus selesai dulu). Mencegah dua webhook deploy paralel
+# saat dua tag release dipush berurutan (race condition).
+concurrency:
+  group: arcane-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

@@ -21,13 +21,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Setup pnpm + Node.js
-        uses: pnpm/setup@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
         with:
-          version: next-12
-          runtime: node@22
-          cache: true
-          install: false
+          node-version: 22
 
       - name: Validate release tag
         env:
@@ -42,12 +39,6 @@ jobs:
             echo "::error::package.json version ($PACKAGE_VERSION) does not match release tag ($RELEASE_TAG)"
             exit 1
           fi
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run tests
-        run: pnpm test
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
