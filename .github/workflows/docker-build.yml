@@ -14,9 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  docker:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -40,8 +39,23 @@ jobs:
             exit 1
           fi
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Reject existing release tag
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::Image tag $IMAGE:$RELEASE_TAG already exists; refusing to overwrite immutable release"
+            exit 1
+          fi
+
+  build-amd64:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -59,33 +73,94 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=${{ github.ref_name }}
-            type=sha,format=long
+            type=raw,value=${{ github.ref_name }}-amd64
+            type=sha,format=long,prefix=sha-,suffix=-amd64
           labels: |
             org.opencontainers.image.version=${{ github.ref_name }}
             org.opencontainers.image.revision=${{ github.sha }}
 
-      - name: Reject existing release tag
-        env:
-          IMAGE: ghcr.io/${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          if docker buildx imagetools inspect "$IMAGE:$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "::error::Image tag $IMAGE:$RELEASE_TAG already exists; refusing to overwrite immutable release"
-            exit 1
-          fi
-
-      - name: Build and push
+      - name: Build and push (amd64)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ github.ref_name }}
             GIT_SHA=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ github.workflow }}-amd64
+          cache-to: type=gha,mode=max,scope=${{ github.workflow }}-amd64
+
+  build-arm64:
+    needs: validate
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract release metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ github.ref_name }}-arm64
+            type=sha,format=long,prefix=sha-,suffix=-arm64
+          labels: |
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push (arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=${{ github.workflow }}-arm64
+          cache-to: type=gha,mode=max,scope=${{ github.workflow }}-arm64
+
+  merge:
+    needs: [build-amd64, build-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch manifest
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          docker buildx imagetools create \
+            -t "$IMAGE:$RELEASE_TAG" \
+            -t "$IMAGE:sha-$SHA" \
+            "$IMAGE:$RELEASE_TAG-amd64" \
+            "$IMAGE:$RELEASE_TAG-arm64"
