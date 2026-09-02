@@ -95,7 +95,7 @@ toskd/
 ├── Dockerfile                    # Multi-stage Docker build (node:22-alpine, non-root, tini init, HEALTHCHECK)
 ├── docker-compose.yaml           # Self-host: service toskd di network eksternal net1 (Caddy reverse-proxy), env dari .env.container
 ├── .dockerignore                 # Exclude unnecessary or sensitive files
-├── .github/workflows/            # CI/CD: ci.yml test-only (push main + pull_request), docker-build.yml tag release GHCR, arcane-deploy.yml deployment, github-release.yml manual published Release
+├── .github/workflows/            # CI/CD: ci.yml test-only (push main + pull_request), docker-build.yml tag release GHCR (tag `N.N.N` → build & push, job merge bikin manifest `N.N.N` + `sha-<long>` + `latest`), arcane-deploy.yml deployment (+ verifikasi /health)
 ├── vercel.json                   # Konfigurasi routing Vercel
 ├── specs/                        # ⚠️ GITIGNORED — konvensi detail + spec docs (working-tree-only, tidak di-clone)
 └── package.json
@@ -127,10 +127,11 @@ node --check <file.js>   # Syntax check setiap edit JS
 4. **Interview-first untuk feature ≥1 file atau behavior change.** 3-round `ask_user` interview SEBELUM implementasi untuk keputusan penting. (Detail konvensi: `specs/AGENTS.md`, lihat §7.)
 5. **Schema migrations diuji di DUA bentuk** — (A) fresh `supabase db reset --local`, (B) replika bentuk prod. Migration wajib idempotent + RLS/GRANT seaman prod.
 6. **Jangan commit credential/secret** — semua env di `.env` (gitignored). `.env.example` (placeholder) aman di-track.
+7. **Spawn sub-agent peninjau kode (code-reviewer sub-agent) sebelum commit** untuk perubahan non-trivial — multi-file, behavior change, atau structure change. Skip hanya untuk trivial fix ≤3 lines. Fallback platform tanpa sub-agents: lakukan self-review setara (`node --check` + grep konsistensi + `pnpm test`).
 
 ### MUST NOT
 
-1. **Jangan `git add` / `git commit` / `git push` tanpa explicit user ask.** Default = working-tree only. Silent, no proactive confirmation.
+1. **Jangan `git add` / `git commit` / `git push` tanpa explicit user ask.** Default = working-tree only. Silent, no proactive confirmation. Lulus dari sub-agent peninjau/verifikasi TIDAK mengotomatiskan commit — tetap butuh perintah eksplisit dari user.
 2. **Jangan force-push, `--amend`, `rebase`, atau `reset --hard`.** Destructive — tidak ada use case valid di repo ini.
 3. **Jangan commit file `specs/`** — gitignored by design (MUST-NOT #10 di `specs/AGENTS.md`). `git add -f specs/<file>` = violation.
 4. **Jangan hardcode hex color** di luar `public/css/tokens.css`. Selalu `var(--token)`.
@@ -165,9 +166,9 @@ node --check <file.js>   # Syntax check setiap edit JS
 | `SUPABASE_URL` | Supabase Project URL |
 | `SUPABASE_KEY` | **service_role key** (bukan anon — wajib bypass RLS utk `password_hash`) |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob Read/Write token |
-| `JWT_SECRET` | ≥32 char (`openssl rand -hex 32`) |
+| `JWT_SECRET` | ≥32 char (`openssl rand -hex 32`). **Di lokal cukup env ini + Supabase vars** — kredensial admin digenerate otomatis (lihat baris Bootstrap). |
 | `COOKIE_SECURE` | Opsional: paksa `Secure` flag cookie login |
-| `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD` | Bootstrap admin pertama saat `admins` kosong |
+| `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD` | Bootstrap admin — **dua mode**: **(a) Auto-generate (default, dev)** — biarkan keduanya kosong; saat `admins` kosong & `NODE_ENV` ≠ `production`, server membuat `admin` + password acak 20 char lalu menampilkannya **sekali** via banner `GENERATED ADMIN CREDENTIALS` di stdout (bukan Pino). **(b) Eksplisit** — set keduanya; dibuat dari env di SEMUA `NODE_ENV`; setelah login pertama, DELETE env tersebut (log warning tiap cold-start). Parsial (hanya satu diset) → error log `partial-env`, bootstrap skip. `NODE_ENV=production` + kosong → skip total. |
 | `LOG_LEVEL` | Level Pino (default `info`) |
 | `OTEL_SERVICE_NAME` + `OTEL_EXPORTER_OTLP_ENDPOINT` | Keduanya wajib terisi agar telemetry aktif |
 | `APP_VERSION` | Build-time (Docker `APP_VERSION`) dari canonical stable SemVer git tag — dipakai `/health` `version` |
@@ -209,7 +210,7 @@ Detail setup + sumber tiap var: `README.md` §Deployment + `.env.example`.
 | Konvensi detail (spec workflow, CSS token, API endpoints §10) | `specs/AGENTS.md` | ⚠️ Lokal saja (gitignored). Detail lengkap konvensi repo |
 | Spec docs (historical + aktif) | `specs/*-spec.md` | Implementation: peer ke spec utk AC/UAT/status |
 | Database schema | `schema.sql` + `supabase/migrations/` | Struktur tabel, migration history |
-| CI/CD | `.github/workflows/` | docker-build.yml (tag release + GHCR; test gate ada di ci.yml) + arcane-deploy.yml |
+| CI/CD | `.github/workflows/` | ci.yml (test-only) + docker-build.yml (tag release `N.N.N` + GHCR) + arcane-deploy.yml (deploy + verifikasi `/health`) |
 
 > **Catatan sinkronisasi**: file ini **self-contained untuk clone baru** (aturan inti + arsitektur: API endpoints §9, token system §8, troubleshooting §10). `specs/` gitignored dan tidak ikut clone — jika folder itu tidak ada di working tree, abaikan referensi ke sana; file ini cukup.
 
@@ -221,8 +222,10 @@ Untuk feature ≥1 file atau behavior change:
 
 1. **Interview 3-round** via `ask_user` (apa → gimana → detail delivery). Jangan tebak keputusan penting.
 2. **Tulis spec** `specs/<slug>-spec.md` (13-section, gitignored, working-tree-only) — atau catat keputusan di commit message jika sederhana.
-3. **Implement + verify** (`node --check`, `pnpm test`).
+3. **Implement + verify** (`node --check`, `pnpm test`; perubahan non-trivial → review sub-agent per MUST #7).
 4. **Commit + push HANYA atas explicit user ask.**
+
+**Sub-agents (SHOULD, jika platform mendukung)**: gunakan ROLE generik, bukan nama model spesifik — (a) **sub-agent pemikir (thinker)** untuk bug-fix non-trivial / pendekatan tidak pasti, beri `filePaths` relevan sebagai konteks; (b) **sub-agent peninjau kode + sub-agent verifikasi (verifier)** dijalankan **paralel** — keduanya independen, hemat waktu. Conventions ini berlaku universal agar kompatibel dengan bermacam AI Agents (Claude Code, Cursor, Codex, Roo, dll.) di masa mendatang.
 
 Single-file tweaks (minor CSS, 1-line fix) tidak butuh spec — cukup commit message langsung.
 
@@ -292,7 +295,7 @@ Semua endpoint didefinisikan di `src/server.js` (Express 5, di-deploy sebagai Ve
 | POST | `/api/exam/submit` | Submit + scoring (TWK/TIU biner 5/0, TKP weighted 1-5); duplicate-submit → 409; set cookie peserta |
 | GET | `/api/exam/:id/results` | Hasil ujian — admin ATAU pemilik cookie peserta, selain → 403 |
 
-### Scoreboard (3)
+### Scoreboard (5)
 
 | Method | Endpoint | Deskripsi |
 |---|---|---|
