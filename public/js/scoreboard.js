@@ -1,6 +1,5 @@
 // public/js/scoreboard.js
 //
-// Spec: scoreboard-pagination-spec.md §6.
 // State model: allResults (server cache) → filteredResults (search filter) →
 // sorted (comparator) → paginated (slice). Everything client-side. No URL
 // sync (Round 2): reload resets state to defaults.

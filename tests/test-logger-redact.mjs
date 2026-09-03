@@ -1,5 +1,5 @@
 // tests/test-logger-redact.mjs
-// Lock-in tests untuk src/logger.js (specs/golden-signals-otel-spec.md §4.4):
+// Lock-in tests untuk src/logger.js:
 //   - pino-redact menyensor password/token/cookie/authorization/body/answers
 //   - field `service` selalu "toskd" + field inti (level/msg/event)
 //   - errorField menghasilkan shape { type, code, message, stack }

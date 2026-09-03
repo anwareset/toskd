@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS questions (
     question_type TEXT NOT NULL DEFAULT 'text', -- Tipe soal (selalu 'text' karena gambar inline di rich text editor)
     options JSONB NOT NULL,             -- {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}
     correct_answer VARCHAR(1) NOT NULL, -- 'A', 'B', 'C', 'D', 'E'
-    option_scores JSONB,                -- TKP-only: {"A":1..5,...,"E":1..5} (lihat migration-002 / tkp-scoring-spec.md). NULL utk TWK/TIU.
+    option_scores JSONB,                -- TKP-only: {"A":1..5,...,"E":1..5} (lihat migration-002). NULL utk TWK/TIU.
     explanation TEXT NOT NULL,          -- Pembahasan (HTML, termasuk gambar inline)
     image_url TEXT,                     -- Deprecated: gambar sekarang inline di content
     explanation_image_url TEXT,         -- Deprecated: gambar sekarang inline di explanation
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS pack_questions (
     question_number INTEGER NOT NULL,
     UNIQUE(pack_id, question_id),
     -- Race-safe (2026-08-12): satu paket TIDAK boleh punya 2 soal bernomor sama
-    -- (lihat migration-004 / pack-question-order-spec.md Rev. 2)
+    -- (lihat migration-004)
     UNIQUE(pack_id, question_number)
 );
 

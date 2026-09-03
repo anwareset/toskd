@@ -1,5 +1,4 @@
 // src/logger.js
-// Spec: specs/golden-signals-otel-spec.md §4.4
 //
 // Pino structured-JSON logger untuk toskd:
 //   - field `service: "toskd"` di setiap log

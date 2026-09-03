@@ -1,6 +1,5 @@
 // tests/test-admin-password-change.mjs
-// Regression lock-in untuk fitur ganti kata sandi admin (self-service),
-// specs/admin-password-change-spec.md §6:
+// Regression lock-in untuk fitur ganti kata sandi admin (self-service):
 //   POST /api/admin/change-password (requireAdmin)
 //     - 401 tanpa sesi / token invalid/expired (HS256 pin)
 //     - OPTIONS preflight tidak diblokir (200/204)

@@ -1,5 +1,5 @@
-// Spec: specs/golden-signals-otel-spec.md §4.7 — Pendekatan A (env-driven
-// exporters). Lock-in perilaku anti-senyap: nilai OTEL_*_EXPORTER yang tidak
+// Pendekatan A (env-driven exporters). Lock-in perilaku anti-senyap: nilai
+// OTEL_*_EXPORTER yang tidak
 // dikenal harus terdeteksi oleh validateExporterEnv() (dipanggil di module
 // body src/otel.js saat init untuk mencetak console.error jelas). Import
 // aman tanpa env OTEL: guard di otel.js menonaktifkan SDK (no-op).

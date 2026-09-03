@@ -104,7 +104,7 @@ function showServerErrorToast() {
 }
 
 // ============================================================================
-// paket-soal-pagination-spec.md §3 — DOM refs + state model
+// DOM refs + state model
 // ============================================================================
 
 // DOM refs (resolved once at script load). All IDs match paket-soal.html.
@@ -208,7 +208,7 @@ function esc(s) {
 }
 
 // ============================================================================
-// pack-visibility-spec.md §4.3 — badge Penayangan
+// Badge Penayangan
 // ============================================================================
 // Label + variant badge utk kolom Penayangan di tabel CMS. Values DB
 // English ('public'/'admin'/'archived'), label UI Bahasa Indonesia
@@ -225,7 +225,7 @@ function packVisibilityBadge(pack) {
 }
 
 // ============================================================================
-// paket-soal-pagination-spec.md §5.3 — Comparator
+// Comparator
 // ============================================================================
 //
 // Single global comparator invoking SORT_KEYS for active user-sortable
@@ -257,7 +257,7 @@ function comparator(a, b) {
 }
 
 // ============================================================================
-// paket-soal-pagination-spec.md §3.3 — reapplyView() (the single pipeline)
+// reapplyView() (the single pipeline)
 // ============================================================================
 //
 // steps: search-filter → sort → paginate → render. Every state mutation
@@ -316,7 +316,7 @@ function renderBody(pageData, startIdx) {
         )
         .join("");
       const subtesLabel = `<div class="subtes-chips">${subtesChips}</div>`;
-      // Penayangan badge (pack-visibility-spec.md §4.3): reuse
+      // Penayangan badge: reuse
       // .chip__label--display; 'archived' pakai modifier muted
       // (.chip__label--display--muted) supaya terlihat non-aktif.
       // Legacy pack tanpa kolom visibility → fallback 'public' (Publik).
@@ -593,7 +593,7 @@ form.onsubmit = async (e) => {
     document.getElementById("pack-duration").value,
   );
   // Passing grade total = jumlah kelulusan per subtes. Field input total
-  // sudah dihapus dari modal (lihat subtes-picker-spec.md §2.2).
+  // sudah dihapus dari modal.
   // Server tetap menerima passing_grade untuk backward compat dengan
   // schema existing — nilainya cukup dihitung client-side dari subtest
   // thresholds yang sudah dikumpulkan di bawah.
@@ -637,7 +637,7 @@ form.onsubmit = async (e) => {
     return;
   }
 
-  // Penayangan (pack-visibility-spec.md §4.3): radio single-select di modal;
+  // Penayangan: radio single-select di modal;
   // fallback 'public' (default chip Publik pre-checked — sama dgn default
   // server di normalizePackInput utk POST).
   const visibility =
@@ -685,7 +685,7 @@ window.editPack = (id) => {
   for (const cb of document.querySelectorAll('input[name="pack-sub"]')) {
     cb.checked = subtests.includes(cb.value);
   }
-  // Penayangan (pack-visibility-spec.md §4.3): pre-check nilai stored;
+  // Penayangan: pre-check nilai stored;
   // legacy pack tanpa kolom visibility → fallback 'public' (Publik).
   const visibility = p.visibility ?? "public";
   for (const rb of document.querySelectorAll('input[name="pack-visibility"]')) {
@@ -823,7 +823,7 @@ if (deletePackConfirmBtn) {
 }
 
 // ==========================================================
-// Per-subtes picker helpers (subtes-picker-spec.md §2.2)
+// Per-subtes picker helpers
 // ==========================================================
 //
 // Tidak ada lagi konsep Tipe Paket (Single/Combo) — admin cukup pilih

@@ -203,7 +203,7 @@ function showNotification(title, message) {
 // ==== Usage modal (chip "Dipakai" di option-item bank list) ====
 // Menampilkan daftar paket soal LAIN yang memakai sebuah soal. Reuse
 // komponen dialog.modal — pattern notification-modal (single OK).
-// JS: openUsageModal() di bawah. See paket-detail-usage-chip-spec.md.
+// JS: openUsageModal() di bawah.
 const usageModal = document.getElementById("usage-modal");
 const usageModalTitle = document.getElementById("usage-modal-title");
 const usageModalBody = document.getElementById("usage-modal-body");
@@ -386,8 +386,7 @@ function typesetMath(rootEl) {
 // Strip block elements (<ol>, <img>) from a Quill-rendered HTML
 // string and replace with compact inline markers so the preview
 // cells in the bank list and pack list stay 1-line. See
-// bulk-parser.js for the full implementation and rationale
-// (spec: bulk-add-format-v2-spec.md §10.1).
+// bulk-parser.js for the full implementation and rationale.
 //
 // We re-bind to a local const for readability at call sites:
 //   const cell = previewHtmlForCell(q.content);
@@ -460,7 +459,7 @@ async function init() {
 
     // Fetch usage (paket mana saja yang memakai tiap soal) untuk chip
     // "Dipakai" di option-item. Gagal di sini TIDAK menggagalkan halaman
-    // — chip saja yang tidak muncul (paket-detail-usage-chip-spec.md).
+    // — chip saja yang tidak muncul.
     try {
       await fetchQuestionUsage(allQuestions.map((q) => q.id));
     } catch (err) {

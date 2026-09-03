@@ -1,5 +1,4 @@
 // src/otel.js
-// Spec: specs/golden-signals-otel-spec.md §4.1-4.3
 //
 // OpenTelemetry bootstrap untuk toskd (self-hosted). Mengekspor:
 //   - recordHttpRequest()   → histogram golden-signals (traffic/latency/errors)

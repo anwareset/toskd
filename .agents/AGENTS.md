@@ -1,9 +1,13 @@
 # AGENTS.md — AI Agent Instructions for `toskd`
 
 > Filename `AGENTS.md` (UPPERCASE) dibaca otomatis oleh AI coding agents
-> (Claude Code, Cursor, Codex, Roo Code, Aider) dari working directory.
+> (Claude Code, Cursor, Codex, Roo Code, Aider) — berlokasi di folder
+> `.agents/` (`.agents/AGENTS.md`).
+> ⚠️ Tool yang hanya auto-detect root `AGENTS.md` (mis. Claude Code, Codex CLI)
+> mungkin perlu symlink/config: `ln -s .agents/AGENTS.md AGENTS.md` di working
+> tree, atau custom rule file (`.cursor/rules`, `.claude/CLAUDE.md`).
 > File ini **di-track di git** — berlaku untuk semua clone, tidak seperti
-> `specs/` yang gitignored (working-tree-only).
+> spec docs (konvensi detail) yang sengaja gitignored (working-tree-only).
 
 ---
 
@@ -97,7 +101,7 @@ toskd/
 ├── .dockerignore                 # Exclude unnecessary or sensitive files
 ├── .github/workflows/            # CI/CD: ci.yml test-only (push main + pull_request), docker-build.yml tag release GHCR (tag `N.N.N` → build & push, job merge bikin manifest `N.N.N` + `sha-<long>` + `latest`), arcane-deploy.yml deployment (+ verifikasi /health)
 ├── vercel.json                   # Konfigurasi routing Vercel
-├── specs/                        # ⚠️ GITIGNORED — konvensi detail + spec docs (working-tree-only, tidak di-clone)
+├── .agents/AGENTS.md             # ✅ DI-TRACK — file ini (aturan kerja agent + arsitektur self-contained)
 └── package.json
 ```
 
@@ -124,16 +128,18 @@ node --check <file.js>   # Syntax check setiap edit JS
 1. **Pakai `pnpm`.** Bukan npm, bukan yarn. `pnpm-lock.yaml` adalah lockfile source of truth. Package baru → `pnpm add <pkg>`.
 2. **Test gate hijau sebelum commit.** `pnpm test` wajib lolos (saat ini **206/206 pass**). Regresi = jangan commit.
 3. **Verify setiap edit JS** dengan `node --check <file.js>` sebelum commit. Untuk HTML/CSS refactor, cek konsistensi ID/class (grep).
-4. **Interview-first untuk feature ≥1 file atau behavior change.** 3-round `ask_user` interview SEBELUM implementasi untuk keputusan penting. (Detail konvensi: `specs/AGENTS.md`, lihat §7.)
+4. **Interview-first untuk feature ≥1 file atau behavior change.** 3-round `ask_user` interview SEBELUM implementasi untuk keputusan penting. (Detail konvensi: spec docs lokal, lihat §7.)
 5. **Schema migrations diuji di DUA bentuk** — (A) fresh `supabase db reset --local`, (B) replika bentuk prod. Migration wajib idempotent + RLS/GRANT seaman prod.
 6. **Jangan commit credential/secret** — semua env di `.env` (gitignored). `.env.example` (placeholder) aman di-track.
 7. **Spawn sub-agent peninjau kode (code-reviewer sub-agent) sebelum commit** untuk perubahan non-trivial — multi-file, behavior change, atau structure change. Skip hanya untuk trivial fix ≤3 lines. Fallback platform tanpa sub-agents: lakukan self-review setara (`node --check` + grep konsistensi + `pnpm test`).
+8. **Komentar di file yang di-track dilarang me-refer spec docs.** Jangan tulis referensi ke spec docs (path folder, nama file spec, nomor section) di komentar kode, migration SQL, `README.md`, file Docker, tests, HTML/JS, atau file tracked lainnya. Folder spec docs bersifat lokal (gitignored) dan tidak ikut clone — referensi dari luar hanya membingungkan developer lain. Referensi ke spec docs hanya boleh ditulis DI DALAM folder spec docs itu sendiri.
+9. **Git message/comment/description yang dibuat AI Agent wajib kalimat umum/generik.** Pesan commit, komentar PR, dan deskripsi perubahan ditulis dengan bahasa deskriptif biasa (apa yang berubah + kenapa), TANPA menyebut atau me-refer spec docs (path folder, nama file spec, atau nomor section).
 
 ### MUST NOT
 
 1. **Jangan `git add` / `git commit` / `git push` tanpa explicit user ask.** Default = working-tree only. Silent, no proactive confirmation. Lulus dari sub-agent peninjau/verifikasi TIDAK mengotomatiskan commit — tetap butuh perintah eksplisit dari user.
 2. **Jangan force-push, `--amend`, `rebase`, atau `reset --hard`.** Destructive — tidak ada use case valid di repo ini.
-3. **Jangan commit file `specs/`** — gitignored by design (MUST-NOT #10 di `specs/AGENTS.md`). `git add -f specs/<file>` = violation.
+3. **Jangan commit spec docs** — gitignored by design (working-tree-only); jangan force-add (`git add -f`).
 4. **Jangan hardcode hex color** di luar `public/css/tokens.css`. Selalu `var(--token)`.
 5. **Jangan ubah `schema.sql`** tanpa spec + interview — berdampak langsung ke production data (no rollback path).
 6. **Jangan tambahkan trailer `Co-authored-by` / atribusi AI** di pesan commit — commit message murni milik author manusia.
@@ -153,7 +159,7 @@ node --check <file.js>   # Syntax check setiap edit JS
 ### Konvensi
 
 - **Feature branch + PR** untuk fitur: `feat/<slug>` dari `main` → PR → merge → cleanup branch. Push langsung ke `main` hanya untuk hotfix/trivial.
-- **Commit message multi-line**: subject ≤72 char + body deskriptif (perubahan per file, AC-verified). TANPA trailer AI (MUST-NOT #6).
+- **Commit message multi-line**: subject ≤72 char + body deskriptif (perubahan per file, AC-verified). Kalimat umum/generik — TANPA referensi ke spec docs (MUST #9). TANPA trailer AI (MUST-NOT #6).
 - **Single commit = single logical change.** Jangan bundle perubahan tak terkait.
 - **Local-only default**: user bilang "commit" tanpa "push" → commit local saja.
 
@@ -207,12 +213,12 @@ Detail setup + sumber tiap var: `README.md` §Deployment + `.env.example`.
 | Resource | Path | Kapan dirujuk |
 |---|---|---|
 | Project intro & deployment | `README.md` | Setup awal, env vars, deployment, self-host |
-| Konvensi detail (spec workflow, CSS token, API endpoints §10) | `specs/AGENTS.md` | ⚠️ Lokal saja (gitignored). Detail lengkap konvensi repo |
-| Spec docs (historical + aktif) | `specs/*-spec.md` | Implementation: peer ke spec utk AC/UAT/status |
+| Konvensi detail (spec workflow, CSS token, API endpoints §10) | Spec docs lokal | ⚠️ Lokal saja (gitignored). Detail lengkap konvensi repo |
+| Spec docs (historical + aktif) | Spec docs lokal | Implementation: peer ke spec utk AC/UAT/status |
 | Database schema | `schema.sql` + `supabase/migrations/` | Struktur tabel, migration history |
 | CI/CD | `.github/workflows/` | ci.yml (test-only) + docker-build.yml (tag release `N.N.N` + GHCR) + arcane-deploy.yml (deploy + verifikasi `/health`) |
 
-> **Catatan sinkronisasi**: file ini **self-contained untuk clone baru** (aturan inti + arsitektur: API endpoints §9, token system §8, troubleshooting §10). `specs/` gitignored dan tidak ikut clone — jika folder itu tidak ada di working tree, abaikan referensi ke sana; file ini cukup.
+> **Catatan sinkronisasi**: file ini **self-contained untuk clone baru** (aturan inti + arsitektur: API endpoints §9, token system §8, troubleshooting §10). Spec docs (konvensi detail) gitignored dan tidak ikut clone — file ini cukup untuk clone baru.
 
 ---
 
@@ -221,7 +227,7 @@ Detail setup + sumber tiap var: `README.md` §Deployment + `.env.example`.
 Untuk feature ≥1 file atau behavior change:
 
 1. **Interview 3-round** via `ask_user` (apa → gimana → detail delivery). Jangan tebak keputusan penting.
-2. **Tulis spec** `specs/<slug>-spec.md` (13-section, gitignored, working-tree-only) — atau catat keputusan di commit message jika sederhana.
+2. **Tulis spec** (13-section, gitignored, working-tree-only) — atau catat keputusan di commit message jika sederhana. Referensi ke spec docs hanya sah di dalam folder spec itu sendiri (MUST #8).
 3. **Implement + verify** (`node --check`, `pnpm test`; perubahan non-trivial → review sub-agent per MUST #7).
 4. **Commit + push HANYA atas explicit user ask.**
 
@@ -351,7 +357,8 @@ Semua endpoint didefinisikan di `src/server.js` (Express 5, di-deploy sebagai Ve
 
 | Field | Value |
 |---|---|
-| Path | `AGENTS.md` (root repo) |
+| Path | `.agents/AGENTS.md` |
 | Tracked | **Ya** (di-commit ke git — berlaku semua clone) |
 | Audience | AI coding agents |
 | Dibuat | 2026-08-16 |
+| Terakhir di-update | 2026-09-03 (MUST #8-#9: komentar & git message dilarang me-refer spec docs) |

@@ -26,8 +26,7 @@ html {
     -webkit-text-size-adjust: 100%;
     /* Hardening anti horizontal-scroll: body sudah overflow-x: clip (di-
        propagasi ke viewport di browser modern); html ikut di-clip supaya
-       browser lama/quirky juga tidak bisa scroll horizontal (lihat section
-       21 — select-pack-pagination-spec.md). */
+       browser lama/quirky juga tidak bisa scroll horizontal. */
     overflow-x: clip;
 }
 
@@ -2699,7 +2698,7 @@ tbody tr:hover .sticky-col-right {
     display: none;
 }
 
-/* Badge Penayangan 'Arsip' (pack-visibility-spec.md §4.5): variant muted
+/* Badge Penayangan 'Arsip': variant muted
    dari .chip__label--display — terlihat non-aktif dibanding Publik/Admin
    (indigo). Token existing saja; light/dark parity otomatis karena token
    sudah parallel di :root + [data-theme="dark"]. */
@@ -4058,8 +4057,7 @@ tbody tr:hover .sticky-col-right {
  * ==========================================================
  * Chip mirror .bank-timestamp tapi bisa diklik — menandai soal yang
  * terpakai di paket soal LAIN. Klik → usage-modal (daftar paket);
- * hover/focus → tooltip CSS daftar paket. Lihat
- * paket-detail-usage-chip-spec.md.
+ * hover/focus → tooltip CSS daftar paket.
  */
 .bank-usage-wrap,
 .bank-timestamp-wrap {

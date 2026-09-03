@@ -125,7 +125,7 @@
         </style>
     </head>
     <body>
-        <!-- client-side guard (admin-auth-spec.md §7.4) -->
+        <!-- client-side guard -->
         <script>
           (function () {
             // Fail-open banner shown when server is unreachable. Extracted to
@@ -480,8 +480,7 @@
                                                      Empty `<option value="">` is the initial
                                                      placeholder ("—") so a TKP soal with
                                                      no-bobot-yet still has a visible neutral
-                                                     state — see server-side rounded invariant
-                                                     tkp-scoring-spec.md §10. -->
+                                                     state — see server-side rounded invariant. -->
                                                 <select
                                                     id="q-bobot-a"
                                                     class="bobot-input"
@@ -717,7 +716,6 @@
                 </dialog>
 
                 <!-- ==================== BULK ADD MODAL ====================
-                     Spec: specs/bulk-add-questions-spec.md
                      Sibling dialog to q-modal. Tabs: Data Soal (paste area)
                      + Preview (readonly list). Plain-text Quill editor.
                 -->
@@ -783,8 +781,7 @@
                                 <details class="data-section" open>
                                     <summary>📝 Paste Soal (format baru: premise + pertanyaan + opsi + kunci + pembahasan)</summary>
                                     <div class="data-section-body">
-                                        <!-- Spec: bulk-add-format-v2-spec.md §5.1.1.
-                                             Lihat contoh: collapsible expander with a
+                                        <!-- Lihat contoh: collapsible expander with a
                                              copy-pasteable sample of the new format. -->
                                         <details class="bulk-format-help" data-help-mode="binary" style="margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--surface-header);">
                                             <summary style="cursor: pointer; font-weight: 600; color: var(--primary);">
@@ -989,7 +986,6 @@ Jawaban C paling mencerminkan pentingnya gotong royong karena menjelaskan peran 
                 </dialog>
 
                 <!-- ==================== BULK DELETE CONFIRM MODAL ====================
-                     Spec: specs/bulk-delete-questions-spec.md
                      Sibling dialog to q-modal / q-bulk-modal. Read-only info
                      panel populated by showBulkDeleteConfirmModal(). Phase 2
                      hooks the confirm button to POST /api/questions/bulk-delete;

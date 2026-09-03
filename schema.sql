@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS questions (
     question_type TEXT NOT NULL DEFAULT 'text', -- Tipe soal (selalu 'text' karena gambar inline di rich text editor)
     options JSONB NOT NULL,             -- {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}
     correct_answer VARCHAR(1) NOT NULL, -- 'A', 'B', 'C', 'D', 'E'
-    option_scores JSONB,                -- TKP-only: {"A":1..5,"B":1..5,"C":1..5,"D":1..5,"E":1..5} sebagai permutasi {1,2,3,4,5}. NULL untuk TWK/TIU atau TKP yang belum di-set bobotnya (lihat tkp-scoring-spec.md §5/§9/§6).
+    option_scores JSONB,                -- TKP-only: {"A":1..5,"B":1..5,"C":1..5,"D":1..5,"E":1..5} sebagai permutasi {1,2,3,4,5}. NULL untuk TWK/TIU atau TKP yang belum di-set bobotnya.
     explanation TEXT NOT NULL,          -- Pembahasan (HTML, termasuk gambar inline)
     image_url TEXT,                     -- Deprecated: gambar sekarang inline di content
     explanation_image_url TEXT,         -- Deprecated: gambar sekarang inline di explanation
@@ -82,7 +82,7 @@ CREATE INDEX IF NOT EXISTS idx_admins_username ON admins(username);
 --   pemisahan tipe soal (semua menggunakan rich text editor).
 -- - Constraint UNIQUE(pack_id, question_number) pada pack_questions (2026-08-12):
 --   menutup race window antar tab admin — insert duplikat ditolak DB (error
---   23505) dan server retry dgn nomor baru (lihat specs/pack-question-order-spec.md).
+--   23505) dan server retry dgn nomor baru.
 --   Untuk existing install, jalankan migration-004 DULU (renumber paket lama yang
 --   sudah terlanjur ber-question_number duplikat) sebelum constraint aktif.
 --- Untuk migrasi data lama yang sudah memiliki gambar di image_url/explanation_image_url,
@@ -90,7 +90,7 @@ CREATE INDEX IF NOT EXISTS idx_admins_username ON admins(username);
 -- atau dari image_url/explanation_image_url.
 --
 -- ============================================
--- TKP weighted scoring (lihat tkp-scoring-spec.md §5/§6/§9)
+-- TKP weighted scoring
 -- ============================================
 -- Kolom option_scores (JSONB, nullable) menyimpan bobot 1..5 per opsi A-E
 -- untuk soal TKP (TWK/TIU tetap NULL). Invariant §6: himpunan nilainya
@@ -128,7 +128,7 @@ ALTER TABLE question_packs
     '{"TWK":65,"TIU":80,"TKP":166}'::jsonb;
 
 -- ============================================
--- PACK VISIBILITY (2026-08-15, lihat specs/pack-visibility-spec.md)
+-- PACK VISIBILITY (2026-08-15)
 -- ============================================
 -- Kontrol penayangan paket soal di select-pack.html:
 --   - 'public'   → tampil + bisa dikerjakan semua orang

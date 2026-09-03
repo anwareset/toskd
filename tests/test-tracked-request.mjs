@@ -1,5 +1,4 @@
-// Spec: specs/golden-signals-otel-spec.md §4.1/§4.2 — lock-in SINGLE SOURCE
-// OF TRUTH keputusan tracking request observability. Modul bersama
+// Lock-in SINGLE SOURCE OF TRUTH keputusan tracking request observability. Modul bersama
 // src/tracked-request.js dipakai oleh middleware metrik/access-log di
 // server.js (isTrackedRequest) DAN hook trace di otel.js (isTrackedUrl).
 // Test ini mengunci aturan: hanya /api/* + *.html yang di-track; /health,

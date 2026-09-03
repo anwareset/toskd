@@ -1,5 +1,4 @@
 // public/js/user.js
-// Spec: specs/admin-password-change-spec.md §4.2.
 // Halaman "User" (terproteksi): form ganti kata sandi admin (self-service).
 //   - Verifikasi password lama wajib (R1-Q3)
 //   - Password baru minimal 8 karakter (R2-Q2), dua kolom (baru + konfirmasi)

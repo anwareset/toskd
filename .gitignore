@@ -167,7 +167,7 @@ Thumbs.db
 *.local
 
 # Specs
-specs/**
+.specs/**
 *-spec.md
 
 # Tests-debug related

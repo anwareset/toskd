@@ -1,5 +1,4 @@
 // src/tracked-request.js
-// Spec: specs/golden-signals-otel-spec.md §4.1/§4.2
 //
 // SINGLE SOURCE OF TRUTH untuk keputusan "request mana yang di-track" oleh
 // observability (metrik golden-signals + access log + trace). Dipakai oleh:
