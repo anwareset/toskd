@@ -2,6 +2,7 @@
 // Lock-in tests for the GET /health readiness probe in src/server.js:
 //   - 200 { status: "ready", version: "<semver>", sha: "<short-sha>" }
 //   - 503 { status: "unavailable", version, sha, error } when DB check fails
+//   - version fallback chain: APP_VERSION → package.json version → "unknown"
 //   - sha fallback chain: VERCEL_GIT_COMMIT_SHA → GIT_COMMIT_SHA →
 //     `git rev-parse --short HEAD` → "unknown"
 //
@@ -117,10 +118,11 @@ test("GET /health → 503 { status: unavailable, version, error } when DB check 
   );
 });
 
-test("sha falls back to 'unknown' when no SHA env and git unavailable", async () => {
+test("version falls back to package.json and sha to 'unknown' without metadata env", async () => {
   // Spawn the REAL server in a child process whose cwd is NOT a git repo,
-  // with both SHA env vars removed. getShortCommitSha() then bottoms out at
-  // "unknown" (`git rev-parse --short HEAD` fails; try/catch catches it).
+  // with all release metadata env vars removed. The version must come from
+  // package.json, while getShortCommitSha() bottoms out at "unknown"
+  // (`git rev-parse --short HEAD` fails; try/catch catches it).
   // This exercises the actual fallback in src/server.js — not a re-implementation.
   //
   // The child runs its OWN mock PostgREST (NOT the parent's): spawnSync blocks
@@ -167,6 +169,6 @@ test("sha falls back to 'unknown' when no SHA env and git unavailable", async ()
   const { status, body } = JSON.parse(result.stdout.trim());
   assert.equal(status, 200);
   assert.equal(body.status, "ready");
-  assert.equal(body.version, "unknown");
+  assert.equal(body.version, "0.1.3");
   assert.equal(body.sha, "unknown");
 });

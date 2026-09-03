@@ -166,6 +166,7 @@ Buat file `.env` di root folder project:
 | `SUPABASE_URL` | `https://your-project-ref.supabase.co` | Project URL |
 | `SUPABASE_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | **service_role key (Wajib, bukan anon)** |
 | `BLOB_READ_WRITE_TOKEN` | `vercel_blob_rw_xxxxxxxxxxxxxx` | Blob Read/Write Token |
+| `APP_VERSION` | `0.1.3` | Opsional override versi `/health`; jika kosong, aplikasi membaca `package.json.version` |
 | `JWT_SECRET` | `<random-32+-chars>` | Generate: `openssl rand -hex 32` |
 | `COOKIE_SECURE` | `true` | Opsional — atur keamanan cookie login (lihat Catatan #3) |
 | `NODE_ENV` | `production` | Opsi: `production` / `development`; **kosongkan di lokal** (auto-generate admin aktif) |
@@ -181,6 +182,8 @@ Buat file `.env` di root folder project:
 | `OTEL_TRACE_SAMPLE_RATIO` | `0.1` | Sampling ratio trace non-kritikal (10%) |
 
 #### Catatan Env Variables
+
+`/health.version` menggunakan `APP_VERSION` jika tersedia. Tanpa variable tersebut, nilainya diambil dari `package.json.version`, sehingga deployment Vercel tetap menampilkan versi release tanpa konfigurasi environment tambahan. `sha` tetap menggunakan metadata commit Vercel atau Docker.
 
 | No | Catatan |
 |---|---|
