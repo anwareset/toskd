@@ -2,6 +2,7 @@
 // Lock-in tests for the GET /health readiness probe in src/server.js:
 //   - 200 { status: "ready", version: "<semver>", sha: "<short-sha>" }
 //   - 503 { status: "unavailable", version, sha, error } when DB check fails
+//   - version fallback: package.json version when APP_VERSION is unavailable
 //   - sha fallback chain: VERCEL_GIT_COMMIT_SHA → GIT_COMMIT_SHA →
 //     `git rev-parse --short HEAD` → "unknown"
 //
@@ -117,9 +118,10 @@ test("GET /health → 503 { status: unavailable, version, error } when DB check 
   );
 });
 
-test("sha falls back to 'unknown' when no SHA env and git unavailable", async () => {
+test("version falls back to package.json when APP_VERSION is empty", async () => {
   // Spawn the REAL server in a child process whose cwd is NOT a git repo,
-  // with both SHA env vars removed. getShortCommitSha() then bottoms out at
+  // with APP_VERSION empty and both SHA env vars removed. The version must
+  // come from package.json, while getShortCommitSha() bottoms out at
   // "unknown" (`git rev-parse --short HEAD` fails; try/catch catches it).
   // This exercises the actual fallback in src/server.js — not a re-implementation.
   //
@@ -129,7 +131,7 @@ test("sha falls back to 'unknown' when no SHA env and git unavailable", async ()
   const nonGitDir = mkdtempSync(join(tmpdir(), "toskd-health-unknown-"));
   const env = { ...process.env }; // inherit PATH, TZ, etc.
   delete env.SUPABASE_URL; // child sets its own below
-  delete env.APP_VERSION;
+  env.APP_VERSION = "   ";
   delete env.GIT_COMMIT_SHA;
   delete env.VERCEL_GIT_COMMIT_SHA;
   env.JWT_SECRET = "x".repeat(64);
@@ -167,6 +169,6 @@ test("sha falls back to 'unknown' when no SHA env and git unavailable", async ()
   const { status, body } = JSON.parse(result.stdout.trim());
   assert.equal(status, 200);
   assert.equal(body.status, "ready");
-  assert.equal(body.version, "unknown");
+  assert.equal(body.version, "0.1.3");
   assert.equal(body.sha, "unknown");
 });
