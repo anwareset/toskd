@@ -2,8 +2,6 @@
 // ============================================================================
 // Pure parser for the "Bulk Add Soal" feature in kelola-soal.html.
 //
-// Spec: bulk-add-format-v2-spec.md
-//
 // Supports TWO input formats, auto-detected per-block by inspecting line 1:
 //   1. NEW format: 1+ numbered premises (1) ... 2) ... 3) ...) before the
 //      question line. Stored as HTML `<ol><li>…</li></ol><p>question</p>`
@@ -60,7 +58,6 @@ const VALID_KEYS = ["A", "B", "C", "D", "E"];
 // tidak harus urut siklik; admin boleh menulis permutasi {1,2,3,4,5} apa
 // pun (mis. A=2,B=1,C=5,D=3,E=4). Separator toleran: `,`, `;`, atau
 // whitespace. Case-insensitive untuk label "Bobot" dan huruf A-E.
-// Tracker: tkp-scoring-spec.md §9.2.
 const BOBOT_LINE_RE = /^[Bb]obot\s*:\s*[Aa]\s*=\s*([1-5])\s*[,;\s]+\s*[Bb]\s*=\s*([1-5])\s*[,;\s]+\s*[Cc]\s*=\s*([1-5])\s*[,;\s]+\s*[Dd]\s*=\s*([1-5])\s*[,;\s]+\s*[Ee]\s*=\s*([1-5])\s*$/;
 
 // Round-13 (2026-07-19): Inline markdown image lines (`![alt](url)`)
@@ -557,7 +554,7 @@ function parseBarePremiseNewFormatBlock(lines, idx, questionType, optIdx) {
     }
   }
 
-  // Per tkp-scoring-spec.md §9.1: implicit-question mode (TIU
+  // Implicit-question mode (TIU
   // silogisme) requires ≥2 premises; explicit-question mode (TWK
   // reading-passage or TIU with prompt) accepts ≥1 premise line
   // because the explicit question is self-contained. Round-13:
@@ -608,7 +605,7 @@ function parseBarePremiseNewFormatBlock(lines, idx, questionType, optIdx) {
   // The FIRST Bobot line we skip is captured into `lastBobotWeights` so
   // 4b can derive `correct_answer` from it when (1) the type is TKP
   // AND (2) there is no explicit single-letter Kunci line below. This
-  // matches the spec at tkp-scoring-spec.md §9.2 ("admin intent: the
+  // matches the design ("admin intent: the
   // option marked 5 is the best answer") — admins who already wrote a
   // Bobot line do not need to repeat the letter as a separate Kunci.
   //
@@ -835,8 +832,7 @@ function parseNewFormatBlock(lines, idx, questionType, leadInLine = null) {
   //     Kunci line without choking the key-position parser). The FIRST
   //     Bobot line we skip is captured into `lastBobotWeights` so 4b
   //     can derive `correct_answer` from it when type=TKP AND no
-  //     explicit single-letter Kunci follows. See tkp-scoring-spec.md
-  //     §9.2 for the placement rules + §10 for the spec invariant.
+  //     explicit single-letter Kunci follows.
   //
   //     FIRST-match semantics mirror enrichTkpBobot, so parser-level
   //     and enrichment-level derivations agree when run on the same
@@ -973,7 +969,7 @@ function parseOldFormatBlock(lines, idx, questionType) {
   };
   // Skip past any Bobot: TKP marker line that may appear at the key
   // position (so admin can paste `Bobot: …` BEFORE the Kunci without
-  // tripping the key validator). Tracks tkp-scoring-spec.md §9.2.
+  // tripping the key validator).
   let keyLineIdx = 6;
   let lastBobotWeights = null;
   while (
@@ -1054,7 +1050,7 @@ function parseOldFormatBlock(lines, idx, questionType) {
 
 // -------- Public entry points --------------------------------------------
 
-// TKP-weighted-scoring helper (tkp-scoring-spec.md §9.2).
+// TKP-weighted-scoring helper.
 //
 // If the parsed block's question_type starts with `TKP` and the raw block
 // text contains a `Bobot: A=#,B=#,C=#,D=#,E=#` line, attach
@@ -1088,8 +1084,8 @@ function enrichTkpBobot(result, rawBlock, questionType) {
       break;
     }
   }
-  // TKP MUST carry a `Bobot:` line in bulk-add (spec tkp-scoring-spec.md §9.1
-  // + §10 V1-strict applied to bulk endpoint too). Returning an invalid
+  // TKP MUST carry a `Bobot:` line in bulk-add (V1-strict applied to
+  // bulk endpoint too). Returning an invalid
   // block propagates through `parseBlock` → `parseBulkText` → the bulk-add
   // UI's `.bulk-error-list`, so the admin sees inline feedback instead of a
   // silent null-option_scores row that would later score as binary.
@@ -1190,7 +1186,6 @@ function parseBlock(rawBlock, idx, questionType) {
   // attaches `option_scores`, derives `correct_answer` as the letter
   // holding the maximum weight, and strips the marker line from
   // `explanation`. No-op when no Bobot: line OR the block is not TKP.
-  // Tracker: tkp-scoring-spec.md §9.2.
   let result;
   if (isNewFormat) {
     // If there's a lead-in, skip it when passing to parseNewFormatBlock

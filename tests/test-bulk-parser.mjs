@@ -1,7 +1,7 @@
 // test-bulk-parser.mjs
 // ============================================================================
 // Unit tests for public/js/bulk-parser.js — pure parser for the Bulk Add
-// feature. Covers all 18 test vectors from bulk-add-format-v2-spec.md §8.
+// feature. Covers all 18 test vectors of the bulk-add format.
 //
 // Run with: `pnpm test` (auto-discovers all tests under tests/)
 // or: `node --test tests/test-bulk-parser.mjs` (single file)

@@ -1,7 +1,6 @@
 -- ============================================
 -- 007-pack-visibility
 -- Manajemen penayangan paket soal (public/admin/archived)
--- Spec: specs/pack-visibility-spec.md §4.1
 -- ============================================
 -- LATAR BELAKANG (2026-08-15):
 -- CMS `public/paket-soal.html` butuh kontrol penayangan paket soal di

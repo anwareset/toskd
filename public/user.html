@@ -10,8 +10,8 @@
     <script src="/js/theme.js"></script>
   </head>
   <body>
-    <!-- client-side guard (admin-auth-spec.md §7.4, Rev 0.7) — copy verbatim
-         dari bank-soal.html: 401 → redirect ke login; 5xx/network error →
+    <!-- client-side guard — copy verbatim dari bank-soal.html: 401 →
+         redirect ke login; 5xx/network error →
          fail-open banner (JANGAN redirect — hindari login loop saat server
          down). Server-side requireAdmin tetap primary defense. -->
     <script>
@@ -108,11 +108,11 @@
       </footer>
 
       <!-- ==================== NOTIFICATION MODAL ====================
-           Feedback sukses ganti password (per specs/admin-password-change-spec.md
-           §12.5). Single OK button — informational only. Mirror of the same
-           pattern in scoreboard.html / kelola-soal.html / paket-detail.html.
-           class="modal" WAJIB (konvensi modal-animation-convention-spec.md §12)
-           supaya animasi opening/closing otomatis dari monkey-patch theme.js. -->
+           Feedback sukses ganti password. Single OK button — informational
+           only. Mirror of the same pattern in scoreboard.html /
+           kelola-soal.html / paket-detail.html.
+           class="modal" WAJIB supaya animasi opening/closing otomatis dari
+           monkey-patch theme.js. -->
       <dialog
         id="notification-modal"
         class="modal"

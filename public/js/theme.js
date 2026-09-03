@@ -215,8 +215,7 @@
         // function declarations are hoisted, so this call is safe even
         // though source-order places relayout after this code.
         logoutBtn = btn;
-        // "User" link (specs/admin-password-change-spec.md §4.2, revisi
-        // 2026-08-27 per manual UAT): diletakkan di .global-header-nav (bukan
+        // "User" link (revisi 2026-08-27 per manual UAT): diletakkan di .global-header-nav (bukan
         // rightGroup) — berperilaku seperti nav link lain (Ujian/Bank Soal/
         // Scoreboard). Auth-gated: hanya dirender saat sesi valid. Ikut
         // berpindah ke drawer mobile bersama nav (relayout memindahkan elemen
@@ -248,7 +247,6 @@
     document.body.insertBefore(header, document.body.firstChild);
 
     // ============ Phase 2: hamburger + drawer + sticky-on-scroll + responsive ============
-    // Spec: specs/global-header-redesign-spec.md
     // All additions only; no existing Rev. 0.8 functionality is changed.
 
     // (a) Hamburger button — last child of .global-header-right. On

@@ -177,8 +177,8 @@ Pilihan C mendapat bobot tertinggi (5) sesuai dengan peran aktif masyarakat dala
 );
 
 // ─────────────────────────────────────────────────────────────────────────
-// 9. TKP WITHOUT Bobot: — INVALID (per tkp-scoring-spec.md §9.1 + §10
-// V1-strict applied to bulk endpoint; bobot TKP wajib diisi).
+// 9. TKP WITHOUT Bobot: — INVALID (V1-strict applied to bulk endpoint;
+// bobot TKP wajib diisi).
 // ─────────────────────────────────────────────────────────────────────────
 dump(
   "9. TKP WITHOUT Bobot: (INVALID — bobot TKP wajib diisi per §9.1)",

@@ -1,6 +1,5 @@
 // tests/test-pack-visibility.mjs
-// Regression lock-in for the pack VISIBILITY feature (2026-08-15,
-// specs/pack-visibility-spec.md):
+// Regression lock-in for the pack VISIBILITY feature (2026-08-15):
 //   - GET /api/packs           : non-admin → hanya pack 'public' (+ legacy
 //                                fallback); admin → semua termasuk 'archived'.
 //   - GET /api/packs/:id       : non-admin → 403 utk 'admin'/'archived'.

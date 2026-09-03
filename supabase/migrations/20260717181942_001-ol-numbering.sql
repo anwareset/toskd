@@ -1,9 +1,8 @@
 -- ============================================================================
 -- Schema Migration 001 — Round-4 verbatim-display retrofit
 -- ============================================================================
--- Spec: tkp-scoring-spec.md §19.2 + bulk-add-format-v2-spec.md (Round 4
--- refactor: "hilangkan penomoran premis di tampilan/preview. Tampilkan
--- apa adanya dengan yang diinput di bulk add").
+-- (Round 4 refactor: "hilangkan penomoran premis di tampilan/preview.
+-- Tampilkan apa adanya dengan yang diinput di bulk add").
 --
 -- PURPOSE:
 -- Existing questions in the `questions.content` column are stored as

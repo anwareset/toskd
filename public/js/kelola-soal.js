@@ -116,8 +116,7 @@ const modal = document.getElementById("q-modal");
 const form = document.getElementById("q-form");
 const modalTitle = document.getElementById("modal-title");
 
-// ==== Bulk Delete selection (per specs/bulk-delete-questions-spec.md
-//      Section 4.3 / 4.4 — see Phase 1 implementation) ====
+// ==== Bulk Delete selection (Section 4.3 / 4.4 — Phase 1 implementation) ====
 const selectedIds = new Set();
 const selectAllCheckbox = document.getElementById("select-all-checkbox");
 const bulkDeleteBtn = document.getElementById("bulk-delete-btn");
@@ -615,7 +614,7 @@ function getFilteredQuestions() {
 // elements (<ol>, <img>) from a Quill-rendered HTML string and
 // replace with compact inline markers so the table preview cell
 // stays 1-line. See bulk-parser.js for the full implementation
-// and rationale (spec: bulk-add-format-v2-spec.md §10.1).
+// and rationale.
 //
 // We re-bind to a local const for readability at call sites:
 //   const cell = previewHtmlForCell(q.content);
@@ -708,7 +707,6 @@ function renderTable() {
 }
 
 // ==== Bulk Delete: state machine + body checkbox delegation ====
-// Spec: specs/bulk-delete-questions-spec.md Section 4.3 / 4.4 / 4.5 / 4.6
 
 // updateSelectionUI() — synchronises pill, bulk-delete button, and header
 // checkbox 3-state from the in-memory `selectedIds` set + current filtered
@@ -1364,7 +1362,6 @@ if (singleDeleteConfirmBtn) {
 init();
 
 // ==================== BULK DELETE WIRING (Phase 1) ====================
-// Spec: specs/bulk-delete-questions-spec.md Sections 4.4a + 4.5 + 4.6
 // Phase 1 installs the state-machine + selection-state plumbing. The
 // picker modal markup, <dialog id="bulk-delete-confirm-modal">, and the
 // pre-fetch / submit handlers are Phase 2 (spec Steps 6-11) — not in
@@ -1544,7 +1541,6 @@ function handleBulkDeleteResponse(data, submittedIds) {
 }
 
 // ==================== BULK ADD FUNCTIONS ====================
-// Spec: specs/bulk-add-questions-spec.md
 //
 // Modal #q-bulk-modal (sibling of q-modal) lets an admin paste a batch
 // of questions (8-line blocks separated by '---') into a plain-text
@@ -1605,7 +1601,6 @@ function initBulkQuillEditor() {
 }
 
 // Parse plain-text paste content into an array of block records.
-// Spec: bulk-add-format-v2-spec.md
 //
 // The actual parsing logic lives in public/js/bulk-parser.js (loaded
 // as `<script type="module">` in kelola-soal.html, side-effect
@@ -2018,7 +2013,7 @@ document.getElementById("q-bulk-form").onsubmit = async (e) => {
 };
 
 // ============================================================================
-// TKP weighted-scoring UI integration (per tkp-scoring-spec.md §8, §19.1)
+// TKP weighted-scoring UI integration
 // ============================================================================
 //
 // We add five small helpers to manage the per-option Bobot inputs that the
@@ -2330,8 +2325,8 @@ function setBobotFromQuestion(q) {
 }
 
 // ============== Bulk-Add help block — TKP vs binary toggle ==============
-// Spec: tkp-scoring-spec.md §9.1 + #q-bulk-modal layout (kelola-soal.html
-// lines ~779-866). The bulk-add modal renders TWO sibling
+// #q-bulk-modal layout (kelola-soal.html lines ~779-866). The bulk-add
+// modal renders TWO sibling
 // `.bulk-format-help` <details> blocks marked with `data-help-mode`
 // ("binary" | "tkp"). This helper shows the block whose mode matches
 // the currently-selected Tipe Soal and hides the other, so the user

@@ -1,4 +1,4 @@
-/* Exam Timer Persistence — see specs/exam-timer-persistence-spec.md
+/* Exam Timer Persistence
    AC1: started_at ditulis sekali di init() saat TIMER_KEY belum ada
    AC2: silent auto-resume (tanpa konfirmasi dialog)
    AC3: auto-submit pada init() jika timeLeft <= 0 (laptop sleep semalam)
@@ -173,7 +173,7 @@ async function init() {
       fetch(`/api/packs/${packId}/questions`),
     ]);
     // Paket yang diblokir visibility (admin-only utk non-admin / archived)
-    // → server 403 { error: "Forbidden" } (pack-visibility-spec.md §4.2).
+    // → server 403 { error: "Forbidden" }.
     // Tampilkan pesan jelas, jangan lanjut render ujian.
     if (packRes.status === 403 || qRes.status === 403) {
       qContentEl.textContent =

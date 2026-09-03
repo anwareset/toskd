@@ -71,7 +71,6 @@ services:
       # endpoint scrape sendiri (scrape via collector saja). Nilai tak dikenal
       # → error jelas di log + signal non-aktif. OTEL_EXPORTER_OTLP_PROTOCOL
       # (grpc/http/json/http/protobuf) & OTEL_METRIC_EXPORT_INTERVAL dibaca SDK.
-      # Lihat specs/golden-signals-otel-spec.md.
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       - OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}

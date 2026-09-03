@@ -1,5 +1,5 @@
 // tests/test-otel-smoke.mjs
-// Lock-in end-to-end OpenTelemetry export (spec: golden-signals-otel-spec.md):
+// Lock-in end-to-end OpenTelemetry export:
 //   A. In-process — histogram golden-signals `http.server.request.duration`
 //      ter-ekspor ke OTLP (mock receiver) dengan status_class 2xx & 4xx,
 //      route ternormalisasi muncul di traces, dan `/health` TIDAK masuk metrik

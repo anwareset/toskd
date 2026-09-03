@@ -19,7 +19,7 @@
         ></script>
     </head>
     <body>
-        <!-- client-side guard (admin-auth-spec.md §7.4) -->
+        <!-- client-side guard -->
         <script>
           (function () {
             // Fail-open banner shown when server is unreachable. Extracted to
@@ -79,8 +79,7 @@
                         <!-- Add-to-pack loading overlay. Absolute-positioned
                              over the bank panel (CSS #loading-add rule) so
                              it dims every bank-side control during the POST
-                             loop. See paket-detail-add-to-pack-polish-spec.md
-                             §4.5–4.6. -->
+                             loop. -->
                         <div
                             id="loading-add"
                             class="loading-overlay"
@@ -513,8 +512,8 @@
 
                 <!-- ==================== USAGE MODAL ====================
                      Menampilkan daftar paket soal LAIN yang memakai soal ini.
-                     Dibuka dari chip "Dipakai" di option-item bank list
-                     (paket-detail-usage-chip-spec.md). Reuse komponen
+                     Dibuka dari chip "Dipakai" di option-item bank list.
+                     Reuse komponen
                      dialog.modal — pattern notification-modal (single OK).
                      JS di public/js/paket-detail.js :: openUsageModal(). -->
                 <dialog

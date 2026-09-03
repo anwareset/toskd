@@ -39,9 +39,8 @@ function setNameError(message) {
   nameInput.style.borderColor = message ? "var(--danger)" : "";
 }
 
-// Pagination (spec: specs/select-pack-pagination-spec.md) — 6 kartu per
-// halaman, bar bawah saja, reuse komponen .pagination-bar yang sama dengan
-// scoreboard/paket-soal (paket-soal-pagination-spec.md §8.4).
+// Pagination — 6 kartu per halaman, bar bawah saja, reuse komponen
+// .pagination-bar yang sama dengan scoreboard/paket-soal.
 const CARDS_PER_PAGE = 6;
 let currentPage = 1;
 const packPagination = document.getElementById("pack-pagination");
@@ -103,7 +102,7 @@ function renderPacks(list, opts = {}) {
 // Render bar pagination bawah (komponen .pagination-bar yang sama dengan
 // scoreboard/paket-soal): info halaman, rentang yang tampil, dan state
 // disabled tombol Sebelumnya/Selanjutnya. Bar selalu ditampilkan selama ada
-// paket (konsisten dengan konvensi paket-soal-pagination-spec.md §7.5);
+// paket (konsisten dengan konvensi scoreboard/paket-soal);
 // saat list kosong renderPacks sudah menyembunyikannya.
 function renderPaginationBar(total, totalPages) {
   if (!packPagination) return;
@@ -196,7 +195,7 @@ async function loadPacks() {
         return { ...p, count: qs.length };
       }),
     );
-    // Visibility filter (pack-visibility-spec.md §4.4): GET /api/packs
+    // Visibility filter: GET /api/packs
     // mengembalikan SEMUA pack utk admin (dibutuhkan CMS paket-soal.html),
     // jadi di sini kita saring 'archived' keluar — archived TIDAK boleh
     // muncul di select-pack untuk siapa pun (termasuk admin). Non-admin
@@ -338,7 +337,7 @@ document.getElementById("start-btn").onclick = () => {
   }
   setNameError("");
   const name = nameInput.value.trim();
-  // Exam Timer Persistence (spec: specs/exam-timer-persistence-spec.md, AC1):
+  // Exam Timer Persistence (AC1):
   // generate SID sekali per "Mulai" click — jadi exam.html bisa pakai wall-clock
   // untuk resume timer walaupun user me-refresh.
   const sid =

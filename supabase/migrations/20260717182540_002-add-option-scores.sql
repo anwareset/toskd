@@ -1,7 +1,6 @@
 -- ============================================================================
 -- Schema Migration 002 — TKP weighted-scoring: ADD COLUMN option_scores
 -- ============================================================================
--- Spec: tkp-scoring-spec.md §5.1, §6, §9, §10
 --
 -- PURPOSE:
 -- TKP scoring (per spec §5.1/§10) requires the questions table to store

@@ -1,8 +1,8 @@
 // src/server.js
-// Spec: specs/admin-auth-spec.md (rev 0.1). All admin auth code is
-// grouped under "ADMIN AUTH" headers below for easy audit.
+// All admin auth code is grouped under "ADMIN AUTH" headers below for easy
+// audit.
 import "dotenv/config";
-// Observability (specs/golden-signals-otel-spec.md): WAJIB di-import sebelum
+// Observability: WAJIB di-import sebelum
 // express/pino dimuat — otel.js mendaftarkan instrumentations yang mem-patch
 // node:http, express, undici, dan pino. ESM mengevaluasi import dalam urutan
 // source (depth-first), jadi blok ini harus tetap PALING ATAS.
@@ -41,7 +41,7 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "10mb" }));
 
 // ============================================
-// OBSERVABILITY (specs/golden-signals-otel-spec.md §4.2/§4.4)
+// OBSERVABILITY
 // ============================================
 // Hanya request bisnis yang di-track: /api/* dan halaman *.html. /health
 // (probe Docker HEALTHCHECK + monitoring eksternal) dan static assets
@@ -99,7 +99,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================
-// ADMIN AUTH (specs/admin-auth-spec.md §6)
+// ADMIN AUTH
 // ============================================
 
 // STRICT-FAIL: throw on startup if JWT_SECRET missing or too short.
@@ -182,7 +182,7 @@ function readSession(req) {
 }
 
 // ============================================
-// PACK VISIBILITY (specs/pack-visibility-spec.md §4.2)
+// PACK VISIBILITY
 // ============================================
 // Single source of truth untuk gate penayangan paket soal
 // (public/admin/archived). Admin = punya session cookie valid
@@ -205,7 +205,7 @@ function isPackVisibleTo(pack, req) {
 }
 
 // Bisa DIKERJAKAN? (POST /api/exam/start + /submit) — LEBIH STRICT dari
-// isPackVisibleTo (pack-visibility-spec.md matriks §12.1):
+// isPackVisibleTo:
 //   - 'archived' → TIDAK untuk siapa pun, TERMASUK admin (admin boleh
 //     membaca archived di CMS, tapi TIDAK boleh mengerjakannya).
 //   - 'admin'    → hanya admin.
@@ -323,7 +323,7 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// --- Bootstrap admin on cold-start (specs/auto-bootstrap-admin-spec.md) ---
+// --- Bootstrap admin on cold-start ---
 // Dua jalur (matriks perilaku §5):
 //   1. EKSLISIT — BOOTSTRAP_ADMIN_USERNAME + BOOTSTRAP_ADMIN_PASSWORD lengkap
 //      diset → insert admin pertama dari env. Berlaku di SEMUA NODE_ENV
@@ -626,7 +626,7 @@ app.get("/api/admin/me", (req, res) => {
 });
 
 // POST /api/admin/change-password
-// Self-service ganti kata sandi admin (specs/admin-password-change-spec.md §4.1).
+// Self-service ganti kata sandi admin.
 // requireAdmin → req.admin = { adminId, username, iat, exp }. Row admin diambil
 // BY ID (bukan username) supaya admin hanya bisa mengganti password MILIKNYA
 // sendiri (self-service by construction). Sesi JWT stateless TIDAK disentuh
@@ -738,7 +738,7 @@ PROTECTED_HTML_ROUTES.forEach((filename) => {
 // ============================================
 
 // ============================================
-// TKP SCORING (specs/tkp-scoring-spec.md §6 / §10)
+// TKP SCORING
 // ============================================
 // Server-authoritative scoring for TKP items uses per-option bobot
 // from `option_scores` (admin-set per-question via single-question
@@ -845,7 +845,6 @@ app.get("/api/questions", async (req, res) => {
 });
 
 // Bulk insert questions (atomic single transaction via PostgREST).
-// Spec: specs/bulk-add-questions-spec.md, Section 4.6.
 // Accepts `{ questions: [{...}, {...}] }` and creates all rows in one
 // round-trip. Returns `{ inserted: N, ids: [...] }` on success.
 app.post("/api/questions/bulk", async (req, res) => {
@@ -882,8 +881,8 @@ app.post("/api/questions/bulk", async (req, res) => {
       // `option_scores`. The bulk-parser (`public/js/bulk-parser.js`
       // `enrichTkpBobot`) rejects TKP-without-Bobot at parse-time with
       // error "bobot TKP wajib diisi"; this server check is defense-in-depth
-      // for direct API calls that bypass the parser. See tkp-scoring-spec.md
-      // §9.1 + §10 (V1-strict unified across single + bulk endpoints).
+      // for direct API calls that bypass the parser (V1-strict unified
+      // across single + bulk endpoints).
       const err = validateOptionScores(q.question_type, q.option_scores ?? null, {
         strict: true,
       });
@@ -939,7 +938,7 @@ app.post("/api/questions/bulk", async (req, res) => {
   }
 });
 
-// Bulk usage pre-check (per specs/bulk-delete-questions-spec.md Section 4.7 / 8).
+// Bulk usage pre-check.
 // Accepts `{ ids: [1..1000] }` and returns Record<idStr, { used, packs }>
 // in a SINGLE round-trip via PostgREST aggregate `IN` query — never loop
 // per-id (would otherwise hang the UI for hundreds of soal). 400 for bad
@@ -987,7 +986,7 @@ app.post("/api/questions/bulk-usage", async (req, res) => {
   }
 });
 
-// Bulk delete questions (per specs/bulk-delete-questions-spec.md Section 4.10).
+// Bulk delete questions.
 // Best-effort per-id semantics via Promise.allSettled — NOT single transaction
 // (partial-failure reporting is explicit feature). Each iteration defensively
 // pre-unlinks pack_questions then deletes the question row (FK ON DELETE
@@ -1164,8 +1163,8 @@ app.get("/api/packs", async (req, res) => {
       countsByPack[row.pack_id] = (countsByPack[row.pack_id] || 0) + 1;
     }
 
-    // Visibility gate (pack-visibility-spec.md §4.2): non-admin hanya dapat
-    // pack 'public'; admin mendapat SEMUA termasuk 'archived' (dibutuhkan
+    // Visibility gate: non-admin hanya dapat pack 'public'; admin mendapat
+    // SEMUA termasuk 'archived' (dibutuhkan
     // CMS paket-soal.html untuk un-arsip). select-pack.js menyaring
     // 'archived' client-side (archived tidak boleh muncul di select-pack
     // untuk siapa pun — server tetap enforce 403 di /api/exam/start).
@@ -1191,8 +1190,8 @@ app.get("/api/packs/:id", async (req, res) => {
       .eq("id", req.params.id)
       .single();
     if (error) throw error;
-    // Visibility gate (pack-visibility-spec.md §4.2): non-admin tidak boleh
-    // membaca detail pack 'admin'/'archived' (403). Admin (CMS) bypass.
+    // Visibility gate: non-admin tidak boleh membaca detail pack
+    // 'admin'/'archived' (403). Admin (CMS) bypass.
     if (!isPackVisibleTo(data, req)) {
       logger.warn(
         { event: "pack.access_denied", operation_status: "denied", pack_id: req.params.id },
@@ -1215,8 +1214,8 @@ app.get("/api/packs/:id", async (req, res) => {
 // panjang array subtests yang menentukan apakah paket itu 1-subtes
 // (khusus) atau 2-3-subtes (combo).
 const DEFAULT_SUBTEST_THRESHOLDS = { TWK: 65, TIU: 80, TKP: 166 };
-// Visibility values (pack-visibility-spec.md §4.1) — sama dengan CHECK
-// constraint di migration-007; server-side validation defense-in-depth.
+// Visibility values — sama dengan CHECK constraint di migration-007;
+// server-side validation defense-in-depth.
 const PACK_VISIBILITY_VALUES = new Set(["public", "admin", "archived"]);
 function normalizePackInput(body, { allowPartial = false } = {}) {
   const {
@@ -1277,7 +1276,7 @@ function normalizePackInput(body, { allowPartial = false } = {}) {
       normalizedThresholds[k] = DEFAULT_SUBTEST_THRESHOLDS[k] || 0;
     }
   }
-  // visibility (pack-visibility-spec.md §4.3): POST default 'public'
+  // visibility: POST default 'public'
   // (requirement: paket baru default Publik); PUT hanya forward jika
   // benar-benar dikirim (partial update — jangan timpa nilai existing
   // dengan 'public' saat field dihilangkan). Nilai tak dikenal → 400.
@@ -1329,7 +1328,7 @@ app.post("/api/packs", async (req, res) => {
 });
 
 // validateQuestionMatchesPack — server-side defense-in-depth for the
-// subtes filter (subtes-picker-spec.md §2.3). The client-side
+// subtes filter. The client-side
 // filter in paket-detail.js `renderBankList` covers the happy path;
 // this catches direct API calls (curl, future endpoints) that would
 // otherwise let an admin bypass the UI and add a TKP soal to a
@@ -1436,7 +1435,7 @@ app.post("/api/packs/:id/questions", async (req, res) => {
 // Get questions for a specific pack
 app.get("/api/packs/:id/questions", async (req, res) => {
   try {
-    // Visibility gate (pack-visibility-spec.md §4.2): endpoint ini adalah
+    // Visibility gate: endpoint ini adalah
     // satu-satunya jalur isi soal — non-admin TIDAK boleh membaca soal pack
     // 'admin'/'archived' (403). Admin (paket-detail, counts) bypass.
     // Diterima (R1.2 strict everywhere): participant yang pack-nya berubah
@@ -1512,7 +1511,7 @@ app.post("/api/exam/start", async (req, res) => {
       return res.status(400).json({ error: nameCheck.error });
     }
     const name = nameCheck.name;
-    // Visibility gate (pack-visibility-spec.md §4.2) — titik enforce utama
+    // Visibility gate — titik enforce utama
     // "tak bisa dikerjakan": canWorkPack LEBIH strict dari isPackVisibleTo:
     //   - pack 'archived'  → 403 untuk SEMUA (termasuk admin)
     //   - pack 'admin'     → 403 untuk non-admin
@@ -1576,7 +1575,7 @@ app.post("/api/exam/submit", async (req, res) => {
     }
     const name = nameCheck.name;
 
-    // Visibility gate (pack-visibility-spec.md §4.2) — defense-in-depth,
+    // Visibility gate — defense-in-depth,
     // strict everywhere (R1.2): canWorkPack → archived 403 utk SEMUA
     // (termasuk admin); admin-only → 403 utk non-admin. SEBELUM
     // duplicate-check supaya peserta yang tidak berhak tidak bisa memaksa
@@ -1678,7 +1677,7 @@ app.post("/api/exam/submit", async (req, res) => {
     if (questionsError) throw questionsError;
 
     // Score per-question (binary for TWK/TIU; weighted for TKP via
-    // option_scores, per tkp-scoring-spec.md §6.1). scoreForQuestion
+    // option_scores). scoreForQuestion
     // is the single source of truth — see helper definition above the
     // API endpoints.
     const questions = packQuestions.map((item) => item.questions);
@@ -1813,8 +1812,8 @@ app.get("/api/exam/:id/results", async (req, res) => {
 app.get("/api/scoreboard", async (req, res) => {
   try {
     const { pack_id } = req.query;
-    // Visibility gate (pack-visibility-spec.md §4.2, R3.2): non-admin tidak
-    // boleh lihat scoreboard paket 'admin'/'archived' meski via URL langsung
+    // Visibility gate (R3.2): non-admin tidak boleh lihat scoreboard paket
+    // 'admin'/'archived' meski via URL langsung
     // (403). Admin → semua.
     if (pack_id) {
       const { data: pack, error: packErr } = await supabase
@@ -2207,7 +2206,7 @@ app.put("/api/packs/:id/questions", async (req, res) => {
 app.get("/api/scoreboard-all", async (req, res) => {
   try {
     const { pack_id } = req.query;
-    // Visibility gate (pack-visibility-spec.md §4.2, R3.2):
+    // Visibility gate (R3.2):
     //   - pack_id diberikan → non-admin dilarang utk pack 'admin'/'archived' (403).
     //   - tanpa pack_id      → non-admin hanya melihat hasil pack 'public'
     //     (filter di bawah setelah query) — admin melihat semua.

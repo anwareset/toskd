@@ -1,7 +1,7 @@
 -- ============================================
 -- 004-unique-pack-question-number
 -- Menutup race window antar admin tab + ALIGN schema prod
--- (2026-08-12, bug-fix urutan soal paket — lihat specs/pack-question-order-spec.md)
+-- (2026-08-12, bug-fix urutan soal paket)
 -- ============================================
 -- DUA PEKERJAAN dalam 1 migrasi:
 --

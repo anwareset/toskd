@@ -1,7 +1,7 @@
 // tests/test-bulk-parser-bobot.mjs
 // Smoke test for bulk-parser.js Bobot: handling. Also acts as a regression
-// guard for tkp-scoring-spec.md §9.1 (strict-rejection: TKP blocks without
-// `Bobot:` line MUST be invalid).
+// guard (strict-rejection: TKP blocks without `Bobot:` line MUST be
+// invalid).
 //
 // Run: node tests/test-bulk-parser-bobot.mjs
 import { parseBlock } from '../public/js/bulk-parser.js';
@@ -70,7 +70,7 @@ log('case6-old-format-bobot', parseBlock(
   'TKP Pelayanan Publik',
 ));
 
-// ── Regression guards for strict-rejection contract (tkp-scoring-spec.md §9.1):
+// ── Regression guards for strict-rejection contract:
 // Cases 7/8/9 exercise the OTHER 3 format paths (old-format, new-format+lead-in,
 // bare-premise) to ensure `enrichTkpBobot` correctly rejects TKP-without-Bobot
 // across all four format branches. Without these, a regression in the

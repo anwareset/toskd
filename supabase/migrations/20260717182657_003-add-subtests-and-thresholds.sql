@@ -1,7 +1,6 @@
 -- ============================================================================
 -- Schema Migration 003 — Pack Subtest Picker + Per-Subtest Thresholds
 -- ============================================================================
--- Spec: paket-soal-pack-type-spec.md §2
 --
 -- PURPOSE:
 -- Mendukung checkbox picker 1-3 subtes di public/paket-soal.html:

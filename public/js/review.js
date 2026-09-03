@@ -1,8 +1,8 @@
 // public/js/review.js
 // ============================================================================
 // Per-question rendering + answer grid for /review.html.
-// TKP weighted-scoring integration per tkp-scoring-spec.md §13.1 + §13.2 +
-// §7.1 (partial grid class) + §7.2 (stats panel subtest breakdown).
+// TKP weighted-scoring integration (partial grid class + stats panel
+// subtest breakdown).
 //
 // The renderQuestion function has two code paths now:
 //   * isTkp(q) = true  → per-weight class on each option card, inline
@@ -201,7 +201,7 @@ async function init() {
     const bd = computeBreakdowns();
 
     // Subtest breakdown harus HANYA menampilkan subtes yang termasuk
-    // dalam paket ini (per subtes-picker-spec.md §2.1). Paket
+    // dalam paket ini. Paket
     // Single-TWK hanya menampilkan TWK; Combo TWK+TIU menampilkan
     // keduanya; Combo 3-subtes menampilkan ketiganya. Legacy packs
     // (pre-migration-003, tidak ada field subtests) default ke
