@@ -25,6 +25,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import packageJson from "../package.json" with { type: "json" };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -169,6 +170,6 @@ test("version falls back to package.json when APP_VERSION is empty", async () =>
   const { status, body } = JSON.parse(result.stdout.trim());
   assert.equal(status, 200);
   assert.equal(body.status, "ready");
-  assert.equal(body.version, "0.1.3");
+  assert.equal(body.version, packageJson.version);
   assert.equal(body.sha, "unknown");
 });
