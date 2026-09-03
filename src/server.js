@@ -7,6 +7,7 @@ import "dotenv/config";
 // node:http, express, undici, dan pino. ESM mengevaluasi import dalam urutan
 // source (depth-first), jadi blok ini harus tetap PALING ATAS.
 import "./otel.js";
+import packageJson from "../package.json" with { type: "json" };
 import "./logger.js";
 import express from "express";
 import { execFileSync } from "node:child_process";
@@ -131,9 +132,11 @@ const BOOTSTRAP_PASSWORD = process.env.BOOTSTRAP_ADMIN_PASSWORD;
 const PUBLIC_DIR = join(__dirname, "..", "public");
 
 // --- Health check helpers ---
-// Release version berasal dari APP_VERSION (Docker build arg dari canonical
-// git tag). Local/serverless tanpa metadata memakai "unknown".
-const APP_VERSION = (process.env.APP_VERSION || "unknown").trim() || "unknown";
+// Use a runtime override when provided; serverless deployments fall back to
+// the tracked package version because Docker build arguments are unavailable.
+const PACKAGE_VERSION =
+  typeof packageJson.version === "string" ? packageJson.version.trim() : "";
+const APP_VERSION = process.env.APP_VERSION?.trim() || PACKAGE_VERSION || "unknown";
 
 // Short git commit hash (7 chars) untuk response /health.
 // Prioritas: env Vercel (VERCEL_GIT_COMMIT_SHA) → env Docker build-arg
